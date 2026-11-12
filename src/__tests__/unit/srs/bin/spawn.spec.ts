@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { EpicSpec, FrSpec, PageContent, PageRef, RawContent, ResolvedParent, SrsAdapter } from '../../../../builders/srs/types'
-import { parseArgs, runSpawn, SpawnIO, SpawnOptions } from '../../../../srs/bin/spawn'
+import { BoardPlacement, parseArgs, runSpawn, SpawnIO, SpawnOptions } from '../../../../srs/bin/spawn'
 import { ExistingSrsTicket } from '../../../../srs/spawn/reconciliation'
 import { parseFrPageTitle } from '../../../../srs/tree/fr-title'
 import { renderEpicPage } from '../../../../builders/srs/templates/pages/epic.tpl'
@@ -103,7 +103,7 @@ function makeIO(overrides?: Partial<SpawnIO>): TestIO {
   })
   const inspectTickets = jest.fn(() => [])
   const linkSubtask = jest.fn()
-  const addToProject = jest.fn()
+  const addToProject = jest.fn((ticket: string) => ({ ticket, action: 'added', status: 'Backlog' }))
   const setComplexity = jest.fn()
   return Object.assign(
     { stdout, stderr, createSubtask, createEpic, inspectTickets, linkSubtask, addToProject, ensureMilestone, assignMilestone, associateMilestone, setComplexity, stdoutBuffer, stderrBuffer },
@@ -389,7 +389,25 @@ describe('runSpawn', () => {
       expect(code).toBe(0)
       expect(io.addToProject.mock.calls.map((call) => call[0])).toEqual(['42', '100', '101'])
       expect(io.addToProject.mock.invocationCallOrder[2]).toBeLessThan((io.assignMilestone as jest.Mock).mock.invocationCallOrder[0])
-      expect(io.stdoutBuffer.join('')).toContain('3 ticket(s) on the project board')
+      expect(io.stdoutBuffer.join('')).toContain('3 ticket(s) on the project board: 3 in Backlog')
+    })
+
+    // #1118 — spawn said every Story was in Backlog while 28 of 31 had no Status on the board:
+    // the summary now states the status the board holds after `add-to-project`
+    it('states the status each ticket holds on the board, and names those it had to set', async () => {
+      registerSrsBackend('stub', () => new StubAdapter(children))
+      writeManifest({ tools: { srs: { backend: 'stub' } } })
+      const placements: Record<string, BoardPlacement> = {
+        '42': { action: 'kept', status: 'In progress' },
+        '100': { action: 'status-set', status: 'Backlog' },
+        '101': { action: 'added', status: 'Backlog' }
+      }
+      const io = makeIO({ addToProject: jest.fn((ticket: string) => placements[ticket]) })
+
+      await expect(runSpawn(baseOptions(), io)).resolves.toBe(0)
+      const out = io.stdoutBuffer.join('')
+      expect(out).toContain('3 ticket(s) on the project board: 2 in Backlog, 1 in In progress')
+      expect(out).toContain('1 ticket(s) were on the board with no status and are now in Backlog: #100')
     })
 
     it('reports which tickets joined when one cannot, and stops before the release', async () => {
@@ -398,6 +416,7 @@ describe('runSpawn', () => {
       const io = makeIO({
         addToProject: jest.fn((ticket: string) => {
           if (ticket === '101') throw new Error('project scope missing')
+          return { action: 'added' as const, status: 'Backlog' }
         })
       })
 

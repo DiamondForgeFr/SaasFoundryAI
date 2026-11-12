@@ -70,9 +70,11 @@ branche dans son worktree et n'enregistre jamais l'accord : seule la réponse du
 **Actions obligatoires :**
 
 1. Publier le plan de test : prérequis, scénarios, résultats attendus et non-régression.
-2. Exécuter build, lint, vérification des types, tests unitaires et la voie de validation prévue par le dépôt.
+2. Exécuter build, lint, vérification des types, tests unitaires et la voie de validation prévue par le dépôt. Les suites complètes ne tournent qu'une fois, ici, à la fin d'AI testing, et non après
+   chaque itération : pendant le travail, l'agent exécute les tests que son changement touche ; après un rebase, il relance ces tests, pas tout.
 3. Exécuter manuellement chaque scénario du plan et documenter le résultat.
-4. En cas de défaut : corriger, committer, pousser et recommencer la validation.
+4. En cas de défaut : corriger, committer, pousser et recommencer la validation par les tests que le changement touche ; les suites complètes ne se relancent que si la correction touche du code
+   partagé.
 
 Un agent délégué s'arrête au rapport vert, avec le ticket toujours en AI testing et la pull request toujours en brouillon. Il ne fusionne jamais. La session reprend la main : elle mène la revue
 contradictoire d'un ticket complexe, puis effectue la transition que le parcours prévoit.

@@ -63,6 +63,10 @@ export const getHealthControllerCheckQueryOptions = <TData = Awaited<ReturnType<
 export type HealthControllerCheckQueryResult = NonNullable<Awaited<ReturnType<typeof healthControllerCheck>>>
 export type HealthControllerCheckQueryError = ErrorType<void>
 
+/**
+ * Returns the health status of various components of the application including database connection, memory usage, and other critical services.
+ * @summary Check API health status
+ */
 export function useHealthControllerCheck<TData = Awaited<ReturnType<typeof healthControllerCheck>>, TError = ErrorType<void>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof healthControllerCheck>>, TError, TData>> &
@@ -70,6 +74,10 @@ export function useHealthControllerCheck<TData = Awaited<ReturnType<typeof healt
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns the health status of various components of the application including database connection, memory usage, and other critical services.
+ * @summary Check API health status
+ */
 export function useHealthControllerCheck<TData = Awaited<ReturnType<typeof healthControllerCheck>>, TError = ErrorType<void>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof healthControllerCheck>>, TError, TData>> &
@@ -77,14 +85,18 @@ export function useHealthControllerCheck<TData = Awaited<ReturnType<typeof healt
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns the health status of various components of the application including database connection, memory usage, and other critical services.
+ * @summary Check API health status
+ */
 export function useHealthControllerCheck<TData = Awaited<ReturnType<typeof healthControllerCheck>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof healthControllerCheck>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Returns the health status of various components of the application including database connection, memory usage, and other critical services.
  * @summary Check API health status
  */
-
 export function useHealthControllerCheck<TData = Awaited<ReturnType<typeof healthControllerCheck>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof healthControllerCheck>>, TError, TData>> },
   queryClient?: QueryClient

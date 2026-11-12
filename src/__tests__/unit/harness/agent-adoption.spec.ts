@@ -13,6 +13,10 @@ import { refreshAgents } from '../../../harness/agent-support'
 const exec = promisify(execFile)
 const MANIFEST = { version: '1', projectName: 'adoption-test', structure: 'cli' }
 
+// A test runs a dozen git processes and up to three plan/apply rounds over the harness deposits: a loaded machine goes
+// past the former 20 s of the unit project (#1205). The bound is a hang guard, not what the tests check.
+jest.setTimeout(90_000)
+
 describe('safe existing-project agent adoption (#649)', () => {
   let root: string
   const path = (relative: string) => join(root, relative)
@@ -39,7 +43,7 @@ describe('safe existing-project agent adoption (#649)', () => {
 
   afterEach(async () => {
     jest.restoreAllMocks()
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   })
 
   it('previews a project without a manifest without creating any files', async () => {

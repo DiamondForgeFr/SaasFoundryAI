@@ -10,6 +10,10 @@ import type { Answers, ProjectPorts, SaaSFoundryManifest } from '../../../types'
 
 const ports: ProjectPorts = { db: 5435, api: 3500, web: 5173 }
 
+// Most tests render the whole technical stack into a temporary candidate, thousands of template files: a loaded
+// machine goes past the former 20 s of the unit project (#1205). The bound is a hang guard, not what the tests check.
+jest.setTimeout(120_000)
+
 function harnessManifest(): SaaSFoundryManifest {
   return {
     $schema: 'schema',
@@ -65,7 +69,7 @@ describe('technical adoption candidate and manifest finalization', () => {
   })
 
   afterEach(async () => {
-    await rm(sandbox, { recursive: true, force: true })
+    await rm(sandbox, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   })
 
   it('preserves the harness surface and adds ownership only for created technical files', async () => {

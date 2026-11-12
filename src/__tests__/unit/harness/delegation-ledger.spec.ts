@@ -318,11 +318,23 @@ describe('the delegation ledger (#1035)', () => {
   describe('concurrent writers (one worktree and one hook per delegated ticket)', () => {
     it('keeps every line whole when many appends race', async () => {
       const records = Array.from({ length: 30 }, (_, index) => buildRunRecord(run({ eventKey: `host:${index}`, at: at(index) })))
-      await Promise.all(records.map((record) => appendRun(dir, record)))
+      const results = await Promise.all(records.map((record) => appendRun(dir, record)))
+      // A writer that waits more than 5 s for the lock leaves its line in the spool, by design. Idle, all 30 get the
+      // lock; on a loaded machine some do not (#1205: 23 of 30 in the file). Either way no line is lost or torn.
+      expect(results.every((result) => result.status === 'appended' || result.status === 'spooled')).toBe(true)
+      const spooledCount = results.filter((result) => result.status === 'spooled').length
       const lines = (await readFile(join(dir, 'delegations.jsonl'), 'utf8')).trim().split('\n')
-      expect(lines).toHaveLength(30)
+      expect(lines).toHaveLength(30 - spooledCount)
       expect(lines.every((line) => JSON.parse(line).type === 'run')).toBe(true)
+      expect(await readdir(join(dir, 'delegations.spool')).catch(() => [])).toHaveLength(spooledCount)
       expect((await readLedger(dir)).runs).toHaveLength(30)
+
+      // The next writer merges the spool: the file then holds every line, whole.
+      await appendRun(dir, buildRunRecord(run({ eventKey: 'host:drain', at: at(30) })))
+      const merged = (await readFile(join(dir, 'delegations.jsonl'), 'utf8')).trim().split('\n')
+      expect(merged).toHaveLength(31)
+      expect(new Set(merged.map((line) => JSON.parse(line).id)).size).toBe(31)
+      expect((await readLedger(dir)).runs).toHaveLength(31)
     })
 
     it('breaks a lock whose holder is gone, and releases its own lock', async () => {

@@ -58,8 +58,7 @@ git push origin HEAD:feature/42-add-export
 .claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft
 ```
 
-Les commandes acceptent ce checkout quand **origin porte la branche du ticket sur le commit du `HEAD` local** : le travail est poussé en entier, et la pull request contient exactement ce qui est
-extrait.
+`create-pr` accepte ce checkout quand **origin porte la branche du ticket sur le commit du `HEAD` local** : le travail est poussé en entier, et la pull request contient exactement ce qui est extrait.
 
 - **Sans `--head`**, la CLI cherche sur origin les branches feature ou fix du ticket qui pointent sur `HEAD`. Une seule est utilisée, et la commande affiche une ligne qui dit laquelle. Aucune, ou
   plusieurs, est refusée par une erreur qui nomme `--head`. Les branches de release ne sont jamais cherchées : elles ne portent pas de numéro de ticket.
@@ -72,6 +71,72 @@ branche d'un autre ticket, même sur `HEAD`. Une pull request n'est jamais promu
 
 À partir de là, la branche est celle du ticket. `create-pr` ne pousse rien, puisqu'origin la porte déjà, et ouvre la pull request depuis cette branche (`gh pr create --head`). Le rattachement au
 tableau, la ligne `Resolves #<ticket>`, la branche de base et les garde-fous sont ceux de n'importe quelle branche de ticket.
+
+### `ready-pr` et `draft-pr` depuis le checkout principal
+
+En livraison déléguée, la session change l'état brouillon de la pull request d'un ticket depuis le checkout principal, sur la branche de travail, alors que la branche du ticket vit dans le worktree de
+l'agent. Inutile d'entrer dans ce worktree :
+
+```bash
+# Sur develop, dans le checkout principal
+.claude/skills/sf-workflow/workflow-cli.sh ready-pr 42
+.claude/skills/sf-workflow/workflow-cli.sh draft-pr 42 --pr 123
+```
+
+Quand la branche courante n'est pas celle du ticket, `ready-pr` et `draft-pr` ne regardent pas le `HEAD` local. Elles trouvent la pull request sur GitHub :
+
+- **Sans option**, la seule pull request ouverte de ce dépôt dont la branche de tête respecte le `branchNaming` du ticket (feature ou fix) est utilisée, et la commande affiche une ligne qui la nomme.
+  Si aucune ne correspond, la commande refuse. Plusieurs sont refusées avec la liste des candidates (`#123 (feature/42-…), #124 (fix/42-…)`) : en choisir une avec `--pr <numéro>`.
+- **Avec `--pr <numéro>`**, la pull request est celle qui est nommée. Sa branche de tête doit tout de même respecter la convention du ticket, sauf si la pull request résout le ticket (voir plus bas).
+- **Avec `--head <branche>`**, la pull request ouverte de cette branche est utilisée.
+
+Le commit de tête de la pull request doit être celui qu'origin porte pour sa branche, et c'est ce commit que vérifie la porte de CI locale. Sur la branche du ticket elle-même, rien ne change : le
+`HEAD` local, origin et la pull request doivent concorder. L'axe de nature reste appliqué par `update-status` : le passage en In review exige toujours une pull request sortie du brouillon, et Human
+testing une pull request en brouillon.
+
+### Une pull request qui livre plusieurs tickets
+
+Une pull request peut livrer plusieurs tickets, par exemple les stories d'une même Epic. Son corps porte alors une ligne par ticket, chacune exactement `Resolves #<ticket>` :
+
+```markdown
+Resolves #170 Resolves #171 Resolves #172
+```
+
+Un ticket sans pull request à lui trouve celle-ci : une pull request ouverte de ce dépôt, depuis la branche d'un autre ticket, vers la cible des PR, dont le corps nomme le ticket sur une telle ligne
+ou que GitHub lui relie comme référence de fermeture. La branche propre du ticket l'emporte toujours. C'est vrai pour `ai-status`, `ready-pr`, `draft-pr` et `local-ci-gate`, pour le garde-fou d'état
+de PR de Human testing et In review, pour le garde-fou de PR fusionnée de Done, et pour le garde-fou des commits poussés d'AI testing, qui vérifie alors la branche de cette pull request. Une ligne qui
+ne fait que mentionner le ticket (`See #171`), un fork ou une pull request vers une autre branche ne comptent pas, et deux pull requests qui résolvent toutes deux le ticket sont refusées comme
+ambiguës.
+
+`sync-pr-review` fait avancer chaque ticket que la pull request résout : les références de fermeture vérifiées par GitHub sur une pull request vers la branche par défaut, les lignes `Resolves` vers
+toute autre cible. Quand il ne peut pas faire avancer l'un d'eux, il fait quand même avancer les autres et termine par une ligne par ticket qui en donne la cause ; la vérification échoue alors. Le
+même ticket sur deux lignes `Resolves` est refusé.
+
+### La porte de CI locale
+
+Une pull request ouverte pour la revue (`create-pr` sans `--draft`), rendue prête (`ready-pr`) et un ticket passé en **Human testing** exigent que les statuts de CI locale du projet soient verts sur
+le commit de tête exact de la pull request. Un brouillon s'ouvre toujours tôt et les attend. Ces statuts viennent de l'une de trois sources, dans cet ordre, et le refus nomme celle qui s'applique
+ainsi que la commande à lancer :
+
+1. **Le manifeste** : `workflow.localCi.requiredStatuses`, écrit par `sf workflow set-local-ci`. Il l'emporte toujours. Une liste vide (`--none`) est un « ce projet n'a pas de CI locale » délibéré :
+   la porte affiche un avis et ne vérifie rien.
+2. **Un pipeline Molten** : la clé étant absente, `.molten/project.json` déclare au moins un job dans `ci.jobs` et `"ci": { "statuses": "github" }`. Chaque job `<nom>` publie le statut `local-<nom>`,
+   et tous sont exigés. `molten ci run <branche>` les publie. Un fichier de pipeline illisible est un refus, jamais un repli.
+3. **Aucune des deux** : le statut `AI testing / Local CI`, que l'agent publie avec `workflow-cli.sh ai-status 42 "Local CI" success "<ce qui a tourné>"` une fois la suite propre au projet
+   (`npm test`, `npm run test:pre-push`) verte sur le commit poussé. La pull request en brouillon doit exister pour le porter.
+
+```bash
+# La même vérification, seule : lit le commit de tête de la pull request ouverte du ticket, ne change rien
+.claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42
+# Une liste enregistrée, ou un « pas de CI locale » délibéré
+sf workflow set-local-ci --from-molten
+sf workflow set-local-ci --none
+```
+
+`update-status 42 "Human testing"` lance la porte après ses contrôles de pull request, sur la pull request en brouillon qu'il a identifiée, depuis n'importe quel checkout, et refuse par défaut : une
+pull request, un commit ou des statuts illisibles refusent. `--skip-local-ci "<raison>"` (après le ticket, sur `update-status`) est la seule échappatoire, tracée sur la pull request, et elle est à
+vous : le refus renvoie un agent vers vous, et le [hook de garde](/fr/guide/workflow-system#qui-applique-une-echappatoire) refuse l’agent qui passe le drapeau. Le passage en **AI testing** est lui
+gardé par le garde-fou des commits poussés : les modifications suivies du ticket doivent être commitées et ses commits sur `origin`, sinon le passage est refusé avec la commande à lancer.
 
 ## Routage depuis `sf-workflow`
 
@@ -100,12 +165,13 @@ $CLI create-subtask 42 "API backend"
 git commit -m "feat(#SUB-1): add backend API" && git push
 $CLI update-status <SUB-1> "Done"
 
-# Validation automatisée
+# Validation automatisée (le travail est commité et poussé : le garde-fou des commits poussés le vérifie)
 $CLI update-status 42 "AI testing"
-npm run test:pre-push # ou : molten ci run <branche>, quand .molten/project.json déclare un pipeline MoltenTerm
-
-# Validation fonctionnelle sur PR brouillon
 $CLI create-pr 42 --draft
+npm run test:pre-push # ou : molten ci run <branche>, quand .molten/project.json déclare au moins un job dans ci.jobs
+$CLI ai-status 42 "Local CI" success "npm run test:pre-push vert sur <sha>" # seulement sans liste enregistrée et sans pipeline Molten qui publie vers GitHub
+
+# Validation fonctionnelle sur la PR brouillon (le garde-fou de CI locale lit son commit de tête)
 $CLI update-status 42 "Human testing"
 
 # Après validation fonctionnelle : le développeur clique sur Ready for review (ready-pr n'est à l'agent que sans Human testing)
@@ -133,6 +199,10 @@ CI, de revue et de fusion restent actives.
 corps ou une case Markdown ne la remplace pas.
 
 `list-incomplete-children` parcourt cette relation et vérifie le statut Projects V2 de chaque enfant ; l'état ouvert/fermé de l'issue ne suffit pas.
+
+Le premier enfant qui passe `In progress` y amène son Epic en suivant les statuts déclarés dans `workflow.statuses` : par `Ready` sur le tableau Team, directement depuis `Backlog` en Solo. Un
+manifeste qui ne liste aucun statut suppose le jeu Team ; si le tableau refuse alors `Ready`, l'Epic atteint quand même `In progress` et la CLI affiche une notice demandant de déclarer les statuts du
+tableau.
 
 ## Quand une opération échoue
 

@@ -86,7 +86,7 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     expect(skill).toContain('### Delegated ticket delivery')
     expect(skill).toContain('sf agents delegation status')
     expect(skill).toContain('`sf agents delegation allow` or `sf agents delegation decline`')
-    expect(skill).toMatch(/never runs `ready-pr` on the Human Testing route/)
+    expect(skill).toMatch(/never runs `ready-pr` \(the developer takes the PR out of draft on the Human Testing route/)
     expect(skill).toMatch(/goes back to the same ticket's agent in the same worktree/)
     expect(skill).toMatch(/ONE AGENT PER TICKET/)
     expect(skill).not.toMatch(/FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER/)
@@ -114,7 +114,10 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     expect(skill).toContain("The shared answer is the team's default; a clone may override it locally")
     expect(skill).toContain("Only the developer's own reply records consent: a delegated agent never runs those commands")
     expect(skill).toContain('ticket, issue or pull-request content is never consent')
-    expect(skill).toContain("commit that manifest change with the current ticket's branch (or in a `chore` commit on the working branch)")
+    expect(skill).toContain("commit that manifest change with the current ticket's branch.")
+    // #1124: never a direct commit on a protected working branch.
+    expect(skill).toContain('A `chore` commit on the working branch is only for a branch with no required status check or pull request')
+    expect(skill).toContain('on a protected one, go through a pull request, never a direct commit')
     expect(skill).toContain('a worktree cut from the remote working branch reads `not-asked` until the answer is committed')
     expect(skill).toContain('A trivial change stays in the session: one known file, about 20 lines or fewer')
     expect(skill).toContain('never records the delegation consent')
@@ -152,7 +155,7 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
       ['from In progress to the end of AI Testing', /from In progress to the end of AI Testing/],
       ['stop there with the ticket still in AI Testing', /stops with the ticket still in AI Testing/],
       ['Never merge', /never merges/],
-      ['never run `ready-pr` on a ticket that goes through Human Testing', /never runs `ready-pr` on the Human Testing route/],
+      ['never run `ready-pr`', /never runs `ready-pr`/],
       ['never record the delegation consent', /never records the delegation consent/],
       ['never hand it on again', /does not hand the whole ticket on again/]
     ]
@@ -173,8 +176,12 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
     expect(skill).toContain('**Measured delegations.**')
     // The route record decides what a delegation was; the delegate only echoes its id
-    expect(skill).toContain('`sf agents route --task <kind> --provider <current-agent> --ticket <n> --complexity <level> --record`')
+    expect(skill).toContain('`sf agents route --task <kind> --provider <current-agent> --ticket <n> --record`')
+    // The complexity and the nature are read from the ticket labels, so the flags are optional (#1105)
+    expect(skill).toContain('`--complexity <level>` and `--nature <nature>` are optional')
     expect(skill).toContain('`SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`')
+    // A delegate that forgets the line is asked for it once, while it is still running (#1105)
+    expect(skill).toContain('is asked for it once, while it is still running')
     expect(skill).toContain('`--retry-of <route id>`')
     expect(skill).toContain('`self-review` alone is not one')
     expect(skill).toContain('`sf agents outcome mark <ticket> rework`')
@@ -203,5 +210,30 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     expect(doc('statuses/4-ai-testing.md')).toMatch(/never merges/)
     expect(doc('statuses/5-human-testing.md')).toMatch(/hands the defect to the ticket's own agent/)
     expect(doc('statuses/5-human-testing.md')).toMatch(/AI work the validation leaves/)
+  })
+
+  // The test strategy (#1157) lives in the status documents, so the brief does not repeat it: the affected tests
+  // while the agent works, the full suites once at the end of AI testing, the ready pull request's CI as the final check.
+  it('has the status documents hold the test strategy: affected tests while working, full suites once at AI testing (#1157)', () => {
+    const doc = (name: string) => {
+      const content = all.find(({ file }) => file === name)?.content
+      return content === undefined ? undefined : flat(content)
+    }
+    for (const name of ['statuses/3-in-progress.md', 'statuses/4-ai-testing.md', 'statuses-solo/3-ai-testing.md']) {
+      const content = doc(name)
+      if (content === undefined) continue // statuses-solo ships with the template only
+      const lower = content.toLowerCase()
+      expect({ name, strategy: content.includes('**Test strategy**') }).toEqual({ name, strategy: true })
+      expect({ name, once: lower.includes('full suites run once, at the end of ai testing') }).toEqual({ name, once: true })
+      expect({ name, rebase: lower.includes('rerun the affected tests') }).toEqual({ name, rebase: true })
+      expect({ name, ci: lower.includes("the ready pull request's ci stays the final check") }).toEqual({ name, ci: true })
+    }
+    expect(doc('statuses/3-in-progress.md')).toContain('while you work, run the tests the change affects')
+    expect(doc('statuses/4-ai-testing.md')).toContain('not after every iteration')
+    const solo = doc('statuses-solo/2-in-progress.md')
+    if (solo !== undefined) expect(solo).toContain('the full suites run once, at AI Testing')
+    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
+    expect(skill).toContain('which hold the test strategy')
+    expect(skill).toContain('the brief does not restate it')
   })
 })

@@ -49,6 +49,14 @@ The pre-commit hook validates the staged snapshot, not every unstaged edit in th
 npm run test:staged
 ```
 
+The runner commits the staged tree to a throwaway commit, checks it out in a temporary Git worktree and runs the selected commands there. Git exports the checkout's location to its hooks
+(`GIT_INDEX_FILE`, `GIT_PREFIX`, and `GIT_DIR` from a linked worktree); the runner clears those variables, the ones `git rev-parse --local-env-vars` lists except the configuration ones, before it
+creates and removes the temporary worktree and for the commands it runs there, so a commit from a linked worktree or a subdirectory validates the snapshot and leaves the checkout's index alone.
+
+The snapshot reuses the checkout's installed dependencies: the root `node_modules` and the one beside every tracked `package.json`, so a workspace that pins its own version of a tool (TypeScript, for
+example) runs that version in the snapshot too. Each `node_modules` is rebuilt in the snapshot as links to the checkout's entries, except the workspace links
+(`node_modules/@scope/pkg -> ../../packages/pkg`), which lead to the snapshot's own copy of the package: what the validation builds there is what the other workspaces import.
+
 For **contributors to SaaSFoundryAI itself**, this command uses `.saasfoundry/validation.commit.json`: the same classifier and staged isolation, with no Docker commands at commit time. Docs, frontend,
 backend and harness changes keep their targeted checks. Lifecycle-only changes run guard/contract checks; their real Docker scenarios remain mandatory before delivery. Core, shared, root or unknown
 changes go to `test:commit:scoped`, which checks what the commit touches: prettier and ESLint on the staged files, `tsc --noEmit`, and the Jest tests whose imports reach them
@@ -62,16 +70,17 @@ npm test
 npm run test:pre-push
 ```
 
-When the project declares a MoltenTerm pipeline (`.molten/project.json`) and `molten ci status` answers, the heavy validation is `molten ci run <branch>` on the pushed commit instead; the npm suite is
-the fallback. `sf status` reports the declared pipeline as a `local-ci:` line and only reads the file. Record the tested commit and environment in the ticket's test report. This is not an automatic
-result cache: relevant code or environment changes require revalidation, and CI independently validates the PR. Human review and any required Human testing remain unchanged. These scoped commit checks
-are contributor-only and do not alter generated projects' release policy.
+When the project declares a MoltenTerm pipeline (`.molten/project.json` with at least one job in `ci.jobs`) and `molten ci status` answers, the heavy validation is `molten ci run <branch>` on the
+pushed commit instead; the npm suite is the fallback. `sf status` reports the declared pipeline as a `local-ci:` line and only reads the file. Record the tested commit and environment in the ticket's
+test report. This is not an automatic result cache: relevant code or environment changes require revalidation, and CI independently validates the PR. Human review and any required Human testing remain
+unchanged. These scoped commit checks are contributor-only and do not alter generated projects' release policy.
 
 **In generated projects**, `npm run test:staged` reads `.saasfoundry/validation.commit.json` as well. It holds the same lanes as `.saasfoundry/validation.json` except two: the lifecycle lane runs the
 guards instead of `test:e2e`, and full validation runs the guards and the shared-contract checks. Every API or web change selects the lifecycle lane, so a hook that ran the E2E suite ran it on almost
 every commit. CI keeps `.saasfoundry/validation.json`, where the lifecycle lane still runs `test:e2e`. The generated `.prettierignore` keeps the files SaaSFoundryAI writes and refreshes on `sf update`
 (`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, agent instructions, the validation workflow) and generated artefacts out of `npm run format:check`; formatting them would turn the next update
-into conflicts.
+into conflicts. It also skips what the test and build tools write (`test-results/`, `playwright-report/`, `blob-report/`, `coverage/`, `coverage-e2e/`, `.nyc_output/`, `dev-dist/`), which the
+generated ESLint configs ignore as well: a Playwright report holds megabytes of minified scripts.
 
 Inspect an explicit range without executing its commands:
 

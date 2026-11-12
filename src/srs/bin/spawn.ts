@@ -92,6 +92,12 @@ interface FrDecision {
   summary: string
 }
 
+/** What `add-to-project --json` did to a ticket, and the status the board holds afterwards. */
+export interface BoardPlacement {
+  action: 'added' | 'status-set' | 'kept'
+  status: string
+}
+
 export interface SpawnIO {
   stdout: (chunk: string) => void
   stderr: (chunk: string) => void
@@ -100,8 +106,11 @@ export interface SpawnIO {
   /** Existing tickets for these FRs; `null` while the delivery parent does not exist yet. */
   inspectTickets: (parent: string | null, requirements: ReconciliationRequirement[]) => ExistingSrsTicket[]
   linkSubtask: (parent: string, child: string) => void
-  /** Put a ticket on the project board in Backlog; one already there keeps its status. */
-  addToProject: (ticket: string) => void
+  /**
+   * Put a ticket on the project board in Backlog; one already there keeps its status, and one
+   * there with no status gets Backlog. Returns the status the board holds afterwards (#1118).
+   */
+  addToProject: (ticket: string) => BoardPlacement
   /**
    * Create the milestone, or report that it already existed. Reuse is the normal
    * case: re-spawning a version must not produce a second release.
@@ -214,7 +223,15 @@ function defaultIO(): SpawnIO {
       execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['link-subtask', parent, child], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
     },
     addToProject: (ticket) => {
-      execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['add-to-project', ticket, '--status', 'Backlog'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
+      const output = execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['add-to-project', ticket, '--status', 'Backlog', '--json'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'inherit']
+      })
+      const parsed = JSON.parse(output.trim().split('\n').pop() ?? '') as Partial<BoardPlacement>
+      if (!parsed || typeof parsed.status !== 'string' || !['added', 'status-set', 'kept'].includes(parsed.action ?? '')) {
+        throw new Error(`add-to-project returned an unexpected response: ${output.trim()}`)
+      }
+      return { action: parsed.action as BoardPlacement['action'], status: parsed.status }
     },
     setComplexity: (ticket, level) => {
       execFileSync('.claude/skills/sf-workflow/workflow-cli.sh', ['retag', ticket, level], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
@@ -646,13 +663,18 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   io.stdout(`\nspawn: created ${created.length}, reused ${reused.length}, skipped ${planned.length - created.length - reused.length} Story ticket(s) under #${parentTicket}.\n`)
 
   // The board is where the lifecycle reads a ticket's status: a ticket missing from it can
-  // never leave Backlog through `update-status` (#836). Reused Stories keep their status.
+  // never leave Backlog through `update-status` (#836). Reused Stories keep their status; one
+  // on the board with no status gets Backlog, and the summary states what the board holds (#1118).
   const toBoard = [...new Set([parentTicket, ...reused, ...created])]
   const boarded: string[] = []
+  const boardStatuses = new Map<string, number>()
+  const statusSet: string[] = []
   for (const ticket of toBoard) {
     try {
-      io.addToProject(ticket)
+      const placement = io.addToProject(ticket)
       boarded.push(ticket)
+      boardStatuses.set(placement.status, (boardStatuses.get(placement.status) ?? 0) + 1)
+      if (placement.action === 'status-set') statusSet.push(ticket)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       io.stderr(`\n✗ spawn: #${ticket} could not join the project board — ${message}\n`)
@@ -661,7 +683,11 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       return 9
     }
   }
-  io.stdout(`spawn: ${boarded.length} ticket(s) on the project board.\n`)
+  const byStatus = [...boardStatuses.entries()].sort(([, a], [, b]) => b - a).map(([status, count]) => `${count} in ${status}`)
+  io.stdout(`spawn: ${boarded.length} ticket(s) on the project board: ${byStatus.join(', ')}.\n`)
+  if (statusSet.length > 0) {
+    io.stdout(`spawn: ${statusSet.length} ticket(s) were on the board with no status and are now in Backlog: ${statusSet.map((ticket) => `#${ticket}`).join(', ')}\n`)
+  }
 
   // A Story leaves Backlog only with a complexity label; the FR page states it, else
   // --complexity does, else the Story is named here rather than found by the guard (#901)

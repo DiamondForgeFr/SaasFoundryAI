@@ -93,9 +93,11 @@ La nature ajoute des exceptions protégées. Un enfant `nature:bundled-pr` n’a
 
 Pour le preset équipe :
 
-1. committer et pousser avant `AI testing` ;
+1. committer et pousser avant `AI testing` : le garde-fou des commits poussés refuse un ticket dont des fichiers suivis ne sont pas commités ou dont `origin` n'a pas les commits, et nomme la commande
+   à lancer ;
 2. publier le plan et le rapport de test en commentaires du ticket, commençant par les titres `## Test plan` et `## Test report` ;
-3. créer ou réutiliser une **pull request en brouillon** avant `Human testing` ;
+3. créer ou réutiliser une **pull request en brouillon** avant `Human testing`, et rendre vertes sur son commit de tête les statuts de CI locale du projet : le garde-fou de CI locale refuse sinon le
+   passage en `Human testing` (voir plus bas) ;
 4. laisser le développeur effectuer la validation fonctionnelle de la feature ;
 5. après approbation et tests de non-régression, le développeur rend la même PR prête (jamais l'agent sur ce parcours) ;
 6. entrer dans `In review` pour la revue de code et la CI complète ;
@@ -115,6 +117,24 @@ $WORKFLOW update-status 42 Done
 
 Sans `Human testing` (preset Solo, ou ticket `nature:internal`), l'agent ouvre aussi la PR en brouillon pendant `AI testing`, puis la rend prête lui-même avec `ready-pr` à la fin d'`AI testing` :
 `In review` est alors la barrière humaine.
+
+### Deux garde-fous aux bords d'`AI testing`
+
+`update-status` vérifie deux points qui n'étaient jusqu'ici que des consignes :
+
+- **`→ AI testing` exige un travail poussé.** Le garde-fou ne lit que git : il vaut donc pour tous les outils de workflow. Il inspecte le checkout qui porte le travail : la branche du ticket, la
+  branche du parent de livraison pour un enfant bundled, une branche nommée par l'hôte (`worktree-agent-<id>`) comparée à l'unique branche du ticket sur `origin`, ou, depuis le checkout principal, le
+  worktree de la branche du ticket. Sont refusés : des modifications suivies (indexées ou non), une branche absente d'`origin`, un commit qu'il n'a pas, une branche qu'il a dépassée, un `origin`
+  injoignable et un HEAD détaché ; le message nomme la commande de commit, de push ou de `git pull --rebase`. Les fichiers non suivis ne font qu'avertir. La même vérification couvre le retour de
+  `Human testing` vers `AI testing` après un correctif.
+- **`→ Human testing` exige une CI locale verte.** Avec GitHub Projects, le garde-fou lit le commit de tête de la pull request en brouillon qu'il vient d'identifier, depuis n'importe quel checkout, et
+  exige que les statuts de CI locale du projet y soient verts. Ils viennent de `workflow.localCi.requiredStatuses` quand il est enregistré (`sf workflow set-local-ci`), sinon de `local-<job>` pour
+  chaque job de `.molten/project.json` quand il publie vers GitHub, sinon du statut `AI testing / Local CI` que l'agent publie avec `workflow-cli.sh ai-status <ticket> "Local CI" success` une fois la
+  suite du projet verte. Le refus nomme la source et la commande à lancer (`molten ci run <branche>`, ou la suite puis l'appel `ai-status`). `workflow-cli.sh local-ci-gate <ticket>` lance la même
+  vérification seule. Un projet sans CI locale l'enregistre avec `sf workflow set-local-ci --none`.
+
+Une liste enregistrée est figée : un job ajouté ensuite à `.molten/project.json` n'est exigé qu'une fois la liste enregistrée de nouveau, ou effacée avec `sf workflow set-local-ci --clear` pour suivre
+le pipeline. `sf workflow show` et `sf status` affichent la liste effective et sa provenance.
 
 ## Le premier ticket
 
@@ -143,6 +163,7 @@ Le garde-fou de Done accepte ce ticket parce que l'unique commit racine du dép�
 sf workflow show
 sf workflow validate
 sf workflow set-working-branch develop
+sf workflow set-local-ci --from-molten
 sf workflow set-ai-rules
 
 .claude/skills/sf-workflow/workflow-cli.sh status 42
@@ -205,28 +226,60 @@ Utilisez `workflow-cli.sh transition-drafting` ; le CLI refuse pour ces tickets 
 ## Échappatoires
 
 Le refus d’un garde-fou signifie qu’une condition ou une preuve manque : la réponse est de la fournir. Pour le cas rare où un garde-fou se trompe ou ne peut pas être satisfait, les scripts acceptent
-quelques échappatoires explicites. Positionnez la variable en ligne pour une seule commande, jamais avec `export`, accompagnée de `SF_WORKFLOW_BYPASS_REASON="<raison>"`. `update-status` affiche alors
-un avertissement qui nomme la variable et l’enregistre, avec la raison, dans un commentaire du ticket ; complétez ce commentaire avec les preuves. Un agent de développement n’en active jamais une de
-lui-même ; il s’arrête et vous demande.
+quelques échappatoires explicites. Elles sont à vous, pas à l’agent : positionnez la variable en ligne pour une seule commande, jamais avec `export`, accompagnée de
+`SF_WORKFLOW_BYPASS_REASON="<raison>"`. `update-status` affiche alors un avertissement qui nomme la variable et l’enregistre, avec la raison, dans un commentaire du ticket ; complétez ce commentaire
+avec les preuves. Un refus n’indique pas à un agent de développement comment contourner le garde-fou : il nomme la prochaine commande légitime et renvoie l’agent vers vous, et un hook refuse l’agent
+qui active tout de même une échappatoire ([plus bas](#qui-applique-une-echappatoire)).
 
-| Échappatoire                                                                 | Ce qu’elle désactive                                                                     |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                             | Garde les tickets `srs:*` hors des statuts du parcours de code                           |
-| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                      | Exige un label `complexity:` pour quitter Backlog                                        |
-| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                          | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)               |
-| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                        | Exige que chaque enfant natif soit Done avant le parent                                  |
-| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                  | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR        |
-| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                    | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review |
-| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                       | Exige une PR fusionnée vérifiée avant Done                                               |
-| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic` | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                       |
-| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                             | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle            |
-| `--skip-local-ci "<raison>"` sur `create-pr` et `ready-pr`                   | Exige que les statuts de CI locale déclarés soient verts sur le commit de tête           |
-| `SF_CACHE_BUST=1`                                                            | Pas un garde-fou : recharge le schéma du board mis en cache                              |
-| `SF_DISABLE_SRS_HOOK=1`                                                      | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                          |
+| Échappatoire                                                                                | Ce qu’elle désactive                                                                     |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                            | Garde les tickets `srs:*` hors des statuts du parcours de code                           |
+| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                     | Exige un label `complexity:` pour quitter Backlog                                        |
+| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                         | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)               |
+| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                       | Exige que chaque enfant natif soit Done avant le parent                                  |
+| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                 | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR        |
+| `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                         | Exige que le travail du ticket soit commité et poussé avant AI testing                   |
+| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                                   | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review |
+| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                                      | Exige une PR fusionnée vérifiée avant Done                                               |
+| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic`                | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                       |
+| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                                            | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle            |
+| `--skip-local-ci "<raison>"` sur `create-pr`, `ready-pr`, `update-status … "Human testing"` | Exige que les statuts de CI locale requis soient verts sur le commit de tête             |
+| `SF_CACHE_BUST=1`                                                                           | Pas un garde-fou : recharge le schéma du board mis en cache                              |
+| `SF_DISABLE_SRS_HOOK=1`                                                                     | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                          |
 
 `--bypass-srs` et `--skip-local-ci` exigent une raison. La raison est la trace : choisissez un jeton facile à retrouver avec `grep`, comme `meta-srs-tooling`. `--bypass-srs` la publie sur le ticket
-créé et `--skip-local-ci` l’écrit sur la pull request. Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à laisser, sont décrits dans
-`.claude/skills/sf-workflow/escape-hatches.md` de tout projet qui installe le workflow.
+créé et `--skip-local-ci` l’écrit sur la pull request (ou sur le ticket quand aucune pull request ne peut le porter). Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à
+laisser, sont décrits dans `.claude/skills/sf-workflow/escape-hatches.md` de tout projet qui installe le workflow.
+
+### Qui applique une échappatoire
+
+Une échappatoire est votre décision, comme chaque choix qu’un garde-fou protège : un ticket saute-t-il Human testing, une pull request est-elle prête, est-elle fusionnée. Un hook `PreToolUse`, écrit
+dans `.claude/settings.json` et `.codex/hooks.json` par `sf new`, `sf update` et `sf agents refresh`, refuse un appel Bash d’agent avant qu’il ne s’exécute (et PowerShell sur Claude Code). Il refuse,
+dans la session principale comme dans un agent délégué :
+
+- une affectation `SF_WORKFLOW_BYPASS_<X>=…` devant une commande, dans `export`, `env`, `bash -c` ou `eval` (la variable de raison seule n’est pas refusée) ;
+- `--skip-local-ci` passé à `workflow-cli.sh` ou à `github-projects-cli.sh` ;
+- `nature:internal` ou `nature:bundled-pr` posé sur un ticket avec `gh issue edit` ou `gh api`.
+
+Pour un **agent délégué** seulement (un identifiant d’agent dans l’événement, ou un répertoire de travail sous `.claude/worktrees/` ou `.codex/worktrees/`), il refuse aussi
+`sf agents delegation allow|decline|clear`, `ready-pr` et `gh pr ready`, `gh pr merge`, et `create-ticket … --nature internal`. Les mêmes appels depuis le checkout principal sont permis. Les scripts
+ajoutent une seconde barrière qui ne dépend pas du hook : `update-status`, `create-pr`, `ready-pr`, `draft-pr` et `local-ci-gate` refusent eux-mêmes une échappatoire, `--skip-local-ci` et `ready-pr`
+quand ils s’exécutent dans un worktree délégué.
+
+Vous appliquez une échappatoire depuis le checkout principal, de l’une de ces deux façons :
+
+- **Claude Code :** tapez la commande dans la session avec un `!` en tête. Elle s’exécute directement, sans passer par l’outil Bash de l’agent, donc le hook ne se déclenche pas, et sa sortie rejoint
+  la conversation. `! SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1 SF_WORKFLOW_BYPASS_REASON="hotfix a1b2c3d poussé directement" .claude/skills/sf-workflow/workflow-cli.sh update-status 42 Done`. Le script
+  publie toujours le commentaire de contournement.
+- **Tout hôte :** votre propre terminal, à la racine du checkout principal. `update-status` et `local-ci-gate` y retrouvent le worktree ou la pull request du ticket.
+
+Les labels de nature, c’est vous qui les ajoutez sur GitHub, ou avec `!` dans Claude Code.
+
+Le hook est un garde-corps contre le chemin ordinaire que les refus enseignaient, pas une frontière de sécurité : il lit la commande que l’agent a écrite, ne couvre que l’outil Bash, et laisse passer
+en cas d’échec (pas de CLI, un CLI ancien ou une charge qu’il ne sait pas lire laisse l’appel passer). `sf status` le dit sur sa ligne `routing:` (`guard enforced`, `guard declared`,
+`guard hook missing`…) et avertit quand le hook ne peut pas fonctionner. Claude Code lit ses réglages au démarrage d’une session : une session en cours garde ses anciens hooks jusqu’à son redémarrage.
+Codex n’exécute un hook de projet que lorsque la couche `.codex/` et le hook sont approuvés : après `sf update`, relisez et approuvez le garde avec `/hooks`. Voir
+[`sf agents guard`](/fr/cli/sf-agents#le-hook-de-garde).
 
 ## Continuer
 

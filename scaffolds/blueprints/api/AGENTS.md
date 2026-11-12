@@ -141,8 +141,8 @@ npm run lint                # ESLint
 npm run type-check          # TypeScript
 
 # Docker
-docker compose -f docker-compose.dev-services.yml up -d  # Start DB + S3
-docker compose -f docker-compose.dev-services.yml down   # Stop services
+npm run services:up         # Start DB + S3 (creates the project's Docker network first if missing)
+npm run services:down       # Stop services (the network stays)
 ```
 
 ## 🤖 AI-Assisted Development

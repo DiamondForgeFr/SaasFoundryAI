@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 /**
@@ -27,6 +27,22 @@ export function resolveCliChannel(root: string = CLI_ROOT): CliChannel {
     commit = undefined
   }
   return { channel: 'checkout', path: root, commit }
+}
+
+/**
+ * Whether `root` is the SaaSFoundryAI CLI's own source repository: the package named `saasfoundryai-cli`
+ * with its `bin/sf.js` entry point and its `src/`. The session-start hook tests the same three things in
+ * shell (`src/harness/session-start-hook.ts`), so the two stay in step. A project that merely depends on
+ * the package has the name in `node_modules`, not at its root.
+ */
+export function isCliSourceRepository(root: string): boolean {
+  if (!existsSync(join(root, 'bin', 'sf.js')) || !existsSync(join(root, 'src'))) return false
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+    return typeof parsed === 'object' && parsed !== null && (parsed as { name?: unknown }).name === 'saasfoundryai-cli'
+  } catch {
+    return false
+  }
 }
 
 /** `1.0.0`, or `1.0.0 (development checkout: <path> @ <commit>)`. The version stays the first word. */

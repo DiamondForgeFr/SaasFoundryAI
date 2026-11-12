@@ -307,8 +307,10 @@ Theme tokens live in `src/index.css`. **Multirepo** declares them inline:
 
 ```css
 @import '@<project>/ui-primitives/theme.css';
-@source '../../../node_modules/@<project>/ui-primitives/src';
+@source '../../../packages/ui-primitives/src';
 ```
+
+`@source` names the workspace folder, never `node_modules/@<project>/ui-primitives`: a git worktree has no root `node_modules`, and the primitives' classes would silently drop out of the CSS.
 
 `topology.md` covers the package wiring.
 

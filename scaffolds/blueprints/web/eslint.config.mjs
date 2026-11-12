@@ -8,7 +8,20 @@ import noVersionPrefixPlugin from './eslint-rules/no-version-prefix.js'
 
 export default [
   {
-    ignores: ['dist', 'node_modules', 'src/components/ui/shadcn/**']
+    ignores: [
+      'dist',
+      'node_modules',
+      'src/components/ui/shadcn/**',
+      // Test and tool outputs: a Playwright report bundles multi-megabyte minified trace-viewer
+      // scripts, and linting them keeps ESLint busy for minutes after an e2e run (#1092)
+      'test-results',
+      'playwright-report',
+      'blob-report',
+      'playwright/.cache',
+      'coverage',
+      '.nyc_output',
+      'dev-dist'
+    ]
   },
 
   ...tseslint.configs.recommended,

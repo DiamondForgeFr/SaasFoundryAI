@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "playwright": {
-    "version": "1.59.1",
-    "image": "mcr.microsoft.com/playwright:v1.59.1-noble",
-    "manifestDigest": "sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53",
+    "version": "1.64.0",
+    "image": "mcr.microsoft.com/playwright:v1.64.0-noble",
+    "manifestDigest": "sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f",
     "distribution": "ubuntu-24.04-noble",
     "nodeMajor": 24,
     "platformDigests": {
-      "linux/amd64": "sha256:eac9b0a5312cdab40ee8c2429df5bf19bffdccf8f3bf3c42268e173f97541645",
-      "linux/arm64": "sha256:040190be07ce081a025d95f2aeab57b588bed4f19165c1c93cb765372d368463"
+      "linux/amd64": "sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462",
+      "linux/arm64": "sha256:4109b399f6d3de22a133ab935df0d7614ed0de9195d529f0ebc6255655cdb495"
     }
   }
 }

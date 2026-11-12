@@ -7,8 +7,18 @@ import { Prisma } from '@/generated/prisma/client'
 /**
  * Dependencies
  */
+import { ScopedPermissionChecker } from '@common/services/account-access/permission-checker'
+import { filterAssignmentsForTarget } from '@common/services/account-access/scope-filter'
 import { Logger } from '@common/services/logger/logger.service'
 import { PrismaService } from '@configs/prisma/services/prisma.service'
+
+/**
+ * Type
+ */
+import type { PermissionAssignment } from '@common/services/account-access/permission-checker'
+import type { EntityScopeTarget, ScopeRequest, ScopeTarget } from '@common/services/account-access/scope-filter'
+
+export type { ScopeRequest } from '@common/services/account-access/scope-filter'
 
 /**
  * Type definitions
@@ -38,6 +48,13 @@ export interface UserEntityAccess {
   entity: { id: string; accountId: string; parentEntityId: string | null; isActive: boolean }
   userId: string
   via: 'platform' | 'account-admin' | 'entity-admin'
+}
+
+/** What a user holds in one scope: only the role assignments that apply to it (see scope-filter.ts) contribute. */
+export interface ScopedGrants {
+  modules: Set<string>
+  subModules: Set<string>
+  permissions: Set<string>
 }
 
 /**
@@ -209,12 +226,16 @@ export class AccountAccessService {
    * Resolve the full ancestor chain of `entityId` (the node itself + every ancestor up to the root)
    * via a recursive CTE walking `parent_entity_id`. Used to test whether the user entity-admins any
    * ancestor of the target — i.e. whether the target sits in a subtree they govern.
+   *
+   * The recursion uses `UNION` (not `UNION ALL`): a row already produced is not produced again, so a
+   * corrupt parent cycle ends the walk instead of looping. The guard runs this on every request that
+   * names an entity, so it must always terminate.
    */
-  private async getAncestorEntityIds(entityId: string): Promise<string[]> {
+  async getAncestorEntityIds(entityId: string): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       WITH RECURSIVE ancestors AS (
         SELECT id, parent_entity_id FROM "entities" WHERE id = ${entityId}
-        UNION ALL
+        UNION
         SELECT e.id, e.parent_entity_id
         FROM "entities" e
         JOIN ancestors a ON e.id = a.parent_entity_id
@@ -222,6 +243,144 @@ export class AccountAccessService {
       SELECT id FROM ancestors
     `
     return rows.map((r) => r.id)
+  }
+
+  /**
+   * Resolve entities into the targets the scope filter needs, in two queries whatever their number:
+   * the account of each and its ancestor chain (the entity itself included). An unknown entity resolves
+   * to a target with no account and no ancestors, so only PLATFORM assignments count for it and the
+   * caller's own existence check (404) stays the one that answers.
+   */
+  async resolveEntityTargets(entityIds: string[]): Promise<Map<string, EntityScopeTarget>> {
+    const uniqueIds = [...new Set(entityIds)]
+    const targets = new Map<string, EntityScopeTarget>(uniqueIds.map((entityId) => [entityId, { kind: 'ENTITY', entityId, accountId: null, ancestorEntityIds: [] }]))
+    if (uniqueIds.length === 0) return targets
+
+    const entities = await this.prisma.entity.findMany({ where: { id: { in: uniqueIds } }, select: { id: true, accountId: true } })
+    if (entities.length === 0) return targets
+
+    const known = entities.map((entity) => entity.id)
+    // One walk for all of them: (entity, ancestor) pairs. `UNION` keeps it cycle-safe (see getAncestorEntityIds).
+    const chains = await this.prisma.$queryRaw<{ entity_id: string; ancestor_id: string }[]>`
+      WITH RECURSIVE chain AS (
+        SELECT id AS entity_id, id AS ancestor_id, parent_entity_id FROM "entities" WHERE id IN (${Prisma.join(known)})
+        UNION
+        SELECT c.entity_id, e.id AS ancestor_id, e.parent_entity_id
+        FROM "entities" e
+        JOIN chain c ON e.id = c.parent_entity_id
+      )
+      SELECT entity_id, ancestor_id FROM chain
+    `
+
+    for (const entity of entities) {
+      const ancestorEntityIds = chains.filter((row) => row.entity_id === entity.id).map((row) => row.ancestor_id)
+      targets.set(entity.id, { kind: 'ENTITY', entityId: entity.id, accountId: entity.accountId, ancestorEntityIds })
+    }
+    return targets
+  }
+
+  /** One entity: see `resolveEntityTargets`. */
+  async resolveEntityTarget(entityId: string): Promise<EntityScopeTarget> {
+    return (await this.resolveEntityTargets([entityId])).get(entityId) as EntityScopeTarget
+  }
+
+  /** Turn a ScopeRequest into the target the scope filter takes (resolves an ENTITY scope). */
+  async resolveScopeTarget(scope: ScopeRequest): Promise<ScopeTarget> {
+    if (scope.kind === 'ENTITY') return this.resolveEntityTarget(scope.entityId)
+    return { kind: 'ACCOUNT', accountId: scope.accountId, includeEntityAssignments: scope.includeEntityAssignments === true }
+  }
+
+  /**
+   * The user's active role assignments with only what a permission check reads: scope, target ids, the
+   * entity's account and the permission names of the role. Current rows (a revocation is seen at once).
+   */
+  private async loadPermissionAssignments(userId: string, withSubModules: boolean): Promise<PermissionAssignment[]> {
+    return this.prisma.userRoleAssignment.findMany({
+      where: { userId, role: { isActive: true } },
+      select: {
+        accountId: true,
+        entityId: true,
+        entity: { select: { id: true, accountId: true } },
+        role: {
+          select: {
+            scope: true,
+            permissionsLinked: { select: { permission: { select: { name: true } } } },
+            // The sections only when asked (granting a role): a permission check reads the permission names alone.
+            ...(withSubModules ? { subModulesLinked: { where: { subModule: { isActive: true } }, select: { subModuleId: true } } } : {})
+          }
+        }
+      }
+    })
+  }
+
+  /**
+   * A checker for one request: the user's assignments are read once and the named entities resolved in
+   * bulk, then every `has` / `assert` is answered from memory. Name every entity the request will check
+   * (`entityIds`); an account needs no preparation. `withSubModules` also loads the sections each role
+   * holds, for `hasSubModule` (checking that a role editor holds what it grants).
+   */
+  async getPermissionChecker(userId: string, entityIds: string[] = [], options: { withSubModules?: boolean } = {}): Promise<ScopedPermissionChecker> {
+    const withSubModules = options.withSubModules === true
+    const [assignments, entityTargets] = await Promise.all([this.loadPermissionAssignments(userId, withSubModules), this.resolveEntityTargets(entityIds)])
+    return new ScopedPermissionChecker(assignments, entityTargets, withSubModules)
+  }
+
+  /**
+   * What `userId` holds in `scope`: the modules, sections and permissions of the role assignments that
+   * apply to that account or entity (PLATFORM always; ACCOUNT on the account; ENTITY per the scope
+   * rule). Reads the user's current assignments (active roles only), so a service sees a revocation
+   * at once instead of waiting for the access token to be rebuilt.
+   *
+   * This is the service-level twin of PermissionsGuard: both go through `filterAssignmentsForTarget`.
+   */
+  async getScopedGrants(userId: string, scope: ScopeRequest): Promise<ScopedGrants> {
+    const target = await this.resolveScopeTarget(scope)
+
+    const assignments = await this.prisma.userRoleAssignment.findMany({
+      where: { userId, role: { isActive: true } },
+      select: {
+        accountId: true,
+        entityId: true,
+        entity: { select: { id: true, accountId: true } },
+        role: {
+          select: {
+            scope: true,
+            modulesLinked: { where: { module: { isActive: true } }, select: { module: { select: { name: true } } } },
+            subModulesLinked: { where: { subModule: { isActive: true } }, select: { subModule: { select: { name: true } } } },
+            permissionsLinked: { select: { permission: { select: { name: true } } } }
+          }
+        }
+      }
+    })
+
+    const grants: ScopedGrants = { modules: new Set(), subModules: new Set(), permissions: new Set() }
+    for (const assignment of filterAssignmentsForTarget(assignments, target)) {
+      assignment.role.modulesLinked.forEach((link) => grants.modules.add(link.module.name))
+      assignment.role.subModulesLinked.forEach((link) => grants.subModules.add(link.subModule.name))
+      assignment.role.permissionsLinked.forEach((link) => grants.permissions.add(link.permission.name))
+    }
+    return grants
+  }
+
+  /**
+   * Does `userId` hold `permission` in `scope`? Reads only the permission names of the user's
+   * assignments (not the modules and sections `getScopedGrants` also loads). A request that checks
+   * several scopes should build one `getPermissionChecker` instead of calling this in a loop.
+   */
+  async hasPermissionInScope(userId: string, permission: string, scope: ScopeRequest): Promise<boolean> {
+    const checker = await this.getPermissionChecker(userId, scope.kind === 'ENTITY' ? [scope.entityId] : [])
+    return checker.has(permission, scope)
+  }
+
+  /**
+   * Same as `hasPermissionInScope`, but throws a 403 (authenticated, not authorised) when the
+   * permission is missing in that scope.
+   */
+  async assertPermissionInScope(userId: string, permission: string, scope: ScopeRequest, message = 'You do not have the required permissions'): Promise<void> {
+    if (await this.hasPermissionInScope(userId, permission, scope)) return
+
+    this.logger.warn(`User ${userId} lacks ${permission} in ${scope.kind === 'ACCOUNT' ? `account:${scope.accountId}` : `entity:${scope.entityId}`}`, 'assertPermissionInScope')
+    throw new ForbiddenException(message)
   }
 
   /**
@@ -234,7 +393,7 @@ export class AccountAccessService {
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       WITH RECURSIVE subtree AS (
         SELECT id FROM "entities" WHERE id IN (${Prisma.join(rootEntityIds)})
-        UNION ALL
+        UNION
         SELECT e.id
         FROM "entities" e
         JOIN subtree s ON e.parent_entity_id = s.id

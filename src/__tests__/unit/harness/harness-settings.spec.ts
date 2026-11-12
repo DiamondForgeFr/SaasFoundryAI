@@ -3,11 +3,13 @@ import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 
 import { ADOPTION_COMMON_INSTRUCTIONS } from '../../../harness/agent-instructions'
-import { CLAUDE_CAPTURE_COMMAND, CLAUDE_CAPTURE_HOOKS } from '../../../harness/delegation-hooks'
+import { CLAUDE_CAPTURE_COMMAND, CLAUDE_CAPTURE_HOOKS, V1_1_0_CAPTURE_COMMANDS } from '../../../harness/delegation-hooks'
 import {
   HARNESS_ALLOWED_COMMANDS,
   HARNESS_ASK_COMMANDS,
   HARNESS_HOOKS,
+  HARNESS_SUPERSEDED_COMMANDS,
+  HARNESS_SUPERSEDED_HOOKS,
   claudeSettingsRoots,
   previewHarnessSettings,
   renderHarnessSettings,
@@ -15,6 +17,8 @@ import {
   syncHarnessSettings,
   syncHarnessSettingsForProject
 } from '../../../harness/harness-settings'
+import { CLAUDE_GUARD_COMMAND, CLAUDE_GUARD_HOOKS } from '../../../harness/guard-hook'
+import { SESSION_START_COMMAND, SESSION_START_HOOKS } from '../../../harness/session-start-hook'
 import type { SaaSFoundryManifest } from '../../../types'
 
 const FIXTURES = join(__dirname, '../../fixtures/released-bridges')
@@ -34,7 +38,9 @@ describe('renderHarnessSettings (#935)', () => {
     const before = JSON.parse(await released('1.0.1')) as Settings
     const after = parsed(await released('1.0.1'))
 
-    expect(after.hooks?.SessionStart).toEqual(before.hooks?.SessionStart)
+    // The bare `sf status` command 1.0.1 wrote is replaced by the one that resolves the project's CLI (#1103).
+    expect(before.hooks?.SessionStart?.map((group) => group.hooks[0].command)).toEqual(['sf status --claude-friendly --no-network'])
+    expect(after.hooks?.SessionStart).toEqual(SESSION_START_HOOKS.SessionStart)
     expect(after.hooks?.SubagentStop).toEqual(CLAUDE_CAPTURE_HOOKS.SubagentStop)
     expect(after.hooks?.PostToolUse).toEqual(CLAUDE_CAPTURE_HOOKS.PostToolUse)
     // Everything 1.0.1 allowed is still allowed, in its order, and the delegation rules come after.
@@ -82,14 +88,42 @@ describe('renderHarnessSettings (#935)', () => {
 
     expect(after.model).toBe('opus')
     expect(after.env).toEqual({ FOO: 'bar' })
-    expect(after.hooks?.PreToolUse).toEqual(own.hooks.PreToolUse)
+    // The guard hook (#1106) joins the project's own PreToolUse hook; it does not replace it
+    expect(after.hooks?.PreToolUse).toEqual([...own.hooks.PreToolUse, ...CLAUDE_GUARD_HOOKS.PreToolUse])
     expect(after.hooks?.SessionStart?.[0]).toEqual(own.hooks.SessionStart[0])
-    expect(after.hooks?.SessionStart?.map((group) => group.hooks[0].command)).toContain('sf status --claude-friendly --no-network')
+    expect(after.hooks?.SessionStart?.map((group) => group.hooks[0].command)).toContain(SESSION_START_COMMAND)
     expect(after.hooks?.SubagentStop?.[0]).toEqual(own.hooks.SubagentStop[0])
     expect(after.hooks?.SubagentStop?.some((group) => group.hooks.some((hook) => hook.command === CLAUDE_CAPTURE_COMMAND))).toBe(true)
     expect(after.permissions).toMatchObject({ deny: ['Bash(rm -rf *)'] })
     expect(after.permissions?.allow?.[0]).toBe('Bash(make test)')
     expect(after.permissions?.ask?.slice(0, 1)).toEqual(['Bash(git push *)'])
+  })
+
+  // #1106 — a PreToolUse hook refuses an agent's own bypass of a guard, in every project the harness manages
+  describe('the PreToolUse guard hook (#1106)', () => {
+    const preToolUse = (settings: Settings) => (settings.hooks?.PreToolUse ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    it('is part of the harness settings written when there is no file', () => {
+      expect(parsed(undefined).hooks?.PreToolUse).toEqual(CLAUDE_GUARD_HOOKS.PreToolUse)
+      expect(preToolUse(parsed(undefined))).toEqual([CLAUDE_GUARD_COMMAND])
+    })
+
+    it('is added to a project that has none, next to the PreToolUse hooks it wrote, and only once', () => {
+      const own = { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: './check.sh' }] }] } }
+
+      const first = rendered(JSON.stringify(own))
+      const after = JSON.parse(first.content) as Settings
+
+      expect(first.changed).toBe(true)
+      expect(preToolUse(after)).toEqual(['./check.sh', CLAUDE_GUARD_COMMAND])
+      const second = rendered(first.content)
+      expect(second.changed).toBe(false)
+      expect(second.content).toBe(first.content)
+    })
+
+    it('is added to a project updated from the 1.0.1 and the 1.0.0 harness', async () => {
+      for (const version of ['1.0.1', '1.0.0']) expect(preToolUse(parsed(await released(version)))).toEqual([CLAUDE_GUARD_COMMAND])
+    })
   })
 
   it('replaces the bare-sf capture command the first build wrote, and nothing else', () => {
@@ -99,6 +133,107 @@ describe('renderHarnessSettings (#935)', () => {
 
     const commands = (after.hooks?.SubagentStop ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
     expect(commands).toEqual([CLAUDE_CAPTURE_COMMAND])
+  })
+
+  // #1105 — v1.1.0, the current npm release, wrote a capture command that discarded the CLI stdout. The new one lets it
+  // through, so the old text is superseded: left beside the new hook it would stay and go on dropping every decision.
+  describe('a project updated from v1.1.0 (#1105)', () => {
+    const v110 = (): Promise<string> => readFile(join(__dirname, '../../fixtures/harness/v1.1.0/claude-settings.json'), 'utf8')
+    const eventCommands = (settings: Settings, event: string) => (settings.hooks?.[event] ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    it('ends with one capture hook per event, the new one, and keeps the hooks and rules it had', async () => {
+      const before = JSON.parse(await v110()) as Settings
+      const result = rendered(await v110())
+      const after = JSON.parse(result.content) as Settings
+
+      expect(result.changed).toBe(true)
+      expect(eventCommands(after, 'SubagentStop')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(eventCommands(after, 'PostToolUse')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(after.hooks?.SubagentStop).toEqual(CLAUDE_CAPTURE_HOOKS.SubagentStop)
+      expect(eventCommands(after, 'SessionStart')).toEqual([SESSION_START_COMMAND])
+      // #1106 — the guard hook v1.1.0 did not have is added
+      expect(after.hooks?.PreToolUse).toEqual(CLAUDE_GUARD_HOOKS.PreToolUse)
+      expect(after.hooks?.UserPromptSubmit).toEqual(before.hooks?.UserPromptSubmit)
+      expect(after.permissions?.allow?.slice(0, before.permissions!.allow!.length)).toEqual(before.permissions?.allow)
+      expect(after.permissions?.ask).toEqual([...HARNESS_ASK_COMMANDS])
+    })
+
+    it('is idempotent: a second run has nothing to change and writes the same text', async () => {
+      const once = rendered(await v110())
+      const twice = rendered(once.content)
+      expect(twice.changed).toBe(false)
+      expect(twice.content).toBe(once.content)
+    })
+
+    it('supersedes the v1.1.0 commands of both hosts, and only those', () => {
+      for (const command of V1_1_0_CAPTURE_COMMANDS) expect(HARNESS_SUPERSEDED_HOOKS.supersedes(command)).toBe(true)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes(CLAUDE_CAPTURE_COMMAND)).toBe(false)
+      expect(HARNESS_SUPERSEDED_COMMANDS).toHaveLength(2)
+    })
+
+    it('leaves a hand-edited copy of the old command alone: it is the project own, and the new hook comes beside it', () => {
+      const mine = `${V1_1_0_CAPTURE_COMMANDS[0]} # mine`
+      const after = parsed(JSON.stringify({ hooks: { SubagentStop: [{ matcher: 'sf-.*', hooks: [{ type: 'command', command: mine }] }] } }))
+      expect(eventCommands(after, 'SubagentStop')).toEqual([mine, CLAUDE_CAPTURE_COMMAND])
+    })
+  })
+
+  // #1103 — the settings merge only adds a command whose exact string is missing, so a changed hook command has to
+  // supersede the one it replaces, or the project would run both.
+  describe('the session-start hook (#1103)', () => {
+    const sessionStart = (settings: Settings) => (settings.hooks?.SessionStart ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    it('is the command that resolves the project CLI, with a timeout, and no bare sf', () => {
+      expect(HARNESS_HOOKS.SessionStart).toEqual([{ hooks: [{ type: 'command', command: SESSION_START_COMMAND, timeout: 30 }] }])
+      expect(SESSION_START_COMMAND).toContain('node_modules/.bin/saasfoundryai')
+      expect(SESSION_START_COMMAND).toContain('status --agent-friendly --no-network')
+      expect(SESSION_START_COMMAND).not.toContain('sf status')
+    })
+
+    it.each(['sf status --claude-friendly --no-network', 'sf status --agent-friendly --no-network'])('replaces the bare `%s` and keeps the hooks around it', (bare) => {
+      const own = {
+        hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'echo hello' }] }, { hooks: [{ type: 'command', command: bare }] }, { hooks: [{ type: 'command', command: 'echo after' }] }] }
+      }
+
+      const after = parsed(JSON.stringify(own))
+
+      expect(sessionStart(after)).toEqual(['echo hello', 'echo after', SESSION_START_COMMAND])
+    })
+
+    it('renders the settings of the 1.0.0 and 1.0.1 harness once, with no duplicate on a second pass', async () => {
+      for (const version of ['1.0.0', '1.0.1']) {
+        const first = rendered(await released(version))
+        expect(sessionStart(JSON.parse(first.content) as Settings)).toEqual([SESSION_START_COMMAND])
+        const second = rendered(first.content)
+        expect(second.changed).toBe(false)
+        expect(second.content).toBe(first.content)
+      }
+    })
+
+    it('leaves a session-start command the project wrote itself', () => {
+      const own = {
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                { type: 'command', command: 'sf status --agent-friendly' },
+                { type: 'command', command: 'saasfoundryai status --json' }
+              ]
+            }
+          ]
+        }
+      }
+      expect(sessionStart(parsed(JSON.stringify(own)))).toEqual(['sf status --agent-friendly', 'saasfoundryai status --json', SESSION_START_COMMAND])
+    })
+
+    it('shares one superseded list with the capture hook, so a later release appends to it', () => {
+      expect(HARNESS_SUPERSEDED_COMMANDS).toHaveLength(2)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes('sf status --claude-friendly --no-network')).toBe(true)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes('sf agents outcome capture --host codex')).toBe(true)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes(SESSION_START_COMMAND)).toBe(false)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes(CLAUDE_CAPTURE_COMMAND)).toBe(false)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes('echo hello')).toBe(false)
+    })
   })
 
   it('says why text that is not a JSON object cannot be merged, and never throws', () => {
@@ -136,9 +271,9 @@ describe('renderHarnessSettings (#935)', () => {
   })
 
   it('still merges when the shapes it would add to are absent or right: other keys may be of any shape', () => {
-    const after = parsed(JSON.stringify({ env: ['not', 'an', 'object'], permissions: { deny: 'whatever', additionalDirectories: { a: 1 } }, hooks: { PreToolUse: 'not mine to judge' } }))
+    const after = parsed(JSON.stringify({ env: ['not', 'an', 'object'], permissions: { deny: 'whatever', additionalDirectories: { a: 1 } }, hooks: { Notification: 'not mine to judge' } }))
     expect(after.env).toEqual(['not', 'an', 'object'])
-    expect(after.hooks?.PreToolUse).toBe('not mine to judge')
+    expect(after.hooks?.Notification).toBe('not mine to judge')
     expect(after.hooks?.SubagentStop).toBeDefined()
     expect(after.permissions).toMatchObject({ deny: 'whatever', additionalDirectories: { a: 1 } })
   })

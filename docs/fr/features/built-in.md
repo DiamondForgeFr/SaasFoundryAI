@@ -61,6 +61,9 @@ async signIn(dto: SignInDto, response: Response) {
 Les mots de passe sont hachés avec bcrypt, les routes authentifiées utilisent `JwtAuthGuard` et l'état du jeton de renouvellement peut être invalidé à la déconnexion. L'application web fournit les
 écrans de connexion, inscription, confirmation et réinitialisation associés.
 
+Un utilisateur désactivé perd l'accès aussitôt. Le jeton d'accès comme le jeton de renouvellement sont refusés à un utilisateur dont l'indicateur `isActive` est éteint (`401`), et désactiver un membre
+depuis les routes du compte supprime ses jetons de renouvellement. L'accès ne revient qu'après réactivation et une nouvelle connexion.
+
 Poursuivez avec [RBAC et multi-tenant](/fr/features/rbac) pour voir comment l'identité devient une autorisation.
 
 ### Modèle tenant, compte et entité

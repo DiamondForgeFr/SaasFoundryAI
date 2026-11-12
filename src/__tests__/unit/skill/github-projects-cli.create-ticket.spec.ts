@@ -13,7 +13,8 @@ const BASH = '/bin/bash'
 
 /**
  * A sandbox whose `gh` logs every call and knows one board (42, Backlog / In progress),
- * one milestone (v1.0.1) and creates issue 12. FAKE_CREATE_FAILS makes `issue create` fail.
+ * one milestone (v1.0.1) and creates issue 12. FAKE_CREATE_FAILS makes `issue create` fail,
+ * FAKE_NATURE_FAILS makes the nature label step fail.
  */
 async function buildSandbox(manifest: object = {}): Promise<{ dir: string; env: NodeJS.ProcessEnv; logPath: string; cleanup: () => Promise<void> }> {
   const dir = mkdtempSync(path.join(tmpdir(), 'sf-gh-create-ticket-'))
@@ -43,7 +44,9 @@ case "$1 $2" in
       *labels*) echo "" ;;
       *) echo "https://github.com/FakeOrg/FakeRepo/issues/12" ;;
     esac ;;
-  "issue edit") echo "https://github.com/FakeOrg/FakeRepo/issues/12" ;;
+  "issue edit")
+    [ -n "$FAKE_NATURE_FAILS" ] && case "$*" in *nature:*) exit 1 ;; esac
+    echo "https://github.com/FakeOrg/FakeRepo/issues/12" ;;
   "api graphql") echo '{"data":{"repository":{"issue":{"title":"T","state":"OPEN","projectItems":{"nodes":[]}}}}}' ;;
   "api repos/FakeOrg/FakeRepo/milestones?state=all&per_page=100") echo '[{"number":3,"title":"v1.0.1"}]' ;;
   # The milestone PATCH, already through its --jq: the issue and milestone GitHub confirms
@@ -164,6 +167,33 @@ describe('github-projects-cli.sh create-ticket', () => {
     expect(result.stdout).toContain('✓ Ticket #12 created')
     expect(result.stderr).toContain('Ticket #12 exists, but these steps failed')
     expect(result.stderr).toContain('milestone assign 12 "v9.9.9"')
+  })
+
+  // #1106 — a nature label decides whether the ticket skips Human Testing: when it cannot be applied, the
+  // failure names the ticket and sends the agent to the developer, and prints no command that relabels it
+  it('asks the developer for a nature label that could not be applied, without printing a relabel command', async () => {
+    sandbox = await buildSandbox()
+
+    const result = await run(['task', 'T', '--nature', 'internal'], { FAKE_NATURE_FAILS: '1' })
+
+    expect(result.code).toBe(1)
+    expect(result.stdout).toContain('✓ Ticket #12 created')
+    expect(result.stderr).toContain('Ticket #12 exists, but one step failed')
+    expect(result.stderr).toContain('nature:internal could not be applied to #12: ask the developer to add the label')
+    expect(result.stderr).not.toContain('gh issue edit')
+    expect(result.stderr).not.toContain('--add-label')
+  })
+
+  it('keeps the commands of the other failed steps next to the nature warning', async () => {
+    sandbox = await buildSandbox()
+
+    const result = await run(['task', 'T', '--nature', 'internal', '--milestone', 'v9.9.9'], { FAKE_NATURE_FAILS: '1' })
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('these steps failed')
+    expect(result.stderr).toContain('milestone assign 12 "v9.9.9"')
+    expect(result.stderr).toContain('nature:internal could not be applied to #12')
+    expect(result.stderr).not.toContain('--add-label')
   })
 
   it('is reachable through workflow-cli.sh', async () => {

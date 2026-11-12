@@ -4,14 +4,19 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { promisify } from 'util'
 
+import { CHECKS } from '../../../execution/calibration'
 import {
+  ASKED_FOR_LINE_REF,
   captureHostEvent,
+  missingLineReason,
   parseDelegationLine,
   readTranscriptSlice,
+  routesInBrief,
   summarizeClaudeLines,
   summarizeClaudeTranscript,
   summarizeCodexLines,
-  summarizeCodexTranscript
+  summarizeCodexTranscript,
+  type HookDecision
 } from '../../../harness/delegation-capture'
 import { agentToken, buildRouteRecord, readLedger, transact } from '../../../harness/delegation-ledger'
 import { issueRoutes, loadRoutingState } from '../../../harness/routing-runtime'
@@ -32,6 +37,17 @@ describe('the delegate line (#1035)', () => {
       checks: ['type-check', 'automated-tests'],
       ignored: []
     })
+  })
+
+  // The affected tests a delegate ran while it worked are a real check, next to the full suites (#1157)
+  it('accepts affected-tests as a check code, next to automated-tests', () => {
+    expect(parseDelegationLine('Done.\n\nSF-DELEGATION: pass route=0123456789abcdef0123 checks=affected-tests,automated-tests')).toEqual({
+      verdict: 'pass',
+      route: '0123456789abcdef0123',
+      checks: ['affected-tests', 'automated-tests'],
+      ignored: []
+    })
+    expect(CHECKS).toContain('affected-tests')
   })
 
   it('reads a claim of kind, ticket or trial as noise: it is reported as ignored, never believed', () => {
@@ -697,6 +713,225 @@ describe('capturing a host event (#1035)', () => {
     })
   })
 
+  // A delegate that ends without its closing line is asked for it once, while it is still running (#1105).
+  describe('a delegate that ended without its line (#1105)', () => {
+    const decisionOf = (result: unknown) => (result as { decision?: HookDecision }).decision
+    /** A transcript fixture whose brief names `route`, written where the payload points. */
+    const briefed = async (name: string, route: string, file = 'agent.jsonl') => {
+      const path = join(transcripts, file)
+      await writeFile(path, (await fixture(name)).replaceAll('__ROUTE__', route))
+      return path
+    }
+
+    it('blocks the stop once, records it with the question it asked, and reads nothing as a verdict', async () => {
+      const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', await claudeTranscript()), { now: NOW })
+      expect(result.status).toBe('appended')
+      expect(decisionOf(result)).toEqual({ decision: 'block', reason: expect.stringContaining('has no SF-DELEGATION line') })
+      const reason = decisionOf(result)!.reason
+      expect(reason).toContain('Do not redo any work')
+      expect(reason).toContain('SF-DELEGATION: <pass|fail> route=')
+      for (const code of CHECKS) expect(reason).toContain(code)
+      const [run] = (await ledger()).runs
+      expect(run).toMatchObject({ outcome: 'outcome-unknown', censored: true, route: null })
+      expect(run.evidenceRefs).toEqual(expect.arrayContaining(['no-sf-delegation-line', ASKED_FOR_LINE_REF]))
+    })
+
+    it('gives the exact line to write when the brief names the route of this delegation, and uses it for the suggestion only', async () => {
+      const route = await issue()
+      const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', await briefed('claude-subagent-brief.jsonl', route.id)), { now: NOW })
+      expect(decisionOf(result)!.reason).toContain(`SF-DELEGATION: <pass|fail> route=${route.id} checks=<codes>`)
+      // The run is attributed from the line the delegate writes, not from what the brief said.
+      expect((await ledger()).runs[0]).toMatchObject({ route: null, taskKind: null, ticket: null })
+    })
+
+    it('does not suggest an id the brief only printed in a tool result, or one this agent could not use', async () => {
+      const other = await issue({ tier: 'fix' })
+      const wrongTier = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', await briefed('claude-subagent-brief.jsonl', other.id)), { now: NOW })
+      expect(decisionOf(wrongTier)!.reason).toContain('route=<the id from your brief, if it gave one>')
+      expect(decisionOf(wrongTier)!.reason).not.toContain(other.id)
+      // `eeee...` is printed by a tool result of the brief fixture: it is not a brief
+      const unknown = await captureHostEvent(
+        'claude-code',
+        await payload('claude-subagent-stop-no-line.json', await briefed('claude-subagent-brief.jsonl', 'f'.repeat(20), 'unknown.jsonl'), { agent_id: 'other' }),
+        { now: NOW }
+      )
+      expect(decisionOf(unknown)!.reason).toContain('route=<the id from your brief, if it gave one>')
+    })
+
+    it('says where to find the id when the brief gave none', async () => {
+      const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', undefined), { now: NOW })
+      expect(decisionOf(result)!.reason).toContain('route=<the id from your brief, if it gave one>')
+    })
+
+    it('asks a Codex delegate the same way, with the id from the user message of its rollout', async () => {
+      const route = await issue({ provider: 'codex' })
+      const rollout = await briefed('codex-rollout-brief.jsonl', route.id, 'rollout.jsonl')
+      const result = await captureHostEvent('codex', await payload('codex-subagent-stop-no-line.json', rollout), { now: NOW })
+      expect(decisionOf(result)).toEqual({ decision: 'block', reason: expect.stringContaining(`route=${route.id} checks=<codes>`) })
+      expect((await ledger()).runs[0]).toMatchObject({ host: 'codex', provider: 'codex', outcome: 'outcome-unknown' })
+      expect((await ledger()).runs[0].evidenceRefs).toContain(ASKED_FOR_LINE_REF)
+    })
+
+    describe('never blocks', () => {
+      it('a delegate that wrote its line, whatever it says', async () => {
+        const route = await issue()
+        const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', await claudeTranscript(), {}, route.id), { now: NOW })
+        expect(result.status).toBe('appended')
+        expect(decisionOf(result)).toBeUndefined()
+        expect((await ledger()).runs[0].evidenceRefs).not.toContain(ASKED_FOR_LINE_REF)
+      })
+
+      it('a pass that names no check: the line is there, the check is not, and asking again would not change that', async () => {
+        const route = await issue()
+        const message = `SF-DELEGATION: pass route=${route.id} checks=self-review`
+        const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', undefined, { last_assistant_message: message }, route.id), { now: NOW })
+        expect(decisionOf(result)).toBeUndefined()
+        expect((await ledger()).runs[0].evidenceRefs).toEqual(expect.arrayContaining(['pass-without-check']))
+      })
+
+      it('the result of the delegation tool, which is not the stop of an agent', async () => {
+        const result = await captureHostEvent('claude-code', await payload('claude-post-tool-use.json', undefined), { now: NOW })
+        expect(result.status).toBe('detail')
+        expect(decisionOf(result)).toBeUndefined()
+      })
+
+      it.each<[string, Record<string, unknown>]>([
+        ['an agent that is not a routed sf-<tier> agent', { agent_type: 'Explore' }],
+        ['a tier the project never declared for the host', { agent_type: 'sf-nowhere' }]
+      ])('%s', async (_, extra) => {
+        const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', undefined, extra), { now: NOW })
+        expect(result.status).toBe('ignored')
+        expect(decisionOf(result)).toBeUndefined()
+      })
+
+      it('a stop the host says it is already continuing because of a stop hook, which is still recorded', async () => {
+        const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop-hook-active.json', await claudeTranscript()), { now: NOW })
+        expect(result.status).toBe('appended')
+        expect(decisionOf(result)).toBeUndefined()
+        expect((await ledger()).runs[0].evidenceRefs).toEqual(expect.arrayContaining(['no-sf-delegation-line']))
+        expect((await ledger()).runs[0].evidenceRefs).not.toContain(ASKED_FOR_LINE_REF)
+      })
+
+      it.each([
+        ['an empty message', ''],
+        ['a message that is only white space', ' \n '],
+        ['no message at all', undefined]
+      ])('an agent that ended with %s: it did not get to answer', async (_, message) => {
+        const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', undefined, { last_assistant_message: message }), { now: NOW })
+        expect(result.status).toBe('appended')
+        expect(decisionOf(result)).toBeUndefined()
+      })
+
+      it('twice, even when the host does not say it is continuing: the earlier segment of the agent carries the question', async () => {
+        const path = join(transcripts, 'agent.jsonl')
+        const lines = (await fixture('claude-subagent.jsonl')).trim().split('\n')
+        await writeFile(path, `${lines.slice(0, 6).join('\n')}\n`)
+        const first = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', path), { now: NOW })
+        expect(decisionOf(first)).toBeDefined()
+        await appendFile(path, `${lines.slice(6).join('\n')}\n`)
+        // the flag is false on purpose: a host that forgot to set it must not make the question loop
+        const second = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', path, { stop_hook_active: false }), { now: () => new Date(NOW().getTime() + 60_000) })
+        expect(second.status).toBe('appended')
+        expect(decisionOf(second)).toBeUndefined()
+        const { runs } = await ledger()
+        expect(runs[0].evidenceRefs).toContain(ASKED_FOR_LINE_REF)
+        expect(runs[1].evidenceRefs).not.toContain(ASKED_FOR_LINE_REF)
+      })
+
+      it('the same stop seen again once it was asked', async () => {
+        const stop = await payload('claude-subagent-stop-no-line.json', await claudeTranscript())
+        expect(decisionOf(await captureHostEvent('claude-code', stop, { now: NOW }))).toBeDefined()
+        const again = await captureHostEvent('claude-code', stop, { now: NOW })
+        expect(again.status).toBe('replayed')
+        expect(decisionOf(again)).toBeUndefined()
+      })
+    })
+
+    it('asks on the replay of a stop that another hook recorded without asking (a copy of the first release command, edited by hand)', async () => {
+      const transcript = await claudeTranscript()
+      // The other hook never asks: its stop reads as one the host was already continuing
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop-hook-active.json', transcript), { now: NOW })
+      const asked = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', transcript), { now: NOW })
+      expect(asked.status).toBe('replayed')
+      expect(decisionOf(asked)).toEqual({ decision: 'block', reason: expect.stringContaining('has no SF-DELEGATION line') })
+      expect((await ledger()).runs).toHaveLength(1)
+    })
+
+    it('folds a stop that was asked and the stop that answered into one delegation: the verdict and route of the answer, the cost of both', async () => {
+      const route = await issue()
+      const path = join(transcripts, 'agent.jsonl')
+      const lines = (await fixture('claude-subagent.jsonl')).trim().split('\n')
+      await writeFile(path, `${lines.slice(0, 6).join('\n')}\n`)
+      const first = await captureHostEvent('claude-code', await payload('claude-subagent-stop-no-line.json', path), { now: NOW })
+      expect(decisionOf(first)).toBeDefined()
+      await appendFile(path, `${lines.slice(6).join('\n')}\n`)
+      const answer = await payload(
+        'claude-subagent-stop.json',
+        path,
+        { stop_hook_active: true, last_assistant_message: `SF-DELEGATION: pass route=${route.id} checks=type-check,automated-tests` },
+        route.id
+      )
+      const second = await captureHostEvent('claude-code', answer, { now: () => new Date(NOW().getTime() + 60_000) })
+      expect(second.status).toBe('appended')
+      const { runs } = await ledger()
+      expect(runs).toHaveLength(2)
+      const [early, last] = runs
+      expect(last.continues).toBe(early.id)
+      expect(early).toMatchObject({ superseded: true, censored: true, route: null })
+      expect(last).toMatchObject({
+        superseded: false,
+        chainSegments: 2,
+        outcome: 'success',
+        effectiveOutcome: 'success',
+        route: route.id,
+        ticket: 1035,
+        taskKind: 'multi-file-feature',
+        censored: false,
+        decisive: true
+      })
+      // The segments are the whole transcript, and the delegation costs what both of them did
+      expect(early.cost).not.toBeNull()
+      expect(last.cost).not.toBeNull()
+      expect(Number(last.countedCost!.amount)).toBeCloseTo(Number(early.cost!.amount) + Number(last.cost!.amount), 8)
+      expect(last.countedDurationMs).toBe(early.durationMs! + last.durationMs!)
+    })
+
+    describe('the route ids a brief gives', () => {
+      const claude = (content: unknown, type = 'user') => JSON.stringify({ type, message: { role: type === 'user' ? 'user' : 'assistant', content } })
+      const a = 'a'.repeat(20)
+      const b = 'b'.repeat(20)
+
+      it('reads the user prompts of a Claude Code transcript, as text or as blocks, and skips tool results and the assistant', () => {
+        expect(
+          routesInBrief([
+            claude(`brief route=${a}`),
+            claude([{ type: 'tool_result', tool_use_id: 't', content: `route=${b}` }]),
+            claude([{ type: 'text', text: `hand-back route=${b}` }]),
+            claude(`I will use route=${'c'.repeat(20)}`, 'assistant'),
+            'not json route=dddddddddddddddddddd'
+          ])
+        ).toEqual([a, b])
+      })
+
+      it('reads the user messages of a Codex rollout, as a response item and as an event, once each', () => {
+        const item = JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: `route=${a}` }] } })
+        const event = JSON.stringify({ type: 'event_msg', payload: { type: 'user_message', message: `route=${a} and route=${b}` } })
+        const assistant = JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: `route=${'c'.repeat(20)}` }] } })
+        expect(routesInBrief([item, event, assistant])).toEqual([a, b])
+      })
+
+      it('takes an id of exactly 20 hexadecimal characters, standing alone', () => {
+        expect(routesInBrief([claude(`route=${'a'.repeat(19)} route=${'a'.repeat(21)} xroute=${b} route=${'g'.repeat(20)}`)])).toEqual([])
+      })
+    })
+
+    it('words the instruction without a route as a pointer to the brief, and with one as the exact line', () => {
+      expect(missingLineReason(null)).toContain('route=<the id from your brief, if it gave one> checks=<codes>')
+      expect(missingLineReason('0123456789abcdef0123')).toContain('SF-DELEGATION: <pass|fail> route=0123456789abcdef0123 checks=<codes>')
+      expect(missingLineReason(null).split('\n')).toHaveLength(3)
+    })
+  })
+
   describe('what is not a delegation', () => {
     it.each<[string, unknown, string]>([
       ['a payload that is not an object', 'text', 'not a JSON object'],
@@ -711,7 +946,7 @@ describe('capturing a host event (#1035)', () => {
 
     it('ignores a tier the project never declared for the host', async () => {
       const result = await captureHostEvent('claude-code', { hook_event_name: 'SubagentStop', agent_type: 'sf-nowhere', cwd: root }, { now: NOW })
-      expect(result).toEqual({ status: 'ignored', reason: 'tier nowhere is not declared for claude-code' })
+      expect(result).toEqual({ status: 'ignored', reason: 'tier nowhere is not declared for claude-code', abnormal: true })
     })
 
     it('ignores an event outside a Git checkout, which has no clone to keep a ledger in', async () => {

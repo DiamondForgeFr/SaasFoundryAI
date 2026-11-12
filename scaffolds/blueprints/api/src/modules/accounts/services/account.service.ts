@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { Prisma } from '@/generated/prisma/client'
 
 /**
@@ -25,6 +25,36 @@ import { FetchAccountUsersResponseDto } from '@modules/accounts/dto/responses/fe
 import { FetchAccountDeepResponseDto } from '@modules/accounts/dto/responses/fetch_account.response.dto'
 import { UpdateAccountStatusResponseDto } from '@modules/accounts/dto/responses/update-account-status.response.dto'
 import { UpdateAccountUsersResponseDto } from '@modules/accounts/dto/responses/update-account-users.response.dto'
+
+/**
+ * Types
+ */
+import type { ScopedPermissionChecker } from '@common/services/account-access/permission-checker'
+import type { ScopeRequest } from '@common/services/account-access/scope-filter'
+
+/**
+ * Role management (#1129)
+ */
+const ROLE_CUSTOM_MANAGEMENT = 'ROLE_CUSTOM_MANAGEMENT'
+/** Its sections give platform reach: they belong on a PLATFORM role only (the guard counts PLATFORM roles only on its routes). */
+const PLATFORM_ADMINISTRATION_MODULE = 'PLATFORM_ADMINISTRATION'
+
+/**
+ * What a caller may do to one role: read once per request (see `loadRoleAuthority`).
+ *   - `platform`: ROLE_CUSTOM_MANAGEMENT through a PLATFORM role, authority over every role;
+ *   - `targets`: where the role applies, each of which the caller must administer.
+ */
+interface RoleAuthority {
+  checker: ScopedPermissionChecker
+  platform: boolean
+  targets: ScopeRequest[]
+}
+
+/** The grants a request adds to a role (what the role did not hold before). */
+interface AddedGrants {
+  permissions: string[]
+  subModules: { id: number; name: string }[]
+}
 
 /**
  * Declaration
@@ -526,23 +556,6 @@ export class AccountService {
         accountId: null,
         entityId: null,
         role: { scope: 'PLATFORM', isActive: true, subModulesLinked: { some: { subModule: { name: 'PLATFORM_ACCOUNTS' } } } }
-      }
-    })
-    return Boolean(found)
-  }
-
-  /**
-   * Internal: does this user hold an ACCOUNT-scoped admin role on the given account?
-   * The marker permission is USER_ACCOUNTS_INVITATION — same one the frontend uses to
-   * distinguish account-admin from entity-admin.
-   */
-  private async isAccountAdminOn(userId: string, accountId: string): Promise<boolean> {
-    const found = await this.prisma.userRoleAssignment.findFirst({
-      where: {
-        userId,
-        accountId,
-        entityId: null,
-        role: { scope: 'ACCOUNT', isActive: true, permissionsLinked: { some: { permission: { name: 'USER_ACCOUNTS_INVITATION' } } } }
       }
     })
     return Boolean(found)
@@ -1225,6 +1238,12 @@ export class AccountService {
    *     tenant-owned roles make no sense — there is no platform-level audience inside a
    *     single account).
    *
+   * Authority (`assertRoleAuthority`): ROLE_CUSTOM_MANAGEMENT where the new role applies — the
+   * account for an ACCOUNT role, the account or one of its entities for an ENTITY role, the
+   * platform for a global template — so an entity administrator creates ENTITY roles only. The
+   * caller must also hold, there, every permission and section the role grants, and no account
+   * or entity role carries a PLATFORM_ADMINISTRATION section.
+   *
    * Always created with isSystem=false.
    */
   public async createCustomRole(
@@ -1234,24 +1253,16 @@ export class AccountService {
   ): Promise<{ id: number; name: string; scope: 'PLATFORM' | 'ACCOUNT' | 'ENTITY' }> {
     this.logger.debug(`Creating custom role '${payload.name}' (scope=${payload.scope}, account=${accountId ?? 'global-template'})`, 'createCustomRole')
     try {
-      if (accountId === null) {
-        // Global template path — platform-admin authorization already checked by route guard.
-        // Any scope is allowed (PLATFORM template, ACCOUNT template, or ENTITY template).
-      } else {
+      // Global template (accountId = null): any scope; the platform authority is checked below (the route guard checks it too).
+      if (accountId !== null) {
         if (payload.scope === 'PLATFORM') {
           throw new BadRequestException('PLATFORM-scoped roles cannot be attached to a single account')
         }
         await this.accountAccessService.validateUserAccountAccess(userId, accountId, 'createCustomRole')
-        // Entity-admin actor (no PLATFORM bypass, no ACCOUNT-admin role on this account) can only
-        // mint ENTITY-scoped roles — they have no authority over the broader ACCOUNT layer.
-        const isPlatformAdmin = await this.isPlatformAdmin(userId)
-        if (!isPlatformAdmin) {
-          const isAccountAdmin = await this.isAccountAdminOn(userId, accountId)
-          if (!isAccountAdmin && payload.scope !== 'ENTITY') {
-            throw new UnauthorizedException('Entity-admins can only create ENTITY-scoped custom roles')
-          }
-        }
       }
+      const newRole = { scope: payload.scope, accountId, isSystem: false }
+      const authority = await this.loadRoleAuthority(userId, newRole)
+      this.assertRoleAuthority(authority, newRole)
 
       // Validate that every requested permission is compatible with the chosen scope
       const permissions = await this.prisma.modulePermission.findMany({
@@ -1265,12 +1276,16 @@ export class AccountService {
         throw new BadRequestException(`Permissions not applicable to scope ${payload.scope}: ${incompatible.map((p) => p.name).join(', ')}`)
       }
 
-      // Validate the explicitly-requested sub-modules exist.
+      // Validate the explicitly-requested sub-modules exist and fit the scope.
       const requestedSubModuleIds = payload.subModuleIds ?? []
-      const subModules = requestedSubModuleIds.length > 0 ? await this.prisma.subModule.findMany({ where: { id: { in: requestedSubModuleIds } } }) : []
+      const subModules = requestedSubModuleIds.length > 0 ? await this.prisma.subModule.findMany({ where: { id: { in: requestedSubModuleIds } }, include: { module: { select: { name: true } } } }) : []
       if (subModules.length !== requestedSubModuleIds.length) {
         throw new BadRequestException('One or more sub-modules could not be found')
       }
+      this.assertSectionsFitScope(subModules, payload.scope)
+
+      // Nobody grants what they do not hold where the role applies.
+      this.assertRoleAuthority(authority, newRole, { permissions: permissions.map((p) => p.name), subModules })
 
       // Derive the grant set per RBAC v2 (insert order: module → sub-module → permission so the integrity trigger is satisfied):
       //   - sub-modules = explicit selection ∪ the sub-module implied by each permission carrying a subModuleId (auto-include);
@@ -1306,7 +1321,7 @@ export class AccountService {
 
       return { id: created.id, name: created.name, scope: created.scope as 'PLATFORM' | 'ACCOUNT' | 'ENTITY' }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof BadRequestException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof BadRequestException) throw error
       this.logger.error(`Failed to create custom role: ${error.message}`, 'createCustomRole')
       throw new BadRequestException('Failed to create custom role')
     }
@@ -1315,12 +1330,15 @@ export class AccountService {
   /**
    * Update a role's identity and/or permission set.
    *
-   * Authorization rules:
-   * - System roles (isSystem = true) only allow editing their permissionIds — their name,
-   *   description, scope and existence are immutable so the platform identity remains stable.
-   *   Caller must hold ROLE_CUSTOM_MANAGEMENT in the PLATFORM scope (enforced by the controller).
-   * - Custom roles (isSystem = false) can edit name / description / permissionIds. Caller must
-   *   have access to the role's owning account.
+   * Authorization rules (`assertRoleAuthority`):
+   * - System roles (isSystem = true) belong to the platform: only a caller holding
+   *   ROLE_CUSTOM_MANAGEMENT through a PLATFORM role changes them, and only their grant set — their
+   *   name, description, scope and existence are immutable so the platform identity remains stable.
+   * - Custom roles (isSystem = false) can edit name / description / grants. Caller must have
+   *   access to the role's owning account and hold ROLE_CUSTOM_MANAGEMENT wherever the role
+   *   applies: its account for an ACCOUNT role, every entity it is assigned in for an ENTITY role.
+   * - Every permission or section the update ADDS must be held by the caller there too, and no
+   *   account or entity role carries a PLATFORM_ADMINISTRATION section.
    */
   public async updateCustomRole(
     userId: string,
@@ -1329,8 +1347,16 @@ export class AccountService {
   ): Promise<{ id: number; name: string }> {
     this.logger.debug(`Updating role ${roleId}`, 'updateCustomRole')
     try {
-      const role = await this.prisma.role.findUnique({ where: { id: roleId } })
+      const role = await this.prisma.role.findUnique({
+        where: { id: roleId },
+        include: { permissionsLinked: { select: { permissionId: true } }, subModulesLinked: { select: { subModuleId: true } } }
+      })
       if (!role) throw new NotFoundException('Role not found')
+
+      // Membership first (404 / 401 answers), then authority (403).
+      if (!role.isSystem && role.accountId) await this.accountAccessService.validateUserAccountAccess(userId, role.accountId, 'updateCustomRole')
+      const authority = await this.loadRoleAuthority(userId, role)
+      this.assertRoleAuthority(authority, role)
 
       if (role.isSystem) {
         // System role: only the grant set (sub-modules + permissions) is editable.
@@ -1341,18 +1367,8 @@ export class AccountService {
           // Nothing to do
           return { id: role.id, name: role.name }
         }
-      } else {
-        // Custom role: caller needs access to the owning account.
-        if (!role.accountId) throw new UnauthorizedException('Custom role is missing its owning account')
-        await this.accountAccessService.validateUserAccountAccess(userId, role.accountId, 'updateCustomRole')
-        // Entity-admins can only edit ENTITY-scoped custom roles on their account.
-        const isPlatformAdmin = await this.isPlatformAdmin(userId)
-        if (!isPlatformAdmin) {
-          const isAccountAdmin = await this.isAccountAdminOn(userId, role.accountId)
-          if (!isAccountAdmin && role.scope !== 'ENTITY') {
-            throw new UnauthorizedException('Entity-admins can only edit ENTITY-scoped custom roles')
-          }
-        }
+      } else if (!role.accountId) {
+        throw new UnauthorizedException('Custom role is missing its owning account')
       }
 
       // A grant rewrite is triggered when EITHER the sub-modules or the permissions are supplied —
@@ -1370,12 +1386,19 @@ export class AccountService {
         if (incompatible.length > 0) {
           throw new BadRequestException(`Permissions not applicable to scope ${role.scope}: ${incompatible.map((p) => p.name).join(', ')}`)
         }
-        if (nextSubModuleIds.length > 0) {
-          const subModules = await this.prisma.subModule.findMany({ where: { id: { in: nextSubModuleIds } } })
-          if (subModules.length !== nextSubModuleIds.length) {
-            throw new BadRequestException('One or more sub-modules could not be found')
-          }
+        const subModules = nextSubModuleIds.length > 0 ? await this.prisma.subModule.findMany({ where: { id: { in: nextSubModuleIds } }, include: { module: { select: { name: true } } } }) : []
+        if (subModules.length !== nextSubModuleIds.length) {
+          throw new BadRequestException('One or more sub-modules could not be found')
         }
+        this.assertSectionsFitScope(subModules, role.scope)
+
+        // Only what the role did not hold needs the caller to hold it: removing a grant, or sending the stored set back, needs nothing more.
+        const heldPermissionIds = new Set(role.permissionsLinked.map((link) => link.permissionId))
+        const heldSubModuleIds = new Set(role.subModulesLinked.map((link) => link.subModuleId))
+        this.assertRoleAuthority(authority, role, {
+          permissions: permissions.filter((p) => !heldPermissionIds.has(p.id)).map((p) => p.name),
+          subModules: subModules.filter((sm) => !heldSubModuleIds.has(sm.id))
+        })
       }
 
       const updated = await this.prisma.$transaction(async (tx) => {
@@ -1416,38 +1439,33 @@ export class AccountService {
 
       return { id: updated.id, name: updated.name }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof BadRequestException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof BadRequestException) throw error
       this.logger.error(`Failed to update role: ${error.message}`, 'updateCustomRole')
       throw new BadRequestException('Failed to update role')
     }
   }
 
   /**
-   * Delete a custom role. System roles cannot be deleted. Active assignments to this role are removed via cascade.
+   * Delete a custom role. System roles and global templates cannot be deleted here. The caller must
+   * hold ROLE_CUSTOM_MANAGEMENT wherever the role applies (`assertRoleAuthority`); a caller without
+   * platform authority gets a 403 on a system role before learning it cannot be deleted at all.
    */
   public async deleteCustomRole(userId: string, roleId: number): Promise<{ id: number }> {
     this.logger.debug(`Deleting custom role ${roleId}`, 'deleteCustomRole')
     try {
       const role = await this.prisma.role.findUnique({ where: { id: roleId } })
       if (!role) throw new NotFoundException('Role not found')
+
+      if (!role.isSystem && role.accountId) await this.accountAccessService.validateUserAccountAccess(userId, role.accountId, 'deleteCustomRole')
+      this.assertRoleAuthority(await this.loadRoleAuthority(userId, role), role)
+
       if (role.isSystem) throw new UnauthorizedException('System roles cannot be deleted')
       if (!role.accountId) throw new UnauthorizedException('Cannot delete a global role from this endpoint')
-
-      await this.accountAccessService.validateUserAccountAccess(userId, role.accountId, 'deleteCustomRole')
-
-      // Entity-admins can only delete ENTITY-scoped custom roles.
-      const isPlatformAdmin = await this.isPlatformAdmin(userId)
-      if (!isPlatformAdmin) {
-        const isAccountAdmin = await this.isAccountAdminOn(userId, role.accountId)
-        if (!isAccountAdmin && role.scope !== 'ENTITY') {
-          throw new UnauthorizedException('Entity-admins can only delete ENTITY-scoped custom roles')
-        }
-      }
 
       await this.prisma.role.delete({ where: { id: roleId } })
       return { id: roleId }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException) throw error
       this.logger.error(`Failed to delete custom role: ${error.message}`, 'deleteCustomRole')
       throw new BadRequestException('Failed to delete custom role')
     }
@@ -1460,11 +1478,11 @@ export class AccountService {
    *   - The seeded `platform-admin` role can NEVER be disabled — self-lockout protection
    *     (deactivating it strips a platform-admin of their own platform privileges, with no
    *     in-app recovery path).
-   *   - PLATFORM-admin (`ACCOUNT_LIST_ALL`) can toggle any other role: system templates AND
-   *     account-owned custom roles.
-   *   - Account-admin (with `ROLE_CUSTOM_MANAGEMENT`) can toggle only their account's own
-   *     custom roles (`accountId = X`, `isSystem = false`). They CANNOT toggle system templates
-   *     even within their account scope.
+   *   - ROLE_CUSTOM_MANAGEMENT through a PLATFORM role toggles any other role: system templates,
+   *     global templates AND account-owned custom roles.
+   *   - Otherwise (`assertRoleAuthority`) only an account-owned custom role, with
+   *     ROLE_CUSTOM_MANAGEMENT wherever it applies: its account for an ACCOUNT role, every entity
+   *     it is assigned in for an ENTITY role. Never a system template.
    */
   public async toggleRoleStatus(userId: string, roleId: number, isActive: boolean): Promise<{ id: number; isActive: boolean }> {
     this.logger.debug(`Toggling role ${roleId} → isActive=${isActive}`, 'toggleRoleStatus')
@@ -1477,25 +1495,13 @@ export class AccountService {
         throw new BadRequestException('platform-admin role cannot be deactivated')
       }
 
-      const isPlatformAdmin = await this.isPlatformAdmin(userId)
-
-      if (!isPlatformAdmin) {
-        // Account-admin path — only their own custom roles
-        if (role.isSystem) throw new UnauthorizedException('Only platform-admin can toggle system roles')
-        if (!role.accountId) throw new UnauthorizedException('Only platform-admin can toggle global templates')
-        await this.accountAccessService.validateUserAccountAccess(userId, role.accountId, 'toggleRoleStatus')
-        // Caller also needs ROLE_CUSTOM_MANAGEMENT — enforced at the route via @RequirePermissions.
-        // Entity-admins can only toggle ENTITY-scoped custom roles.
-        const isAccountAdmin = await this.isAccountAdminOn(userId, role.accountId)
-        if (!isAccountAdmin && role.scope !== 'ENTITY') {
-          throw new UnauthorizedException('Entity-admins can only toggle ENTITY-scoped custom roles')
-        }
-      }
+      if (!role.isSystem && role.accountId) await this.accountAccessService.validateUserAccountAccess(userId, role.accountId, 'toggleRoleStatus')
+      this.assertRoleAuthority(await this.loadRoleAuthority(userId, role), role)
 
       const updated = await this.prisma.role.update({ where: { id: roleId }, data: { isActive } })
       return { id: updated.id, isActive: updated.isActive }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof BadRequestException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof BadRequestException) throw error
       this.logger.error(`Failed to toggle role status: ${error.message}`, 'toggleRoleStatus')
       throw new BadRequestException('Failed to toggle role status')
     }
@@ -1844,10 +1850,15 @@ export class AccountService {
    *   - accountRoleIds    : *replace* every ACCOUNT-scoped assignment on (user, account) by these role IDs
    *   - entityRoleIds     : per (entityId, roleIds) tuple, *replace* every ENTITY-scoped assignment on (user, entity)
    *
-   * Authorization:
-   *   - `ACCOUNT_USER_MANAGEMENT` is required for isActive
-   *   - `USER_ROLE_ALLOCATION`    is required for assignment changes
-   *   - decorator-level guard checks at least one of them is held; per-action checks happen here
+   * Authorization (the route guard only proves the actor holds ONE of the two permissions somewhere
+   * in the account; each change is then checked here, in the scope it acts on, and only when it
+   * actually changes something — a field or slice sent back unchanged is a no-op):
+   *   - `isActive` change          → `ACCOUNT_USER_MANAGEMENT` at ACCOUNT scope (PLATFORM or ACCOUNT assignment on this account)
+   *   - `accountRoleIds` change    → `USER_ROLE_ALLOCATION` at ACCOUNT scope
+   *   - an `entityRoleIds` slice   → `USER_ROLE_ALLOCATION` in the scope of THAT entity (PLATFORM, ACCOUNT on its account, ENTITY on it or an ancestor)
+   *   - a role being granted must be a system/global role or belong to this account
+   * An ENTITY assignment therefore never reaches the account level: an entity-admin cannot promote
+   * itself (or anyone) to account admin, nor change a user's active flag, nor touch another entity's roles.
    */
   public async updateAccountUser(
     actorUserId: string,
@@ -1887,6 +1898,7 @@ export class AccountService {
 
       // Validate role scopes
       const allRoleIds = Array.from(new Set([...(payload.accountRoleIds ?? []), ...(payload.entityRoleIds ?? []).flatMap((e) => e.roleIds)]))
+      let requestedRoles: { id: number; accountId: string | null }[] = []
       if (allRoleIds.length > 0) {
         const roles = await this.prisma.role.findMany({ where: { id: { in: allRoleIds } } })
         if (roles.length !== allRoleIds.length) throw new BadRequestException('One or more role IDs could not be found')
@@ -1894,7 +1906,12 @@ export class AccountService {
         const entityRoles = (payload.entityRoleIds ?? []).flatMap((e) => e.roleIds).map((id) => roles.find((r) => r.id === id)!)
         if (accountRoles.some((r) => r.scope !== 'ACCOUNT')) throw new BadRequestException('accountRoleIds must reference ACCOUNT-scoped roles only')
         if (entityRoles.some((r) => r.scope !== 'ENTITY')) throw new BadRequestException('entityRoleIds must reference ENTITY-scoped roles only')
+        requestedRoles = roles
       }
+
+      // Authority: each change is checked in the scope it acts on (the route guard checked none of this).
+      // The plan keeps only the changes that really change something: those are the only ones written.
+      const plan = await this.planAccountUserUpdate(actorUserId, accountId, targetUser, payload, requestedRoles)
 
       // Last-admin guard — refuse a deactivation that would leave any account, or the platform
       // itself, with no remaining active admin. The user must deactivate the whole account
@@ -1932,28 +1949,32 @@ export class AccountService {
         }
       }
 
+      // Only what changed is written. A slice sent back unchanged is left alone: rewriting it from a stale form
+      // could restore a role someone has revoked since the form was loaded, with no permission ever checked.
       const updated = await this.prisma.$transaction(async (tx) => {
-        if (payload.isActive !== undefined) {
-          await tx.user.update({ where: { id: targetUserId }, data: { isActive: payload.isActive } })
+        if (plan.setActive !== null) {
+          await tx.user.update({ where: { id: targetUserId }, data: { isActive: plan.setActive } })
+          // Deactivation ends the user's sessions: without its refresh tokens, no session can rotate.
+          if (!plan.setActive) {
+            await tx.userToken.deleteMany({ where: { userId: targetUserId, type: 'SESSION_REFRESH' } })
+          }
         }
 
-        if (payload.accountRoleIds !== undefined) {
+        if (plan.accountRoleIds !== null) {
           await tx.userRoleAssignment.deleteMany({ where: { userId: targetUserId, accountId, role: { scope: 'ACCOUNT' } } })
-          if (payload.accountRoleIds.length > 0) {
+          if (plan.accountRoleIds.length > 0) {
             await tx.userRoleAssignment.createMany({
-              data: payload.accountRoleIds.map((roleId) => ({ userId: targetUserId, roleId, accountId }))
+              data: plan.accountRoleIds.map((roleId) => ({ userId: targetUserId, roleId, accountId }))
             })
           }
         }
 
-        if (payload.entityRoleIds !== undefined) {
-          for (const { entityId, roleIds } of payload.entityRoleIds) {
-            await tx.userRoleAssignment.deleteMany({ where: { userId: targetUserId, entityId, role: { scope: 'ENTITY' } } })
-            if (roleIds.length > 0) {
-              await tx.userRoleAssignment.createMany({
-                data: roleIds.map((roleId) => ({ userId: targetUserId, roleId, entityId }))
-              })
-            }
+        for (const { entityId, roleIds } of plan.entitySlices) {
+          await tx.userRoleAssignment.deleteMany({ where: { userId: targetUserId, entityId, role: { scope: 'ENTITY' } } })
+          if (roleIds.length > 0) {
+            await tx.userRoleAssignment.createMany({
+              data: roleIds.map((roleId) => ({ userId: targetUserId, roleId, entityId }))
+            })
           }
         }
 
@@ -1962,7 +1983,7 @@ export class AccountService {
 
       return { id: updated.id, isActive: updated.isActive }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof BadRequestException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof BadRequestException) throw error
       this.logger.error(`Failed to update account user ${targetUserId}: ${error.message}`, 'updateAccountUser')
       throw new BadRequestException('Failed to update user')
     }
@@ -2051,6 +2072,164 @@ export class AccountService {
   /**
    * Privates methods
    */
+
+  /**
+   * `updateAccountUser` plan: compares the payload with the target's stored state, checks every real change
+   * in the scope it acts on (see the method's doc) and returns ONLY what must be written. A field or slice
+   * that matches the stored state changes nothing, needs no permission and is not written back, so a client
+   * may send the whole form without a stale value undoing someone else's revocation.
+   *
+   * Cost does not grow with the number of slices: the target's assignments are read in one query, the
+   * actor's assignments and the slices' entities once (a scoped permission checker), the rest is in memory.
+   *
+   * Throws a 403 for a missing permission and for a role that belongs to another account.
+   */
+  private async planAccountUserUpdate(
+    actorUserId: string,
+    accountId: string,
+    target: { id: string; isActive: boolean },
+    payload: { isActive?: boolean; accountRoleIds?: number[]; entityRoleIds?: { entityId: string; roleIds: number[] }[] },
+    requestedRoles: { id: number; accountId: string | null }[]
+  ): Promise<{ setActive: boolean | null; accountRoleIds: number[] | null; entitySlices: { entityId: string; roleIds: number[] }[] }> {
+    const unique = (roleIds: number[]) => [...new Set(roleIds)]
+    const slices = (payload.entityRoleIds ?? []).map((slice) => ({ entityId: slice.entityId, roleIds: unique(slice.roleIds) }))
+    const sliceEntityIds = [...new Set(slices.map((slice) => slice.entityId))]
+
+    // The target's stored ACCOUNT roles on this account and ENTITY roles on the sliced entities: one query.
+    const storedAccountRoleIds: number[] = []
+    const storedEntityRoleIds = new Map<string, number[]>()
+    if (payload.accountRoleIds !== undefined || sliceEntityIds.length > 0) {
+      const stored = await this.prisma.userRoleAssignment.findMany({
+        where: {
+          userId: target.id,
+          OR: [{ accountId, role: { scope: 'ACCOUNT' } }, ...(sliceEntityIds.length > 0 ? [{ entityId: { in: sliceEntityIds }, role: { scope: 'ENTITY' as const } }] : [])]
+        },
+        select: { roleId: true, accountId: true, entityId: true }
+      })
+      for (const assignment of stored) {
+        if (assignment.entityId === null) storedAccountRoleIds.push(assignment.roleId)
+        else storedEntityRoleIds.set(assignment.entityId, [...(storedEntityRoleIds.get(assignment.entityId) ?? []), assignment.roleId])
+      }
+    }
+
+    const setActive = payload.isActive !== undefined && payload.isActive !== target.isActive ? payload.isActive : null
+    const requestedAccountRoleIds = payload.accountRoleIds === undefined ? null : unique(payload.accountRoleIds)
+    const accountRoleIds = requestedAccountRoleIds !== null && !this.sameRoleSet(storedAccountRoleIds, requestedAccountRoleIds) ? requestedAccountRoleIds : null
+    const entitySlices = slices.filter((slice) => !this.sameRoleSet(storedEntityRoleIds.get(slice.entityId) ?? [], slice.roleIds))
+
+    if (setActive === null && accountRoleIds === null && entitySlices.length === 0) return { setActive, accountRoleIds, entitySlices }
+
+    // Every real change is checked against the actor's rights in its own scope, from one set of loaded assignments.
+    const checker = await this.accountAccessService.getPermissionChecker(
+      actorUserId,
+      entitySlices.map((slice) => slice.entityId)
+    )
+
+    if (setActive !== null) {
+      checker.assert('ACCOUNT_USER_MANAGEMENT', { kind: 'ACCOUNT', accountId }, 'You are not allowed to change the status of the users of this account')
+    }
+
+    if (accountRoleIds !== null) {
+      checker.assert('USER_ROLE_ALLOCATION', { kind: 'ACCOUNT', accountId }, 'You are not allowed to allocate account roles in this account')
+      this.assertRolesUsableInAccount(
+        requestedRoles,
+        accountRoleIds.filter((roleId) => !storedAccountRoleIds.includes(roleId)),
+        accountId
+      )
+    }
+
+    for (const { entityId, roleIds } of entitySlices) {
+      checker.assert('USER_ROLE_ALLOCATION', { kind: 'ENTITY', entityId }, 'You are not allowed to allocate roles in this entity')
+      this.assertRolesUsableInAccount(
+        requestedRoles,
+        roleIds.filter((roleId) => !(storedEntityRoleIds.get(entityId) ?? []).includes(roleId)),
+        accountId
+      )
+    }
+
+    return { setActive, accountRoleIds, entitySlices }
+  }
+
+  /**
+   * The caller's authority over one role, read once per request: the caller's assignments (with the
+   * sections they hold) and the entities the role is assigned in, resolved in bulk. The route guard
+   * cannot do this (the role routes carry a role id, not an account or entity id).
+   *
+   * Where the role applies (`targets`):
+   *   - an ACCOUNT role: its account (ENTITY assignments do not count);
+   *   - an ENTITY role: every entity it is assigned in, so an entity administrator reaches it only when
+   *     each of them lies in the subtree it administers; a role assigned nowhere yet applies to the
+   *     account, its entity assignments included (an administrator of one of its entities may shape it);
+   *   - a system role or a global template: nowhere but the platform (no target).
+   */
+  private async loadRoleAuthority(userId: string, role: { id?: number; scope: string; accountId: string | null; isSystem: boolean }): Promise<RoleAuthority> {
+    const accountId = role.isSystem ? null : role.accountId
+    const assignedEntityIds =
+      accountId !== null && role.scope === 'ENTITY' && role.id !== undefined
+        ? (await this.prisma.userRoleAssignment.findMany({ where: { roleId: role.id, entityId: { not: null } }, select: { entityId: true }, distinct: ['entityId'] })).flatMap((assignment) =>
+            assignment.entityId ? [assignment.entityId] : []
+          )
+        : []
+
+    const checker = await this.accountAccessService.getPermissionChecker(userId, assignedEntityIds, { withSubModules: true })
+
+    let targets: ScopeRequest[] = []
+    if (accountId !== null) {
+      if (role.scope !== 'ENTITY') targets = [{ kind: 'ACCOUNT', accountId }]
+      else if (assignedEntityIds.length > 0) targets = assignedEntityIds.map((entityId) => ({ kind: 'ENTITY', entityId }))
+      else targets = [{ kind: 'ACCOUNT', accountId, includeEntityAssignments: true }]
+    }
+
+    return { checker, platform: checker.hasOnPlatform(ROLE_CUSTOM_MANAGEMENT), targets }
+  }
+
+  /**
+   * Throws a 403 unless the caller may change this role and grant `added` on it:
+   *   - platform authority (ROLE_CUSTOM_MANAGEMENT through a PLATFORM role) may do anything;
+   *   - otherwise the role must be account-owned (never a system role or a global template), the caller
+   *     must hold ROLE_CUSTOM_MANAGEMENT in each place the role applies, and each permission or section
+   *     it adds must be held there too: nobody grants what they do not hold, so no role can be used to
+   *     climb above its editor.
+   */
+  private assertRoleAuthority(authority: RoleAuthority, role: { isSystem: boolean; accountId: string | null }, added: AddedGrants = { permissions: [], subModules: [] }): void {
+    if (authority.platform) return
+    if (role.isSystem || role.accountId === null) throw new ForbiddenException('Only a platform administrator can change a system role or a global role template')
+
+    for (const scope of authority.targets) {
+      authority.checker.assert(
+        ROLE_CUSTOM_MANAGEMENT,
+        scope,
+        scope.kind === 'ENTITY' ? 'This role is used in an entity you do not administer' : 'You are not allowed to manage the roles of this account'
+      )
+      const missing = [
+        ...added.permissions.filter((permission) => !authority.checker.has(permission, scope)),
+        ...added.subModules.filter((subModule) => !authority.checker.hasSubModule(subModule.id, scope)).map((subModule) => subModule.name)
+      ]
+      if (missing.length > 0) throw new ForbiddenException(`You cannot grant what you do not hold where this role applies: ${missing.join(', ')}`)
+    }
+  }
+
+  /** A PLATFORM_ADMINISTRATION section gives platform reach: it belongs on a PLATFORM role only, whoever grants it. */
+  private assertSectionsFitScope(subModules: { name: string; module: { name: string } }[], scope: string): void {
+    if (scope === 'PLATFORM') return
+    const platformSections = subModules.filter((subModule) => subModule.module.name === PLATFORM_ADMINISTRATION_MODULE)
+    if (platformSections.length > 0) {
+      throw new ForbiddenException(`Platform sections cannot be granted to a ${scope} role: ${platformSections.map((subModule) => subModule.name).join(', ')}`)
+    }
+  }
+
+  /** A role can be granted in an account when it is a system/global role (no owning account) or belongs to that account. */
+  private assertRolesUsableInAccount(roles: { id: number; accountId: string | null }[], roleIds: number[], accountId: string): void {
+    const foreign = roles.filter((role) => roleIds.includes(role.id) && role.accountId !== null && role.accountId !== accountId)
+    if (foreign.length > 0) throw new ForbiddenException('One or more roles do not belong to this account')
+  }
+
+  private sameRoleSet(left: number[], right: number[]): boolean {
+    const a = new Set(left)
+    const b = new Set(right)
+    return a.size === b.size && [...a].every((roleId) => b.has(roleId))
+  }
+
   /**
    * Discriminate a user's pending state purely from data (no heuristic on link counts):
    *   - active user                              → null (not pending)

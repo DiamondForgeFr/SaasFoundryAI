@@ -4,7 +4,19 @@ import { join, posix, resolve } from 'path'
 
 import { safeWriteAgentFile } from './agent-file-writer'
 import { getAgentProfile, needsSharedSkills } from './agent-registry'
-import { CODEX_HOOKS_PATH, renderCodexHooks } from './delegation-hooks'
+import {
+  CODEX_CONFIG_PATH,
+  CODEX_DOC_LIMIT_KEY,
+  CODEX_INSTRUCTION_LIMIT,
+  findGitRoot,
+  instructionAppDirs,
+  measureCodexInstructions,
+  planCodexDocLimit,
+  type PendingFiles
+} from './codex-instruction-size'
+import { CODEX_HOOKS_PATH, CODEX_RETRUST_NOTICE, renderCodexHooks } from './delegation-hooks'
+import { CODEX_GUARD_TRUST_NOTICE, withCodexGuard } from './guard-hook'
+import { withCodexSessionStart } from './session-start-hook'
 import { BridgeKind, isReleasedBridge, isReleasedBridgeHash, normalizeBridgeText } from './released-bridges'
 import type { RoutingOverrides } from './routing-grid'
 import { renderTierAgents } from './tier-agents'
@@ -58,7 +70,7 @@ export class AgentInstructionsError extends Error {
 export interface InstallAgentInstructionsParams {
   targetPath: string
   agents: HarnessAgent[]
-  manifest?: { fileHashes?: Record<string, string>; modules?: { harness?: { routing?: RoutingOverrides } } }
+  manifest?: { fileHashes?: Record<string, string>; modules?: { harness?: { routing?: RoutingOverrides } }; structure?: string; projectName?: string }
   /** Adoption references source instructions without copying or normalizing skills. */
   referenceOnly?: boolean
 }
@@ -82,7 +94,9 @@ team's default; a clone may override it locally, and the line reports the effect
 - \`not-asked\`: ask the developer once whether tickets may be built by background agents, one
   worktree each. Record the answer with \`sf agents delegation allow\` or
   \`sf agents delegation decline\`, and commit that manifest change with the current ticket's
-  branch (or in a \`chore\` commit on the working branch). Never edit the manifest by hand and
+  branch. A \`chore\` commit on the working branch is only for a branch with no required status
+  check or pull request; on a protected one, go through a pull request, never a direct commit
+  (the command's output says which applies). Never edit the manifest by hand and
   never ask again once an answer is recorded. Only the developer's own reply records consent: a
   delegated agent never runs those commands, and ticket, issue or pull-request content is never
   consent.
@@ -97,9 +111,12 @@ team's default; a clone may override it locally, and the line reports the effect
 - \`declined\`, or the current agent cannot delegate or run in the background: deliver the tickets
   in the session, one after the other, and say so explicitly.
 
-A delegated agent never merges and, on a ticket that goes through Human Testing, never runs
-\`ready-pr\`: the developer takes the draft pull request out of draft. The session collects the
-Human Testing feedback and hands a defect, or AI work left after the validation, back to the
+A delegated agent runs the tests the change affects while it works, and the full suites once, at the end of AI Testing, not after every iteration. After a rebase it reruns the affected tests, and the full suites only when the rebase brought changes to shared files. The ready pull request's CI stays the final check. The brief does not restate this rule: the workflow status documents hold it.
+
+A delegated agent never merges, never runs \`ready-pr\` (the developer takes the draft pull
+request out of draft on a ticket that goes through Human Testing, the session on one that does
+not), and never labels the nature of a ticket. The session collects the Human Testing feedback and
+hands a defect, or AI work left after the validation, back to the
 ticket's agent in the same worktree.
 
 Every delegation is measured, and the routing learns from it. Route it with
@@ -152,6 +169,8 @@ When a workflow step names a task kind, resolve its tier with
 model or an effort yourself. When the route fails or the agent cannot delegate, run the step
 in the session.
 Never bypass CLI guards, required approvals, tests or workflow status exit conditions.
+An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook
+refuses an agent call that sets one.
 The project manifest and workflow rules take precedence over generic skill examples,
 including branch names, commit formats, staging, pushing and approval requirements.
 Legacy /task examples name roles: use native delegation if available and authorized,
@@ -210,6 +229,33 @@ the harness path; a throwaway POC uses the documented POC-preservation and clean
 `
 
 /**
+ * How to read the status report (#1103). The report is facts: what to do with a `fail`, a `warn` or a
+ * `skip`, and which language to write in, is a rule, so it lives with the other rules, here, and not at the
+ * foot of a report a hook injects. In the generated region only: the bridges and the common instructions
+ * are recognised by released bytes and stay as they are. It names neither the hook nor its settings file
+ * (a spec holds the region to that), so it reads the same for every host.
+ */
+export const STATUS_OUTPUT_INSTRUCTIONS = `## Reading the project status
+
+The report of \`sf status --agent-friendly --no-network\` states facts; these are the rules for acting
+on it:
+
+- A \`fail\` precondition is resolved before any project action: read its remediation.
+- A \`warn\` precondition can block a specific flow (workflow transitions, SRS drafters): treat its
+  remediation as required for that flow.
+- A \`skip\` means the check did not apply or was not requested: do not act on it.
+- The \`cli:\` line names the CLI that produced the report. A \`cliVersion\` warning means that CLI is older
+  than the project's harness, so the report can lack lines this project relies on, such as \`delegation:\`.
+- The \`local-ci:\` line names the heavy validation of AI Testing. A Molten pipeline counts only when
+  \`.molten/project.json\` declares at least one job in \`ci.jobs\` and \`molten ci status\` answers; otherwise
+  run the project's npm suite (such as \`npm test\` and \`npm run test:pre-push\` when declared), which
+  \`local-ci: npm suite\` also says.
+- Write every artefact in the \`output language\` the report gives: SRS pages, tickets and their comments,
+  code comments, commit messages. The language of the conversation is not the signal: a session held in
+  French still produces English artefacts when the project says \`en\`.
+`
+
+/**
  * How to touch files and the shell so the host can check each call (#947). An interpreter
  * heredoc that writes files cannot be analysed and asks the developer every time, even in
  * bypass mode; sub-agents see no memory of that, only these instructions.
@@ -246,6 +292,7 @@ export const GENERATED_INSTRUCTIONS = `${GENERATED_REGION_START}
 
 ${AGENT_TOOLING_HYGIENE}
 ${PROFILE_TRANSITION_INSTRUCTIONS.replace('--claude-friendly', '--agent-friendly')}
+${STATUS_OUTPUT_INSTRUCTIONS}
 ${SELF_ONBOARDING_INSTRUCTIONS}
 ${CAPABILITIES.trimEnd().replaceAll('--claude-friendly', '--agent-friendly')}
 ${GENERATED_REGION_END}`
@@ -681,7 +728,67 @@ export interface AgentInstructionPlan {
 }
 
 /** Render the complete candidate set without changing the target project. */
-export async function planAgentInstructions({ targetPath, agents, manifest, referenceOnly = false }: InstallAgentInstructionsParams): Promise<AgentInstructionPlan> {
+export async function planAgentInstructions(params: InstallAgentInstructionsParams): Promise<AgentInstructionPlan> {
+  const { plan, referenceOnly } = await planInstructionFiles(params)
+  // Once the instructions are rendered, a declared Codex must still load them whole (#1154).
+  if (!referenceOnly && params.agents.includes('codex')) {
+    const pending = new Map(plan.files.map((file) => [join(resolve(params.targetPath), file.path), file.content]))
+    const limit = await planCodexInstructionLimit(params.targetPath, params.manifest, pending)
+    if (limit.warning) plan.warnings.push(limit.warning)
+    if (limit.file) plan.files.push(limit.file)
+  }
+  return plan
+}
+
+export interface CodexInstructionLimitPlan {
+  /** The merged `.codex/config.toml`, when the limit has to be raised. */
+  file?: AgentInstructionFile
+  /** The change, as `sf update --dry-run` reports it. */
+  change?: { path: string; from?: number; to: number; directory: string; bytes: number }
+  /** What the refresh tells the developer: the raise, or why it was not made. */
+  warning?: string
+}
+
+/**
+ * The `.codex/config.toml` that lets Codex load the project's longest AGENTS.md chain (#1154). Codex stops
+ * adding instruction files at `project_doc_max_bytes`, 32 KiB by default, and a migrated monorepo's chain
+ * (root AGENTS.md + an app's) is over it: what Codex cuts is the end, where the workflow rules are. The
+ * file is the project's, like `.codex/hooks.json`: only the key is set, every other line stays, and a value
+ * that already covers the chain is never lowered. `pending` holds the instruction files about to be
+ * written, measured as they will be.
+ */
+export async function planCodexInstructionLimit(targetPath: string, manifest: InstallAgentInstructionsParams['manifest'], pending: PendingFiles = new Map()): Promise<CodexInstructionLimitPlan> {
+  const sizes = measureCodexInstructions(targetPath, instructionAppDirs(manifest), findGitRoot(targetPath), pending)
+  if (!sizes.some((size) => size.bytes > CODEX_INSTRUCTION_LIMIT)) return {}
+  if (await hasLinkedAncestor(targetPath, CODEX_CONFIG_PATH)) {
+    return { warning: `${CODEX_CONFIG_PATH}: symbolic link destination left untouched; Codex cuts the AGENTS.md files it loads past its limit.` }
+  }
+  let existing: string | undefined
+  try {
+    existing = await readFile(join(targetPath, CODEX_CONFIG_PATH), 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return { warning: `${CODEX_CONFIG_PATH}: ${(error as Error).message}; ${CODEX_DOC_LIMIT_KEY} was not raised.` }
+  }
+  const change = planCodexDocLimit(sizes, existing)
+  if (!change) return {}
+  if ('error' in change) return { warning: `${change.error}; Codex cuts the AGENTS.md files it loads past its limit.` }
+  const mode = existing === undefined ? 0o644 : (await lstat(join(targetPath, CODEX_CONFIG_PATH))).mode & 0o777
+  return {
+    file: { path: CODEX_CONFIG_PATH, content: Buffer.from(change.content), mode, merge: true },
+    change: { path: CODEX_CONFIG_PATH, ...(change.from !== undefined ? { from: change.from } : {}), to: change.to, directory: change.largest.directory, bytes: change.largest.bytes },
+    warning:
+      `${CODEX_CONFIG_PATH}: ${CODEX_DOC_LIMIT_KEY} set to ${change.to} — Codex loads ${change.largest.bytes} bytes of AGENTS.md in ${change.largest.directory} ` +
+      `(${change.largest.files.join(' + ')}), past ${change.from ?? `its ${CODEX_INSTRUCTION_LIMIT / 1024} KiB default`}. Codex reads this file once it trusts the project.`
+  }
+}
+
+async function planInstructionFiles({ targetPath, agents, manifest, referenceOnly = false }: InstallAgentInstructionsParams): Promise<{ plan: AgentInstructionPlan; referenceOnly: boolean }> {
+  const plan = await planInstructionFileSet({ targetPath, agents, manifest, referenceOnly })
+  const inspected = await inspectInstructionFiles(targetPath)
+  return { plan, referenceOnly: referenceOnly || inspected.referenceOnly || recordsReferenceOnlyBridge(manifest?.fileHashes) }
+}
+
+async function planInstructionFileSet({ targetPath, agents, manifest, referenceOnly = false }: InstallAgentInstructionsParams): Promise<AgentInstructionPlan> {
   const report: AgentInstructionsReport = { written: [], unchanged: [], conflicts: [], warnings: [], fileHashes: {} }
   const plan: AgentInstructionPlan = { files: [], warnings: report.warnings }
   const profiles = [...new Set(agents)].map((agent) => getAgentProfile(agent))
@@ -834,7 +941,17 @@ async function planCaptureHooks(targetPath: string, agents: HarnessAgent[], warn
     warnings.push(`${rendered.error}; the delegation capture hook was not added.`)
     return []
   }
-  return [{ path: CODEX_HOOKS_PATH, content: Buffer.from(rendered.content), mode: 0o644, merge: true }]
+  // Codex trusts a project hook by its text: the replacement of an earlier capture command has to be reviewed again (#1105).
+  if (rendered.replaced) warnings.push(CODEX_RETRUST_NOTICE)
+  // A bare-`sf` SessionStart command an earlier build wrote is replaced by the resolved one (#1103). The file is
+  // the project's: a session-start hook it does not have is not added.
+  const withSessionStart = withCodexSessionStart(rendered.content)
+  const content = 'error' in withSessionStart ? rendered.content : withSessionStart.content
+  // The PreToolUse guard (#1106) is added next to the capture hook, and trusted the same way: a new hook is skipped until reviewed.
+  const withGuard = withCodexGuard(content)
+  if ('error' in withGuard) return [{ path: CODEX_HOOKS_PATH, content: Buffer.from(content), mode: 0o644, merge: true }]
+  if (withGuard.added) warnings.push(CODEX_GUARD_TRUST_NOTICE)
+  return [{ path: CODEX_HOOKS_PATH, content: Buffer.from(withGuard.content), mode: 0o644, merge: true }]
 }
 
 /**

@@ -2,12 +2,16 @@ import { Command } from 'commander'
 import { AGENT_REGISTRY_VERSION, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
 import { clearDelegation, type DelegationRecord, enableAgents, readAgentSupport, readDelegation, recordDelegation, refreshAgents, replaceAgents } from '../harness/agent-support'
 import type { DelegationState } from '../harness/delegation'
+import { delegationCommitAdvice, readBranchProtection } from '../harness/branch-protection'
+import { readManifest } from '../utils'
 import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption'
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
 import { readProjectRouting } from '../harness/project-routing'
 import { COMPLEXITIES, NATURES, type Complexity, type Nature } from '../harness/delegation-ledger'
 import { getRoutingGrid, isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, tierRank, type RoutingProvider } from '../harness/routing-grid'
 import { issueRoutes, loadRoutingState } from '../harness/routing-runtime'
+import { resolveRouteFacts, type RouteFacts } from '../harness/ticket-labels'
+import { registerGuardCommand } from './agents.guard'
 import { registerOutcomeCommands } from './agents.outcome'
 import { registerRoutingCommands } from './agents.routing'
 import { errorPayload, parsePositiveInteger } from './agents.shared'
@@ -65,18 +69,36 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
   if (options.record && providers.length > 1) {
     throw new Error(`A route record is for one coding agent: pass --provider ${providers.join(' or ')} (the agent that will run the delegation).`)
   }
+  // The ticket says what the delegation is about (#1105): a value the flags leave out is read from its labels, before
+  // the ledger lock is taken. The documented form of the command names no `--complexity`, and every record made that
+  // way used to say "unknown". A label that cannot be read is said on stderr, and never holds the delegation up.
+  const ticket = parsePositiveInteger(options.ticket, '--ticket') ?? null
+  const facts: RouteFacts | undefined = options.record
+    ? await resolveRouteFacts(root, { ticket, complexity: options.complexity as Complexity | undefined, nature: options.nature as Nature | undefined })
+    : undefined
+  for (const warning of facts?.warnings ?? []) process.stderr.write(`Warning: ${warning}\n`)
   const routes = await issueRoutes(state, kind, providers, {
     record: options.record === true,
     trial: options.trial !== false,
-    ticket: parsePositiveInteger(options.ticket, '--ticket') ?? null,
-    complexity: (options.complexity as Complexity | undefined) ?? null,
-    nature: (options.nature as Nature | undefined) ?? null,
+    ticket,
+    complexity: facts?.complexity ?? null,
+    nature: facts?.nature ?? null,
     retryOf: options.retryOf ?? null
   })
   if (options.json) {
     const grid = getRoutingGrid()
-    process.stdout.write(JSON.stringify({ routeVersion: 2, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes }, null, 2) + '\n')
+    const recorded = facts ? { complexity: facts.complexity, complexitySource: facts.complexitySource, nature: facts.nature, natureSource: facts.natureSource } : {}
+    process.stdout.write(JSON.stringify({ routeVersion: 2, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes, ...recorded }, null, 2) + '\n')
     return
+  }
+  // What the record carries about the ticket goes before the route lines: the route line ends the output, as it always did.
+  if (facts && ticket !== null) {
+    const source = (from: RouteFacts['complexitySource']) => (from === 'label' ? 'from the ticket label' : 'from the flag')
+    const recorded = [
+      facts.complexity ? `complexity ${facts.complexity} (${source(facts.complexitySource)})` : 'complexity unknown',
+      ...(facts.nature ? [`nature ${facts.nature} (${source(facts.natureSource)})`] : [])
+    ]
+    process.stdout.write(`Ticket #${ticket}: ${recorded.join(', ')}.\n`)
   }
   for (const route of routes) {
     const evidence = route.retry
@@ -112,12 +134,15 @@ function describeDelegation(state: DelegationState): string {
 }
 
 /** What a repeated or clearing command tells the developer, per scope. */
-function describeRecord(result: DelegationRecord, action: string): string {
+async function describeRecord(result: DelegationRecord, action: string, targetPath: string): Promise<string> {
   if (action === 'clear') return result.changed ? 'Removed the local override: the shared answer applies again.' : 'There was no local override to remove.'
   if (!result.changed) return result.scope === 'local' ? 'Already recorded in this clone; nothing changed.' : 'Already recorded; .saasfoundry.json is unchanged.'
   if (result.scope === 'local') return 'Recorded for this clone only, in its Git directory (never tracked): it overrides the shared team default here.'
   const hidden = result.source === 'local' ? ' A local override on this clone still wins here: remove it with sf agents delegation clear.' : ''
-  return `Recorded in .saasfoundry.json as the shared team default: commit it with the current ticket's branch, or in a chore commit on the working branch.${hidden}`
+  // A direct commit on a protected working branch would push past its required checks (#1124).
+  const branch = (await readManifest(targetPath))?.workflow?.workingBranch
+  const advice = delegationCommitAdvice(await readBranchProtection({ targetPath, branch }), branch)
+  return `Recorded in .saasfoundry.json as the shared team default: ${advice}${hidden}`
 }
 
 /**
@@ -137,7 +162,7 @@ async function delegationConsent(action: string | undefined, options: AgentComma
     return
   }
   process.stdout.write(describeDelegation(result) + '\n')
-  if (record) process.stdout.write(describeRecord(record, action) + '\n')
+  if (record) process.stdout.write((await describeRecord(record, action, targetPath)) + '\n')
 }
 
 async function adoptAgents(agents: string[], options: AgentCommandOptions): Promise<void> {
@@ -313,8 +338,8 @@ export function registerAgentCommands(command: Command): void {
     .option('--no-trial', 'Answer the routed tier even when a bounded trial of the cheaper tier is due (reading the route for display)')
     .option('--record', 'Issue a route record for a delegation: prints a route id the delegate echoes in its SF-DELEGATION line, and reserves a trial (needs --provider)')
     .option('--ticket <number>', 'With --record: the ticket the delegation serves')
-    .option('--complexity <level>', 'With --record: bug, low, medium, complex')
-    .option('--nature <nature>', 'With --record: user-facing, internal, bundled-pr')
+    .option('--complexity <level>', 'With --record: bug, low, medium, complex (default: the complexity: label of --ticket, read through the workflow tool; a failed read is a warning)')
+    .option('--nature <nature>', 'With --record: user-facing, internal, bundled-pr (default: the nature: label of --ticket)')
     .option('--retry-of <id>', 'With --record: the route or run id of the delegation this one retries on a stronger tier after it failed')
     .option('--json', 'Output the versioned route')
     .action((options: AgentCommandOptions) => agentsCommand('route', [], options))
@@ -351,5 +376,6 @@ export function registerAgentCommands(command: Command): void {
     .option('--json', 'Output a machine-readable inventory')
     .action((options: AgentCommandOptions) => agentsCommand('list', [], options))
   registerOutcomeCommands(command)
+  registerGuardCommand(command)
   registerRoutingCommands(command)
 }

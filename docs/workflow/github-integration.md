@@ -68,7 +68,7 @@ git push origin HEAD:feature/42-add-export
 .claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft
 ```
 
-The commands accept that checkout when **origin holds the ticket's branch at the local `HEAD` commit**: the work has been pushed in full, and the pull request carries exactly what is checked out.
+`create-pr` accepts that checkout when **origin holds the ticket's branch at the local `HEAD` commit**: the work has been pushed in full, and the pull request carries exactly what is checked out.
 
 - **Without `--head`**, the CLI looks for the feature or fix branches of the ticket on origin that point at `HEAD`. Exactly one is used, and the command prints a line saying which. None, or several,
   is refused with an error that names `--head`. Release branches are never searched for: they carry no ticket number.
@@ -80,6 +80,68 @@ even at `HEAD`. A pull request is never promoted from a branch that is not prova
 
 From there the branch is the ticket's own. `create-pr` pushes nothing, because origin already holds it, and opens the pull request from that branch (`gh pr create --head`). The board linkage, the
 `Resolves #<ticket>` line, the base branch and the guards are those of any other ticket branch.
+
+### `ready-pr` and `draft-pr` from the primary checkout
+
+With delegated delivery, the session changes the draft state of a ticket's pull request from the primary checkout, on the working branch, while the ticket branch lives in the agent's worktree. There
+is no need to enter that worktree:
+
+```bash
+# On develop, in the primary checkout
+.claude/skills/sf-workflow/workflow-cli.sh ready-pr 42
+.claude/skills/sf-workflow/workflow-cli.sh draft-pr 42 --pr 123
+```
+
+When the current branch is not the ticket's, `ready-pr` and `draft-pr` do not look at the local `HEAD`. They find the pull request on GitHub:
+
+- **Without an option**, the ticket's one open pull request of this repository whose head branch follows the ticket's `branchNaming` (feature or fix) is used, and the command prints a line naming it.
+  When none matches, the command refuses. Several are refused with the list of candidates (`#123 (feature/42-…), #124 (fix/42-…)`): pick one with `--pr <number>`.
+- **With `--pr <number>`**, the pull request is the one named. Its head branch must still follow the ticket's naming, unless the pull request resolves the ticket (see below).
+- **With `--head <branch>`**, the open pull request of that branch is used.
+
+The pull request's head commit must be the commit origin holds for its branch, and that commit is the one the local CI gate checks. On the ticket branch itself nothing changes: the local `HEAD`,
+origin and the pull request must all match. The nature axis is enforced by `update-status` as before: the In review transition still requires a non-draft pull request, and Human testing a draft one.
+
+### One pull request that delivers several tickets
+
+A pull request may deliver several tickets, for example the stories of one Epic. Its body then carries one line per ticket, each reading exactly `Resolves #<ticket>`:
+
+```markdown
+Resolves #170 Resolves #171 Resolves #172
+```
+
+A ticket with no pull request of its own finds that one: an open pull request of this repository, from another ticket's branch, into the PR target, whose body names the ticket on such a line or that
+GitHub links to it as a closing reference. The ticket's own branch always wins. This holds for `ai-status`, `ready-pr`, `draft-pr` and `local-ci-gate`, for the PR-state guard of Human testing and In
+review, for the PR-merged guard of Done, and for the pushed-commits guard of AI testing, which then checks the branch of that pull request. A line that only mentions the ticket (`See #171`), a fork,
+or a pull request into another branch does not count, and two pull requests that both resolve the ticket are refused as ambiguous.
+
+`sync-pr-review` moves every ticket the pull request resolves: the closing references GitHub verified on a pull request into the default branch, the `Resolves` lines on any other target. When it
+cannot move one of them, it still moves the others and ends with one line per ticket that names the cause; the check then fails. The same ticket on two `Resolves` lines is refused.
+
+### The local CI gate
+
+A pull request opened for review (`create-pr` without `--draft`), marked ready (`ready-pr`) and a ticket moved to **Human testing** need the project's local CI statuses green on the exact head commit
+of the pull request. A draft still opens early and waits for them. The statuses come from one of three sources, in this order, and the refusal names the one that applies and the command to run:
+
+1. **The manifest**: `workflow.localCi.requiredStatuses`, written by `sf workflow set-local-ci`. It always wins. An empty list (`--none`) is a deliberate "this project has no local CI": the gate
+   prints a notice and checks nothing.
+2. **A Molten pipeline**: with the key absent, `.molten/project.json` declares at least one job in `ci.jobs` and `"ci": { "statuses": "github" }`. Each job `<name>` publishes the status
+   `local-<name>`, and every one is required. `molten ci run <branch>` publishes them. A pipeline file that cannot be read is a refusal, never a fallback.
+3. **Neither**: the status `AI testing / Local CI`, which the agent publishes with `workflow-cli.sh ai-status 42 "Local CI" success "<what ran>"` once the project's own suite (`npm test`,
+   `npm run test:pre-push`) is green on the pushed commit. The draft pull request must exist to carry it.
+
+```bash
+# The same check, on its own: reads the head commit of the ticket's open pull request, changes nothing
+.claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42
+# A recorded list, or a deliberate "no local CI"
+sf workflow set-local-ci --from-molten
+sf workflow set-local-ci --none
+```
+
+`update-status 42 "Human testing"` runs the gate after its pull request checks, on the draft pull request it matched, from any checkout, and fails closed: a pull request, a commit or statuses that
+cannot be read refuse. `--skip-local-ci "<reason>"` (after the ticket, on `update-status`) is the only hatch, recorded on the pull request, and it is yours to apply: the refusal sends an agent back to
+you, and the [guard hook](/guide/workflow-system#who-applies-a-hatch) refuses an agent that passes the flag. The same transition to **AI testing** is guarded by the pushed-commits guard: the ticket's
+tracked changes must be committed and its commits on `origin`, or the move is refused with the command to run.
 
 ## Routing from `sf-workflow`
 
@@ -108,12 +170,13 @@ $CLI create-subtask 42 "Backend API"
 git commit -m "feat(#SUB-1): add backend API" && git push
 $CLI update-status <SUB-1> "Done"
 
-# Automated validation
+# Automated validation (the work is committed and pushed: the pushed-commits guard checks it)
 $CLI update-status 42 "AI testing"
-npm run test:pre-push # or: molten ci run <branch>, when .molten/project.json declares a MoltenTerm pipeline
-
-# Functional feature testing on a draft PR
 $CLI create-pr 42 --draft
+npm run test:pre-push # or: molten ci run <branch>, when .molten/project.json declares at least one job in ci.jobs
+$CLI ai-status 42 "Local CI" success "npm run test:pre-push green on <sha>" # only when no list is recorded and no Molten pipeline publishes to GitHub
+
+# Functional feature testing on the draft PR (the local CI guard reads its head commit)
 $CLI update-status 42 "Human testing"
 
 # Code review: the developer clicks Ready for review (ready-pr is the agent's only without Human testing)
@@ -142,6 +205,9 @@ After automated testing, PR review is the human gate. The developer can still ru
 checkbox is not a substitute.
 
 `list-incomplete-children` follows those native relationships and checks each child's Projects V2 status. An issue being closed does not prove that its board status is `Done`.
+
+The first child entering `In progress` brings its Epic there through the statuses `workflow.statuses` declares: through `Ready` on the Team board, straight from `Backlog` on Solo. A manifest that
+lists no statuses assumes the Team set; when the board then refuses `Ready`, the Epic still reaches `In progress` and the CLI prints a notice asking you to declare the board's statuses.
 
 ## Troubleshooting
 

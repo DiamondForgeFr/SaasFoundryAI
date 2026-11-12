@@ -13,6 +13,7 @@ import {
   LEDGER_DIR,
   type AppendResult,
   type DelegationRunRecord,
+  type FoundRoute,
   type LedgerState,
   type RunInput
 } from './delegation-ledger'
@@ -112,6 +113,70 @@ export function parseDelegationLine(message: unknown): DelegationReport | undefi
     checks: [...new Set(checks)],
     ignored: [...fields.keys()].filter((key) => key !== 'route' && key !== 'checks')
   }
+}
+
+// --- asking for the line ------------------------------------------------------------------------------
+
+/**
+ * The evidence ref the stop carries when the capture asked its agent for the missing line (#1105). The agent's
+ * next stop is a segment of the same chain and reads it to know the question was already put: that guard is ours,
+ * and holds when a host's own loop flag is wrong or missing.
+ */
+export const ASKED_FOR_LINE_REF = 'asked-for-sf-delegation-line'
+
+/**
+ * What the capture hands back to the host (#1105): a Claude Code or Codex `SubagentStop` hook that prints this on
+ * stdout keeps the subagent running, and `reason` reaches it as its next instruction. Both hosts take the same
+ * shape (Claude Code: `decision: "block"` with a `reason`; Codex: the same JSON on stdout with exit 0).
+ */
+export interface HookDecision {
+  decision: 'block'
+  reason: string
+}
+
+/**
+ * The instruction a delegate that ended without its line is given. It asks for the line and nothing else: the
+ * work is done, only the measure is missing. `route` is the id the brief gave, offered as the exact line to write;
+ * the line the delegate writes is what attributes the run, never this suggestion.
+ */
+export function missingLineReason(route: string | null): string {
+  return [
+    'Your final message has no SF-DELEGATION line, so this delegation cannot be measured. Do not redo any work.',
+    `Reply with only this line, as plain text outside a code block, with your real verdict and the checks you actually ran (codes: ${CHECKS.join(', ')}; checks=none when you ran no check):`,
+    `SF-DELEGATION: <pass|fail> route=${route ?? '<the id from your brief, if it gave one>'} checks=<codes>`
+  ].join('\n')
+}
+
+const BRIEF_ROUTE = /\broute=([0-9a-f]{20})(?![0-9a-f])/g
+
+/** The texts a transcript entry carries as a user prompt: Claude Code `user` entries and Codex user messages, never a tool result. */
+function promptTexts(entry: Record<string, unknown>): string[] {
+  const texts: string[] = []
+  const blocks = (content: unknown): void => {
+    if (typeof content === 'string') texts.push(content)
+    else if (Array.isArray(content)) for (const block of content) if (object(block) && typeof block.text === 'string' && (block.type === 'text' || block.type === 'input_text')) texts.push(block.text)
+  }
+  const payload = object(entry.payload) ? entry.payload : undefined
+  if (entry.type === 'user' && object(entry.message) && entry.message.role === 'user') blocks(entry.message.content)
+  else if (entry.type === 'response_item' && payload?.type === 'message' && payload.role === 'user') blocks(payload.content)
+  else if (entry.type === 'event_msg' && payload?.type === 'user_message' && typeof payload.message === 'string') texts.push(payload.message)
+  return texts
+}
+
+/**
+ * The route ids the user prompts of a transcript slice give (`route=<20 hex>`), in order, without repeats. That is
+ * where the session put the id of the route record it issued (the brief), and only there: a tool result that
+ * happens to print an id is not a brief.
+ */
+export function routesInBrief(lines: readonly string[]): string[] {
+  const found: string[] = []
+  for (const line of lines) {
+    if (!line.includes('route=')) continue
+    const entry = parseObject(line)
+    if (!entry) continue
+    for (const text of promptTexts(entry)) for (const match of text.matchAll(BRIEF_ROUTE)) if (!found.includes(match[1])) found.push(match[1])
+  }
+  return found
 }
 
 // --- transcripts --------------------------------------------------------------------------------------
@@ -300,11 +365,13 @@ export interface CaptureOptions {
  * `detail` of its agent. `root`, `dir` and `project` are what the adjustment that follows reads again.
  */
 export type CaptureResult =
-  | (AppendResult & { record: DelegationRunRecord; root: string; dir: string; project: ProjectRouting })
+  /** `decision`: the stop asks the host to keep the agent running so it can write its missing line (#1105); the hook prints it. */
+  | (AppendResult & { record: DelegationRunRecord; root: string; dir: string; project: ProjectRouting; decision?: HookDecision })
   /** The stop was recorded before and the transcript has nothing new: no state was read. */
-  | { status: 'replayed'; id: string; record: DelegationRunRecord; root: string; dir: string; project: ProjectRouting }
+  | { status: 'replayed'; id: string; record: DelegationRunRecord; root: string; dir: string; project: ProjectRouting; decision?: HookDecision }
   | { status: 'detail'; id: string; state: LedgerState; root: string; dir: string; project: ProjectRouting }
-  | { status: 'ignored'; reason: string }
+  /** `abnormal`: not a plain "this is not ours" (a payload that is not an object, an undeclared tier, a tool result without an agent id): it goes to the capture error log. */
+  | { status: 'ignored'; reason: string; abnormal?: true }
 
 const FAILED_TOOL_STATUS = new Set(['failed', 'error', 'timeout', 'timed_out'])
 const CANCELLED_TOOL_STATUS = new Set(['killed', 'cancelled', 'canceled'])
@@ -326,7 +393,7 @@ const FALLBACK_PROJECT: ProjectRouting = (() => {
 
 /** Capture one hook payload. Never throws for a payload that is not ours: it is ignored with the reason. */
 export async function captureHostEvent(host: CaptureHost, payload: unknown, options: CaptureOptions = {}): Promise<CaptureResult> {
-  if (!object(payload)) return { status: 'ignored', reason: 'the payload is not a JSON object' }
+  if (!object(payload)) return { status: 'ignored', reason: 'the payload is not a JSON object', abnormal: true }
   const event = squash(payload.hook_event_name ?? payload.event ?? payload.type)
   const isStop = event === 'subagentstop'
   const isTool = event === 'posttooluse' && host === 'claude-code' && ['agent', 'task'].includes(squash(payload.tool_name))
@@ -353,7 +420,7 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
     project = FALLBACK_PROJECT
   }
   const candidate = resolveTierCandidate(tier, host, project.decision.routing)
-  if (!candidate) return { status: 'ignored', reason: `tier ${tier} is not declared for ${host}` }
+  if (!candidate) return { status: 'ignored', reason: `tier ${tier} is not declared for ${host}`, abnormal: true }
 
   // An agent id is the host's own: it is never recorded as it came, only a hash of it.
   const rawAgentId = isStop ? payload.agent_id : (toolResponse.agentId ?? toolResponse.agent_id ?? payload.agent_id)
@@ -363,7 +430,7 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
 
   if (!isStop) {
     const status = String(toolResponse.status ?? '').toLowerCase()
-    if (!agentId) return { status: 'ignored', reason: 'the tool result names no agent id, so it cannot be joined to the agent stop' }
+    if (!agentId) return { status: 'ignored', reason: 'the tool result names no agent id, so it cannot be joined to the agent stop', abnormal: true }
     if (BACKGROUND_TOOL_STATUS.has(status)) return { status: 'ignored', reason: 'a background launch: the agent stop carries the result' }
     const resolved = toolResponse.resolvedModel ?? toolResponse.model
     const detail = buildDetailRecord({
@@ -380,9 +447,23 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
 
   const segments = agentId ? await findAgentSegments(dir, host, agentId) : []
   const previous = segments[segments.length - 1]
-  const slice = await readTranscriptSlice(payload.agent_transcript_path ?? payload.transcript_path, previous?.segment?.to ?? 0)
-  // The same stop seen again: the transcript has nothing the agent's last segment did not already count.
-  if (previous && slice && slice.to === previous.segment?.to) return { status: 'replayed', id: previous.id, record: previous, root, dir, project }
+  const transcriptPath = payload.agent_transcript_path ?? payload.transcript_path
+  const slice = await readTranscriptSlice(transcriptPath, previous?.segment?.to ?? 0)
+  // The delegate is asked for its line at most once, and only when it ended with a message that has none (an empty
+  // one is an agent that did not get to answer). The host says it is already continuing because of a stop hook
+  // (`stop_hook_active`); the earlier segment of the agent carrying the ref says it too, whatever the host does.
+  const lineMissing = typeof payload.last_assistant_message === 'string' && payload.last_assistant_message.trim() !== '' && parseDelegationLine(payload.last_assistant_message) === undefined
+  const hostContinuing = payload.stop_hook_active === true
+  // The same stop seen again: the transcript has nothing the agent's last segment did not already count. When another
+  // hook recorded it first (a copy of the first release's command, edited by hand and so not replaced) and nobody asked
+  // yet, this is still the stop to ask on.
+  if (previous && slice && slice.to === previous.segment?.to) {
+    const unasked = lineMissing && !hostContinuing && previous.evidenceRefs.includes('no-sf-delegation-line') && !previous.evidenceRefs.includes(ASKED_FOR_LINE_REF)
+    const brief = unasked ? await readTranscriptSlice(transcriptPath, previous.segment?.from ?? 0) : undefined
+    const decision = unasked ? await askForLine(dir, host, tier, agentId, now, [previous.route, ...routesInBrief(brief?.lines ?? [])]) : undefined
+    return { status: 'replayed', id: previous.id, record: previous, root, dir, project, ...(decision ? { decision } : {}) }
+  }
+  const ask = lineMissing && !hostContinuing && !previous?.evidenceRefs.includes(ASKED_FOR_LINE_REF)
   const summary = slice === undefined ? undefined : host === 'claude-code' ? summarizeClaudeLines(slice.lines) : summarizeCodexLines(slice.lines, sumTokens(segments))
   const report = parseDelegationLine(payload.last_assistant_message)
   const passed = report?.verdict === 'pass' && report.checks.some((check) => check !== 'self-review')
@@ -392,13 +473,10 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
   const route = routeId ? await findRoute(dir, routeId) : undefined
   const reasons: string[] = []
   if (!routeId) reasons.push('no-route')
-  else if (!route) reasons.push('unknown-route')
-  else if (route.provider !== host) reasons.push('route-provider-mismatch')
-  else if (route.tier !== tier) reasons.push('route-tier-mismatch')
-  else if (route.users.some((user) => user !== (agentId ?? null))) reasons.push('route-used-by-another-agent')
-  // A route nobody has used and whose reservation lapsed is not a delegation anyone is waiting for: its trial would
-  // land outside the share that was counted. An agent that already used the route (a resumed one) is never expired.
-  else if (route.users.length === 0 && route.expiresAt < now) reasons.push('route-expired')
+  else {
+    const fault = routeFault(route, host, tier, agentId, now)
+    if (fault) reasons.push(fault)
+  }
   const attributed = route !== undefined && reasons.length === 0
 
   const segment = slice ? { from: slice.from, to: slice.to } : null
@@ -429,6 +507,7 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
     evidenceRefs: [
       agentId ? `agent:${agentId}` : undefined,
       report ? undefined : 'no-sf-delegation-line',
+      ask ? ASKED_FOR_LINE_REF : undefined,
       report?.verdict === 'pass' && !passed ? 'pass-without-check' : undefined,
       slice?.truncated ? 'transcript-truncated' : undefined,
       ...reasons,
@@ -437,7 +516,39 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
   }
   const record = buildRunRecord(input, { prices: project.decision.policy.prices })
   const appended = await appendRun(dir, record)
-  return { ...appended, record, root, dir, project }
+  // The stop is recorded first, so nothing is lost if the agent never stops again; the id the brief gave is only the
+  // line suggested, the line the delegate writes is what attributes its run.
+  const decision = ask ? await askForLine(dir, host, tier, agentId, now, previous ? [previous.route, ...routesInBrief(slice?.lines ?? []).reverse()] : routesInBrief(slice?.lines ?? [])) : undefined
+  return { ...appended, record, root, dir, project, ...(decision ? { decision } : {}) }
+}
+
+/** Why a route record cannot attribute a stop of this agent, or undefined when it can. The same test judges a suggestion. */
+function routeFault(route: FoundRoute | undefined, host: CaptureHost, tier: string, agentId: string | undefined, now: string): string | undefined {
+  if (!route) return 'unknown-route'
+  if (route.provider !== host) return 'route-provider-mismatch'
+  if (route.tier !== tier) return 'route-tier-mismatch'
+  if (route.users.some((user) => user !== (agentId ?? null))) return 'route-used-by-another-agent'
+  // A route nobody has used and whose reservation lapsed is not a delegation anyone is waiting for: its trial would
+  // land outside the share that was counted. An agent that already used the route (a resumed one) is never expired.
+  if (route.users.length === 0 && route.expiresAt < now) return 'route-expired'
+  return undefined
+}
+
+/**
+ * The decision that asks a delegate for its missing line. The line it is shown carries a route id when the brief
+ * gave one that this stop could be attributed to (a retry brief may also name the route of the run it retries, and
+ * that one is not this agent's); otherwise it says where to find it.
+ */
+async function askForLine(dir: string, host: CaptureHost, tier: string, agentId: string | undefined, now: string, candidates: readonly (string | null | undefined)[]): Promise<HookDecision> {
+  let suggested: string | null = null
+  for (const id of candidates) {
+    if (!id) continue
+    if (!routeFault(await findRoute(dir, id), host, tier, agentId, now)) {
+      suggested = id
+      break
+    }
+  }
+  return { decision: 'block', reason: missingLineReason(suggested) }
 }
 
 function sumTokens(segments: readonly DelegationRunRecord[]): TokenUsage | null {

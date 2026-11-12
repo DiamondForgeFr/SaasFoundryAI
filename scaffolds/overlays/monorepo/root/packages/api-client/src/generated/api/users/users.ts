@@ -68,6 +68,10 @@ export const getUserControllerGetMyPreferencesQueryOptions = <TData = Awaited<Re
 export type UserControllerGetMyPreferencesQueryResult = NonNullable<Awaited<ReturnType<typeof userControllerGetMyPreferences>>>
 export type UserControllerGetMyPreferencesQueryError = ErrorType<void>
 
+/**
+ * Retrieve the authenticated user own preferences (locale, avatar URL).
+ * @summary Get my preferences
+ */
 export function useUserControllerGetMyPreferences<TData = Awaited<ReturnType<typeof userControllerGetMyPreferences>>, TError = ErrorType<void>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof userControllerGetMyPreferences>>, TError, TData>> &
@@ -75,6 +79,10 @@ export function useUserControllerGetMyPreferences<TData = Awaited<ReturnType<typ
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Retrieve the authenticated user own preferences (locale, avatar URL).
+ * @summary Get my preferences
+ */
 export function useUserControllerGetMyPreferences<TData = Awaited<ReturnType<typeof userControllerGetMyPreferences>>, TError = ErrorType<void>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userControllerGetMyPreferences>>, TError, TData>> &
@@ -82,14 +90,18 @@ export function useUserControllerGetMyPreferences<TData = Awaited<ReturnType<typ
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Retrieve the authenticated user own preferences (locale, avatar URL).
+ * @summary Get my preferences
+ */
 export function useUserControllerGetMyPreferences<TData = Awaited<ReturnType<typeof userControllerGetMyPreferences>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userControllerGetMyPreferences>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Retrieve the authenticated user own preferences (locale, avatar URL).
  * @summary Get my preferences
  */
-
 export function useUserControllerGetMyPreferences<TData = Awaited<ReturnType<typeof userControllerGetMyPreferences>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof userControllerGetMyPreferences>>, TError, TData>> },
   queryClient?: QueryClient
@@ -136,6 +148,7 @@ export type UserControllerUpdateMyPreferencesMutationError = ErrorType<void>
 export type UserControllerUpdateMyPreferencesMutationVariables = { data: BodyType<UpdateUserPreferencesDto> }
 
 /**
+ * Partial update of the authenticated user own preferences. Omitted fields are left untouched.
  * @summary Update my preferences
  */
 export const useUserControllerUpdateMyPreferences = <TError = ErrorType<void>, TContext = unknown>(

@@ -88,6 +88,7 @@ export type AuthControllerSignUpMutationError = ErrorType<void>
 export type AuthControllerSignUpMutationVariables = { data: BodyType<SignUpDto> }
 
 /**
+ * Create a new user account. A confirmation email will be sent if the email address is valid.
  * @summary User signup
  */
 export const useAuthControllerSignUp = <TError = ErrorType<void>, TContext = unknown>(
@@ -131,6 +132,7 @@ export type AuthControllerSignInMutationError = ErrorType<void>
 export type AuthControllerSignInMutationVariables = { data: BodyType<SignInDto> }
 
 /**
+ * Authenticate user and return access token.
  * @summary User signin
  */
 export const useAuthControllerSignIn = <TError = ErrorType<void>, TContext = unknown>(
@@ -171,6 +173,7 @@ export type AuthControllerSignOutMutationResult = NonNullable<Awaited<ReturnType
 export type AuthControllerSignOutMutationError = ErrorType<void>
 
 /**
+ * Invalidate user session and clear authentication tokens.
  * @summary User signout
  */
 export const useAuthControllerSignOut = <TError = ErrorType<void>, TContext = unknown>(
@@ -220,6 +223,7 @@ export type AuthControllerRequestPasswordResetMutationError = ErrorType<void>
 export type AuthControllerRequestPasswordResetMutationVariables = { data: BodyType<RequestPasswordResetDto> }
 
 /**
+ * Request a password reset. If the email is valid, a reset email will be sent.
  * @summary Request password reset
  */
 export const useAuthControllerRequestPasswordReset = <TError = ErrorType<void>, TContext = unknown>(
@@ -263,6 +267,7 @@ export type AuthControllerResetPasswordMutationError = ErrorType<void>
 export type AuthControllerResetPasswordMutationVariables = { data: BodyType<ResetPasswordDto> }
 
 /**
+ * Reset user password using the token received by email.
  * @summary Reset password
  */
 export const useAuthControllerResetPassword = <TError = ErrorType<void>, TContext = unknown>(
@@ -298,6 +303,10 @@ export const getAuthControllerGetMeQueryOptions = <TData = Awaited<ReturnType<ty
 export type AuthControllerGetMeQueryResult = NonNullable<Awaited<ReturnType<typeof authControllerGetMe>>>
 export type AuthControllerGetMeQueryError = ErrorType<void>
 
+/**
+ * Retrieve the profile of the currently authenticated user. Requires a valid session; an authenticated user may always view their own profile.
+ * @summary Get current user
+ */
 export function useAuthControllerGetMe<TData = Awaited<ReturnType<typeof authControllerGetMe>>, TError = ErrorType<void>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerGetMe>>, TError, TData>> &
@@ -305,6 +314,10 @@ export function useAuthControllerGetMe<TData = Awaited<ReturnType<typeof authCon
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Retrieve the profile of the currently authenticated user. Requires a valid session; an authenticated user may always view their own profile.
+ * @summary Get current user
+ */
 export function useAuthControllerGetMe<TData = Awaited<ReturnType<typeof authControllerGetMe>>, TError = ErrorType<void>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerGetMe>>, TError, TData>> &
@@ -312,14 +325,18 @@ export function useAuthControllerGetMe<TData = Awaited<ReturnType<typeof authCon
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Retrieve the profile of the currently authenticated user. Requires a valid session; an authenticated user may always view their own profile.
+ * @summary Get current user
+ */
 export function useAuthControllerGetMe<TData = Awaited<ReturnType<typeof authControllerGetMe>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerGetMe>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Retrieve the profile of the currently authenticated user. Requires a valid session; an authenticated user may always view their own profile.
  * @summary Get current user
  */
-
 export function useAuthControllerGetMe<TData = Awaited<ReturnType<typeof authControllerGetMe>>, TError = ErrorType<void>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerGetMe>>, TError, TData>> },
   queryClient?: QueryClient
@@ -358,6 +375,10 @@ export const getAuthControllerGetGuestQueryOptions = <TData = Awaited<ReturnType
 export type AuthControllerGetGuestQueryResult = NonNullable<Awaited<ReturnType<typeof authControllerGetGuest>>>
 export type AuthControllerGetGuestQueryError = ErrorType<unknown>
 
+/**
+ * Retrieve the basic information for guest users.
+ * @summary Get guest user
+ */
 export function useAuthControllerGetGuest<TData = Awaited<ReturnType<typeof authControllerGetGuest>>, TError = ErrorType<unknown>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerGetGuest>>, TError, TData>> &
@@ -365,6 +386,10 @@ export function useAuthControllerGetGuest<TData = Awaited<ReturnType<typeof auth
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Retrieve the basic information for guest users.
+ * @summary Get guest user
+ */
 export function useAuthControllerGetGuest<TData = Awaited<ReturnType<typeof authControllerGetGuest>>, TError = ErrorType<unknown>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerGetGuest>>, TError, TData>> &
@@ -372,14 +397,18 @@ export function useAuthControllerGetGuest<TData = Awaited<ReturnType<typeof auth
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Retrieve the basic information for guest users.
+ * @summary Get guest user
+ */
 export function useAuthControllerGetGuest<TData = Awaited<ReturnType<typeof authControllerGetGuest>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerGetGuest>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Retrieve the basic information for guest users.
  * @summary Get guest user
  */
-
 export function useAuthControllerGetGuest<TData = Awaited<ReturnType<typeof authControllerGetGuest>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authControllerGetGuest>>, TError, TData>> },
   queryClient?: QueryClient

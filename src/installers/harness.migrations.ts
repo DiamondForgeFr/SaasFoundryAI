@@ -146,6 +146,10 @@ export const moveClaudeMdToAgentsMd: ModuleMigration = {
   up: async (projectDir, manifest) => {
     const result = await applyClaudeMdMigration(projectDir, manifest, await planClaudeMdMigration(projectDir, manifest))
     for (const path of result.migrated) console.log(chalk.gray(`  Moved ${path} into ${path.replace(/CLAUDE\.md$/, 'AGENTS.md')}, the instruction file every agent reads, and removed it.`))
+    for (const { path, rewrites, mentions } of result.rewritten) {
+      if (rewrites > 0) console.log(chalk.gray(`  Rewrote ${rewrites} reference(s) in ${path} to a removed CLAUDE.md: each now names the AGENTS.md beside it.`))
+      if (mentions > 0) console.log(chalk.yellow(`  ${path}: ${mentions} mention(s) of a removed CLAUDE.md in running text were kept as you wrote them — edit those that mean the file.`))
+    }
     for (const path of result.removedBridges) console.log(chalk.gray(`  Removed ${path}: a generated bridge to AGENTS.md, which Claude Code now reads directly.`))
     for (const path of result.keptForReview)
       console.log(chalk.yellow(`  ${path}: sections you had edited are kept under "Kept from CLAUDE.md for review" — merge what you still need, then delete them.`))

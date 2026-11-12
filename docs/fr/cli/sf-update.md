@@ -133,7 +133,17 @@ Les ponts générés sont reconnus à leurs octets, quelle que soit la version q
 `AGENTS.md` est supprimé, car il cache `AGENTS.md` à Claude Code ; il n'est pas pris pour un `CLAUDE.md` que vous avez écrit, ce qui laissait votre `AGENTS.md` à côté d'un sidecar. Un `AGENTS.md` qui
 n'est que le pont généré vers votre `CLAUDE.md` est remplacé, pas conservé comme un fichier à vous.
 
-Prévisualisez d'abord : `sf update --dry-run --json` liste chaque section sous `moduleMigrations`, avec son action (`move`, `refresh`, `drop`, `keep-for-review`), sa source et sa cible.
+Une section déplacée à l'identique peut citer un fichier que le déplacement supprime : une ligne de l'arborescence du projet comme `└── CLAUDE.md     # API-specific context`, ou « Check
+`apps/api/CLAUDE.md` ». La mise à jour fait pointer chacune de ces références vers l'`AGENTS.md` voisin (`apps/api/CLAUDE.md` devient `apps/api/AGENTS.md`), pour que le texte déplacé ne cite pas un
+fichier qui n'existe plus. Elle ne le fait que là où le texte ne laisse aucun doute : un chemin avec un dossier, ou une entrée d'une arborescence dessinée, qui cite un `CLAUDE.md` que la mise à jour
+supprime. Un nom seul dans une phrase (« Mettez CLAUDE.md à jour quand… ») peut désigner le fichier comme simplement l'étiqueter : il est conservé tel que vous l'avez écrit et signalé (voir l'aperçu
+ci-dessous et l'avis que la mise à jour affiche). Un `CLAUDE.md` qui reste (une application dont vous avez écrit l'`AGENTS.md`), `CLAUDE.local.md`, `~/.claude/CLAUDE.md`, un lien vers un autre site et
+tout le reste du texte sont conservés. Un projet déplacé par la version 1.1.0, qui a laissé ces références, voit ce qui reste signalé par [`sf status`](/fr/cli/sf-status#instructions-des-agents)
+(`instructionReferences`) et le corrige à la main.
+
+Prévisualisez d'abord : `sf update --dry-run --json` liste chaque section sous `moduleMigrations`, avec son action (`move`, `refresh`, `drop`, `keep-for-review`), sa source et sa cible. Chaque
+référence qu'elle ferait pointer vers un `AGENTS.md` a sa propre entrée `rewrite`, avec la ligne du `CLAUDE.md` dont elle vient ; chaque nom seul qu'elle laisserait est une entrée `report` avec sa
+ligne.
 
 Lorsqu'un projet `harness` reçoit le stack technique, SaaSFoundry utilise une transaction journalisée. Un prochain `sf update --target-profile full` tente d'abord une récupération sûre si un processus
 s'est arrêté pendant la transition. S'il ne peut prouver ni commit complet ni retour arrière sûr, il s'arrête et signale les chemins non résolus.
@@ -151,8 +161,12 @@ projet : un fichier intact est réécrit, un fichier modifié reçoit un fichier
 
 `.claude/settings.json` est votre fichier, et `sf update` y maintient deux choses à jour à **chaque exécution**, sans question ni option (`--non-interactive` compris) :
 
-- les **hooks** qui enregistrent chaque délégation routée dans le registre du clone (`SubagentStop` pour les agents `sf-<tier>`, `PostToolUse` sur l'outil de délégation), voir
-  [capture et signaux](/fr/cli/sf-agents#capture-et-signaux) ;
+- les **hooks** : celui qui met l'état du projet sous les yeux de la session à son démarrage (`SessionStart`, qui exécute le CLI propre au projet et non un `sf` nu, voir
+  [le hook de début de session](/fr/cli/sf-status#le-hook-de-debut-de-session)), et ceux qui enregistrent chaque délégation routée dans le registre du clone (`SubagentStop` pour les agents
+  `sf-<tier>`, `PostToolUse` sur l'outil de délégation), voir [capture et signaux](/fr/cli/sf-agents#capture-et-signaux) ;
+- le **hook de garde** (`PreToolUse` sur les outils Bash et PowerShell), qui refuse l'échappatoire, le `--skip-local-ci` et le label de nature qu'un agent s'applique de lui-même, ainsi que la fusion,
+  le `ready-pr` et le consentement à la délégation d'un agent délégué, voir [le hook de garde](/fr/cli/sf-agents#le-hook-de-garde). La v1.1.0 n'en avait pas : la mise à jour l'ajoute, après un hook
+  `PreToolUse` que vous avez écrit, qui reste ;
 - les **règles de permission** qui laissent l'agent lire une route, le consentement à déléguer et le rapport de routage sans demander, tandis que les formes qui écrivent une preuve (`--record`,
   `--retry-of`) demandent toujours.
 
@@ -161,14 +175,33 @@ C'est la même fusion que `sf agents refresh --scope shared` : `sf agents refres
 déplacement vers `AGENTS.md` que chaque mise à jour faisait déjà. La migration ne dépose rien d'autre, et n'écrit jamais le consentement à déléguer : seule votre propre réponse l'enregistre
 (`sf agents delegation`).
 
-| Situation                                                                                                                                                                    | Résultat                                                                                                                                        |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Le fichier n'a pas les hooks ou les règles.                                                                                                                                  | Ils sont fusionnés. Vos clés, hooks et règles restent, dans leur ordre ; le résumé nomme le fichier.                                            |
-| Le fichier a tout.                                                                                                                                                           | Rien n'est écrit : mêmes octets, même date de modification, rien d'affiché.                                                                     |
-| Il n'y a pas de fichier.                                                                                                                                                     | Il est créé avec les hooks et les règles du harness.                                                                                            |
-| Le fichier est un lien symbolique, un lien physique, ou un texte qui n'est pas un objet JSON.                                                                                | Il reste tel quel et la proposition fusionnée va dans `.claude/settings.json.saasfoundry.new` ; la mise à jour continue.                        |
-| `hooks` n'est pas un objet, un événement de hook n'est pas une liste de groupes de hooks, `permissions` n'est pas un objet, ou son `allow` ou son `ask` n'est pas une liste. | Pareil : il reste tel quel et la proposition va dans le sidecar, avec la raison dans le résumé. La fusion aurait écrasé ce que vous avez écrit. |
-| Le hook est la commande `sf agents outcome capture` nue qu'écrivait une première version.                                                                                    | Elle est remplacée par la commande qui résout le CLI propre au projet.                                                                          |
+| Situation                                                                                                                                                                    | Résultat                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Le fichier n'a pas les hooks ou les règles.                                                                                                                                  | Ils sont fusionnés. Vos clés, hooks et règles restent, dans leur ordre ; le résumé nomme le fichier.                                                                                                           |
+| Le fichier a tout.                                                                                                                                                           | Rien n'est écrit : mêmes octets, même date de modification, rien d'affiché.                                                                                                                                    |
+| Il n'y a pas de fichier.                                                                                                                                                     | Il est créé avec les hooks et les règles du harness.                                                                                                                                                           |
+| Le fichier est un lien symbolique, un lien physique, ou un texte qui n'est pas un objet JSON.                                                                                | Il reste tel quel et la proposition fusionnée va dans `.claude/settings.json.saasfoundry.new` ; la mise à jour continue.                                                                                       |
+| `hooks` n'est pas un objet, un événement de hook n'est pas une liste de groupes de hooks, `permissions` n'est pas un objet, ou son `allow` ou son `ask` n'est pas une liste. | Pareil : il reste tel quel et la proposition va dans le sidecar, avec la raison dans le résumé. La fusion aurait écrasé ce que vous avez écrit.                                                                |
+| Le hook est la commande `sf agents outcome capture` nue qu'écrivait une première version.                                                                                    | Elle est remplacée par la commande qui résout le CLI propre au projet.                                                                                                                                         |
+| Le hook est la commande de capture que la v1.1.0 a livrée (elle écartait la sortie du CLI).                                                                                  | Elle est remplacée, dans `.claude/settings.json` et dans `.codex/hooks.json`, par la commande qui laisse passer la décision du CLI, jamais laissée à côté. Une copie modifiée à la main est la vôtre et reste. |
+| Le hook `SessionStart` est la commande `sf status --claude-friendly --no-network` nue (ou avec `--agent-friendly`) qu'écrivait la 1.0.x.                                     | Elle est remplacée par la commande qui résout le CLI propre au projet ; vos autres hooks `SessionStart` restent. Un hook que vous avez écrit avec d'autres options est le vôtre et reste.                      |
+
+**Le hook de capture de la v1.1.0 est remplacé, et Codex doit approuver le nouveau.** La commande de la v1.1.0 se terminait par `>/dev/null 2>&1`, si bien qu'un délégué qui oubliait sa ligne de fin ne
+pouvait pas la recevoir en réclamation ; la nouvelle laisse la stdout du CLI parvenir à l'hôte (voir [réclamer la ligne manquante](/fr/cli/sf-agents#reclamer-la-ligne-manquante)). La fusion des
+réglages n'ajoute qu'une commande dont la chaîne exacte manque : le texte de la v1.1.0 est donc reconnu, octet pour octet, et remplacé dans les deux fichiers. Claude Code lit la nouvelle commande à sa
+prochaine session. **Codex n'exécute un hook de projet qu'une fois approuvé, et l'approbation suit le texte du hook** : quand `sf update` ou `sf agents refresh` remplace la commande dans
+`.codex/hooks.json`, il affiche
+`.codex/hooks.json: the delegation capture hook was replaced. Codex skips a changed project hook until it is trusted: review and trust it with /hooks, or delegations stay unrecorded.` Tant que vous ne
+l'avez pas fait, les délégations Codex ne sont pas enregistrées. L'avis n'est donné qu'une fois : la mise à jour suivante n'a plus rien à remplacer.
+
+**Le hook de garde est nouveau, et Codex doit lui aussi l'approuver.** La même fusion ajoute le garde `PreToolUse` à `.claude/settings.json` (matcher `Bash|PowerShell`) et à `.codex/hooks.json`
+(matcher `Bash`), après les hooks `PreToolUse` que vous avez écrits, qui sont conservés. `sf update` et `sf agents refresh` affichent une fois
+`.codex/hooks.json: the PreToolUse guard hook was added. Codex skips a project hook until it is trusted: review and trust it with /hooks, or the guard does not run.` Tant que vous ne l'avez pas
+approuvé, Codex n'exécute pas le garde ; `sf status` dit `guard declared` pour Codex, jamais `enforced`. Un projet qui a modifié une commande `PreToolUse` à lui n'est pas touché.
+
+Aucune version de module n'est incrémentée pour cela : le hook est livré par la fusion des réglages qui s'exécute à chaque mise à jour, et non par le jeu de fichiers d'un installeur, il n'y a donc
+aucune migration de module à prévisualiser ou à lancer. Un projet qui a écrit lui-même exactement `sf status --claude-friendly --no-network` perd cette ligne à la prochaine mise à jour, puisqu'on ne
+peut pas la distinguer de celle qu'a écrite le harness ; la commande résolue prend sa place.
 
 **Un simple `sf update` n'ajoute que.** Il ne retire jamais une règle de vos `permissions` : une règle ajoutée volontairement reste, exécution après exécution. Les seules règles que le harness retire
 un jour sont les deux qu'une version de développement avait pré-approuvées, `Bash(sf agents outcome record *)` et `Bash(sf agents outcome mark *)` : elles écrivent une preuve dont le routage tient
@@ -183,6 +216,31 @@ templates : un changement de template ne transforme jamais un fichier déjà mis
 
 Prévisualisez : `sf update --dry-run` liste le fichier sous `harnessSettings` du rapport (`merged`, `created`, `sidecar`), ou dans l'aperçu de la migration `wire-delegation-capture` en attente quand
 le harness est encore sous la v5.
+
+### Limite d'instructions de Codex
+
+Codex charge l'`AGENTS.md` de chaque dossier, de la racine Git jusqu'à celui où il démarre, et cesse d'ajouter des fichiers dès que la taille cumulée atteint `project_doc_max_bytes`, 32 Kio par
+défaut. Ce qu'il coupe, c'est la fin, là où se trouvent les règles de workflow, de délégation et de worktrees. Une fois un monorepo passé à `AGENTS.md`, le fichier racine plus celui d'une application
+(`apps/api/AGENTS.md`, `apps/web/AGENTS.md`) peut dépasser cette limite.
+
+Quand le projet déclare l'agent `codex` et qu'une de ces chaînes dépasse la limite, le rafraîchissement des instructions d'agent que lance `sf update` (comme `sf agents refresh` et
+`sf agents enable codex`) règle `project_doc_max_bytes` dans `.codex/config.toml` sur la plus longue chaîne plus un quart, arrondie aux 16 Kio supérieurs (une chaîne de 37 Ko donne 49152).
+
+| Situation                                                                   | Résultat                                                                                                             |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Pas de `.codex/config.toml`.                                                | Il est créé avec la seule clé, sous un commentaire qui dit pourquoi.                                                 |
+| Le fichier existe sans la clé.                                              | La clé est ajoutée à la table racine, avant la première `[table]` ; toutes les autres lignes restent telles quelles. |
+| Le fichier fixe une valeur plus petite.                                     | Seule cette valeur est remplacée ; le reste de la ligne, commentaire compris, reste.                                 |
+| Le fichier fixe une valeur qui couvre déjà la plus longue chaîne.           | Rien n'est écrit. La valeur n'est jamais abaissée.                                                                   |
+| La valeur n'est pas un entier simple, ou le fichier est un lien symbolique. | Il reste tel quel et un avertissement le signale.                                                                    |
+| Codex n'est pas déclaré, ou toutes les chaînes tiennent.                    | Rien n'est écrit.                                                                                                    |
+
+`sf update --dry-run` l'annonce sous `codexInstructionLimit` dans le rapport (fichier, valeur actuelle et nouvelle, dossier et sa taille), en mesurant les `AGENTS.md` tels que la mise à jour les
+laissera, y compris le passage de CLAUDE.md à AGENTS.md en attente. Codex ne lit le `.codex/config.toml` d'un projet qu'une fois ce projet approuvé (trusted) ; `sf status` rapporte alors
+`codexInstructionSize` à `ok`.
+
+Aucune version de module n'est incrémentée : la clé est écrite par le rafraîchissement des instructions d'agent qui tourne à chaque mise à jour, comme `.codex/hooks.json`, pas par le jeu de fichiers
+d'un installeur. Les instructions ne sont pas raccourcies ici ; ce travail est suivi à part.
 
 ## Ajouter des capacités après la création
 

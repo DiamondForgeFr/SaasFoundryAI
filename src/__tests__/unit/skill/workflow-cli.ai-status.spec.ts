@@ -38,7 +38,9 @@ describe('workflow ai-status', () => {
       headRepositoryOwner: { login: 'Org' },
       isCrossRepository: false,
       baseRefName: 'develop',
-      body: 'Resolves #42',
+      // #1093 — the PR delivers #42 from its branch and #43 through its second Resolves line
+      body: 'Resolves #42\nResolves #43',
+      closingIssuesReferences: [],
       mergedAt: null,
       mergeCommit: null
     }
@@ -106,6 +108,19 @@ esac
     expect(body).not.toContain('⏳ running')
     expect(body).toContain('| test suite | ✅ 3456 passed |')
     expect(body.indexOf('normal Docker lane |')).toBeLessThan(body.indexOf('test suite |'))
+  })
+
+  it('publishes on the pull request that resolves the ticket from another ticket branch (#1093)', async () => {
+    const result = await aiStatus('43', 'Local CI', 'success', 'molten ci run: green')
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('(PR #885)')
+    expect(readFileSync(statuses, 'utf8')).toContain(`statuses/${head}`)
+  })
+
+  it('still refuses a ticket that the pull request does not resolve', async () => {
+    const result = await aiStatus('44', 'Local CI', 'success', 'green')
+    expect(result.code).toBe(2)
+    expect(result.stderr).toContain('ticket #44 has no open pull request')
   })
 
   it('keeps table syntax safe when the description contains a pipe', async () => {

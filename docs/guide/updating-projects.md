@@ -102,6 +102,12 @@ For each file, the comparison produces one of four actions:
 | `!base` AND `target` AND `current != target`   | **conflict** | A user-owned file already occupies the new template path.            |
 | `base` AND `!target` AND `current == base`     | **remove**   | Template removed the file, you didn't touch it → removed and listed. |
 
+The manifest does not record every answer `sf new` rendered into a file, so the target is rendered with values read back from your project: the package description and repository URLs from each
+`package.json`; the MailerSend sender from the deployment workflow (then the API's `.env.test` and `.env`); the Docker database credentials and the Docker bucket from `docker-compose.dev-services.yml`
+(then the API's `.env`). A template that did not change therefore yields no update and no conflict. Up to 1.1.0, `sf update` rendered the sender with placeholders (`noreply@example.com`, `App`) and
+recorded that render as the baseline. On such a project, a workflow that still carries the placeholders gets its sender back from the `.env.test` or the `.env`, and a workflow you edited is not
+reported as a conflict.
+
 ### Why this matters
 
 The merge is conservative by design:
@@ -316,7 +322,9 @@ git checkout HEAD -- path/to/removed-file.ts
 
 Since harness v4, `AGENTS.md` is the instruction file every agent reads, Claude Code included. `sf update` moved each section of `CLAUDE.md` into `AGENTS.md` before removing it, and kept any edited
 copy of a generated section under **Kept from CLAUDE.md for review**. Compare with `git show HEAD:CLAUDE.md`; [the move](/cli/sf-update#claude-md-moves-to-agents-md-harness-v4) lists what goes where.
-If your own `AGENTS.md` already existed, look for `AGENTS.md.saasfoundry.new` instead: `CLAUDE.md` stays until you merge it.
+If your own `AGENTS.md` already existed, look for `AGENTS.md.saasfoundry.new` instead: `CLAUDE.md` stays until you merge it. A moved section that named a `CLAUDE.md` the move deleted
+(`apps/api/CLAUDE.md`, a tree line) now names the `AGENTS.md` beside it. Release 1.1.0 left those references as they were: `sf status` lists them under `instructionReferences`, and you point each one
+at the `AGENTS.md` that replaced the file.
 
 ### Where are the tests for this merge?
 

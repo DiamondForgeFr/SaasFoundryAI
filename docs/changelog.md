@@ -6,6 +6,100 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-12
+
+A reliability and security release. Generated applications enforce access more strictly: a deactivated user loses API access at once, and a role only grants rights where it is scoped. The workflow now
+enforces what it used to only ask for: pushed commits before AI Testing, green local CI before Human Testing, and no escape hatch applied by an agent to itself.
+
+### Added
+
+#### CLI and workflow
+
+- `sf workflow set-local-ci` records the local CI statuses that must be green on a pull request's head, and `workflow-cli.sh local-ci-gate` checks them. When no list is recorded, the gate derives it
+  from `.molten/project.json`, and an empty list means the project has no local CI ([#1104](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1104),
+  [#1172](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1172), [#1175](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1175)).
+- `update-status` refuses AI Testing until the ticket's work is committed and pushed, and Human Testing until the required local CI statuses are green on the pull request's head
+  ([#1173](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1173), [#1174](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1174),
+  [#1176](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1176)).
+- `sf agents guard --host <claude-code|codex>` is a hook that refuses an agent call applying an escape hatch to itself (`SF_WORKFLOW_BYPASS_*`, `--skip-local-ci`, `nature:` labels) or running
+  `ready-pr` from a delegated worktree. `sf update` installs it for Claude Code and Codex ([#1106](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1106),
+  [#1212](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1212), [#1213](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1213),
+  [#1215](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1215)).
+- One pull request can resolve several tickets: the guards and `sync-pr-review` handle every ticket it closes, and a pull request marked "Part of #N" stays green without moving that ticket
+  ([#964](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/964), [#1093](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1093),
+  [#1065](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1065)).
+
+#### Status and delegation measurement
+
+- `sf status` names the CLI that produced the report and warns when it is older than the project's harness. The session-start hook runs the project's own CLI and keeps its output factual
+  ([#1103](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1103), [#1145](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1145),
+  [#1146](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1146), [#1147](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1147),
+  [#1148](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1148)).
+- `sf status` reports personal skills that shadow a project skill, and `sf skill install` installs into the project by default in a managed project
+  ([#1107](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1107)).
+- Delegation capture failures go to an error log that `sf status` and `sf agents routing report` show. A delegate that omits its `SF-DELEGATION` line is asked for it once, and
+  `sf agents route --record` records the ticket's complexity and nature ([#1105](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1105),
+  [#1159](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1159), [#1160](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1160),
+  [#1161](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1161), [#1162](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1162),
+  [#1163](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1163)).
+
+#### Harness and agent instructions
+
+- Delegated agents run only the affected tests while they work, and the full suites once, at AI Testing ([#1157](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1157)).
+
+### Changed
+
+- Guard refusals of the workflow and board scripts say that the decision belongs to the developer, and the escape-hatch catalogue says who may apply each hatch
+  ([#1211](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1211), [#1214](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1214)).
+- The generated stack is refreshed within its current majors: shared lint, format and build tooling, the API runtime and test tooling, the web runtime, the storage module pins, Radix UI, lucide-react,
+  react-hook-form, React 19.3, orval (with the committed API client regenerated) and Playwright 1.64 ([#1110](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1110),
+  [#1189](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1189) to [#1196](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1196)).
+
+### Security
+
+Behaviour change for existing generated projects: after `sf update`, access that only worked through these defects is refused. Check role assignments before you update.
+
+- A role assigned on an entity no longer counts on account-level routes, so an entity admin no longer passes account admin checks. Entity routes and invitations are authorized against their target
+  ([#1072](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1072), [#1133](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1133) to
+  [#1137](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1137)).
+- Only the platform can change a system role. Changing a custom role requires role-management authority wherever the role is assigned
+  ([#1129](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1129)).
+- The access and refresh tokens of a deactivated user are refused, and deactivation ends the user's sessions ([#1140](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1140)).
+- Dependency advisories are patched in the CLI (including a critical handlebars pair, and the unused `simple-git` is dropped) and in the generated API and web (js-yaml through swagger, fast-uri,
+  handlebars, Vite 8.3.5, source-map-js) ([#1108](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1108), [#1109](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1109),
+  [#1130](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1130), [#1131](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1131),
+  [#1132](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1132), [#1203](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1203)).
+
+### Fixed
+
+#### CLI and workflow
+
+- `update-status` can move a parent Epic on a board without a Ready status ([#965](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/965)).
+- `sf new --profile full` creates the workflow labels, so the first `create-ticket --complexity` works ([#973](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/973)).
+- Stories spawned onto the board get a status ([#1118](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1118)).
+- The delegation consent message no longer suggests a direct commit on a protected working branch ([#1124](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1124)).
+- `ready-pr` and `draft-pr` work from the main checkout ([#1125](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1125)).
+- `sf update` keeps the project's email sender in `deployment-api.yml` ([#1151](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1151)).
+- The `AGENTS.md` migration rewrites the references to the `CLAUDE.md` files it removes, and migrated monorepos stay within Codex's 32 KiB instruction limit
+  ([#1152](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1152), [#1154](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1154)).
+- AI Testing no longer treats a MoltenTerm pipeline with no job as the declared local CI ([#1155](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1155)).
+
+#### Generated projects
+
+- `npm run services:up` works on a fresh project: the external Docker network is created ([#978](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/978)).
+- The pre-commit impact validation uses each workspace's own TypeScript and no longer inherits the hook variables that broke its temporary worktree
+  ([#1027](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1027), [#1153](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1153)).
+- The UI primitives' classes are generated in worktrees ([#1048](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1048)).
+- Lint ignores test outputs and no longer hangs after an E2E run ([#1092](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1092)).
+- The entity invite dialog closes after submit ([#1200](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1200)).
+
+#### Tooling
+
+- The local CI is hermetic: tests no longer read the global `sf`, and the format check skips `.tmp/` ([#1128](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1128)).
+- Unit and integration specs hold under machine load, the Docker lifecycle lane retries transient npm registry errors, and the previous-release lifecycle spec passes again
+  ([#1171](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1171), [#1205](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1205),
+  [#1198](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1198), [#1080](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1080)).
+
 ## [1.1.0] - 2026-11-01
 
 A feature release. Delegated ticket delivery is now routed by task kind, the agent instructions move to `AGENTS.md`, and an existing functional requirement can be changed in place. It also fixes the

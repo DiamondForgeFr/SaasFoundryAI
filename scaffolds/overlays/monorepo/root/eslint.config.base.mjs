@@ -9,7 +9,8 @@ import tseslint from 'typescript-eslint'
 
 export default [
   {
-    ignores: ['node_modules', 'dist']
+    // Test and tool outputs too: coverage reports ship minified scripts ESLint would lint (#1092)
+    ignores: ['node_modules', 'dist', 'coverage', '.nyc_output', 'test-results']
   },
 
   ...tseslint.configs.recommended,

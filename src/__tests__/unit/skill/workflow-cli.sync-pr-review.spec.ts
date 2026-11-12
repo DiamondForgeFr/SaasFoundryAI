@@ -69,7 +69,7 @@ case "$1 $2" in
   'pr list')
     case "$*" in
       *'--state merged'*) printf '%s' "\${MERGED_LIST:-[]}";;
-      *) if [ -n "$OPEN_LIST" ]; then printf '%s' "$OPEN_LIST"; else printf '%s' "$LIVE" | jq '[{number,headRefName,baseRefName,isDraft,body,closingIssuesReferences}]'; fi;;
+      *) if [ -n "$OPEN_LIST" ]; then printf '%s' "$OPEN_LIST"; else printf '%s' "$LIVE" | jq '[{number,headRefName,baseRefName,isDraft,isCrossRepository,body,closingIssuesReferences}]'; fi;;
     esac;;
   *) echo 'unexpected gh request' >&2; exit 1;;
 esac
@@ -77,7 +77,7 @@ esac
     const tool = `#!/bin/bash
 printf 'tool %s\\n' "$*" >> "$CALLS"
 case "$1" in
-  status) jq -n --arg status "$STATUS" '{status: $status}';;
+  status) v="STATUS_$2"; jq -n --arg status "\${!v:-$STATUS}" '{status: $status}';;
   get-labels) [ "$LABEL_FAIL" = 1 ] && exit 1; printf '%s\\n' "$LABELS";;
   update-status) echo "Ticket #$2 → $3";;
   get-issue-type) printf '{"name":"sf-issue"}';;
@@ -352,15 +352,19 @@ esac
       await writeFile(path.join(dir, 'event.json'), JSON.stringify(integrationEvent('Resolves #42 — FR-FORK-005: continuous integration')))
       const result = await run()
       expect(result.code).toBe(2)
-      expect(result.stderr).toContain('must contain exactly one line that reads `Resolves #<ticket>` and nothing else (found 0)')
+      expect(result.stderr).toContain('must contain one line per ticket that reads exactly `Resolves #<ticket>` and nothing else (found 0)')
       expect(result.stderr).toContain('no ticket changed')
       expect(changedTicket()).toBe(false)
     })
 
-    it('counts two Resolves lines as ambiguous', async () => {
+    // #1093 — several tickets are several lines; the same ticket twice is a mistake and is named.
+    it('names a ticket that appears on two Resolves lines', async () => {
       await writeFile(path.join(dir, '.saasfoundry.json'), integrationManifest)
-      await writeFile(path.join(dir, 'event.json'), JSON.stringify(integrationEvent('Resolves #42\nResolves #43')))
-      expect((await run()).stderr).toContain('(found 2)')
+      await writeFile(path.join(dir, 'event.json'), JSON.stringify(integrationEvent('Resolves #42\nResolves #42')))
+      const result = await run()
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('names the same ticket on several `Resolves #<ticket>` lines (#42)')
+      expect(changedTicket()).toBe(false)
     })
 
     it.each([
@@ -580,6 +584,165 @@ esac
       const result = await run(await pullRequest('feature/12-x', 'develop', 'Delivery'))
       expect(result.code).toBe(2)
       expect(changedTicket()).toBe(false)
+    })
+  })
+
+  // #1065 — a pull request that delivers only part of a ticket says `Part of #N` and leaves the ticket where it is.
+  describe('partial pull requests (#1065)', () => {
+    // The PR target (develop) is not the default branch, as in a Solo workflow released from master.
+    async function partial(body: string, { defaultBranch = 'master', ref = 'fix/42-probe' } = {}) {
+      await writeFile(
+        path.join(dir, 'event.json'),
+        JSON.stringify({
+          ...event,
+          repository: { ...event.repository, default_branch: defaultBranch },
+          pull_request: { ...event.pull_request, body, head: { ...event.pull_request.head, ref } }
+        })
+      )
+      return { LIVE: JSON.stringify({ ...live, headRefName: ref, body, closingIssuesReferences: [] }) }
+    }
+
+    it('turns a `Part of #N` pull request into a green no-op with a notice and no ticket change', async () => {
+      const result = await run(await partial('Signing probe.\n\nPart of #42'))
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('::notice::Pull request #100 delivers part of ticket #42')
+      expect(result.stdout).toContain('no ticket changed')
+      expect(changedTicket()).toBe(false)
+      expect(calls()).not.toContain('tool status')
+    })
+    it('is neutral too when the PR target is the default branch', async () => {
+      const result = await run(await partial('Part of #42', { defaultBranch: 'develop' }))
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('delivers part of ticket #42')
+      expect(changedTicket()).toBe(false)
+    })
+    it('still syncs a pull request that carries its Resolves line next to a Part of line', async () => {
+      const result = await run(await partial('Part of #41\n\nResolves #42'))
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('tool update-status 42 In review')
+    })
+    it('still fails a pull request with neither line, and names the partial marker', async () => {
+      const result = await run(await partial('Delivery'))
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('(found 0)')
+      expect(result.stderr).toContain('`Part of #<ticket>`')
+      expect(changedTicket()).toBe(false)
+    })
+    it('still fails a Part of line that names another ticket than the branch', async () => {
+      const result = await run(await partial('Part of #43'))
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('no verified closing association to ticket #42')
+      expect(result.stderr).toContain('`Part of #42`')
+      expect(changedTicket()).toBe(false)
+    })
+    it('leaves the ticket where it is when a partial pull request is merged', async () => {
+      const mergeSha = 'c'.repeat(40)
+      await writeFile(
+        path.join(dir, 'event.json'),
+        JSON.stringify({
+          ...event,
+          action: 'closed',
+          pull_request: { ...event.pull_request, state: 'closed', merged: true, merge_commit_sha: mergeSha, head: { ...event.pull_request.head, ref: 'fix/42-probe' } }
+        })
+      )
+      const result = await run({
+        LIVE: JSON.stringify({ ...live, state: 'MERGED', headRefName: 'fix/42-probe', mergeCommit: { oid: mergeSha }, body: 'Part of #42', closingIssuesReferences: [] }),
+        STATUS: 'In review'
+      })
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('::notice::Pull request #100 delivers part of ticket #42')
+      expect(changedTicket()).toBe(false)
+    })
+  })
+
+  // #1093 — one pull request that resolves several tickets synchronizes each of them.
+  describe('pull requests that resolve several tickets (#1093)', () => {
+    const issue = (n: number) => ({ number: n, url: `https://github.com/${repo}/issues/${n}` })
+    const integrationManifest = JSON.stringify({
+      workflow: {
+        tool: 'github-projects',
+        workingBranch: 'develop',
+        prTargetBranch: 'integration',
+        releaseBranch: 'master',
+        branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' }
+      }
+    })
+    async function integrationPullRequest(body: string) {
+      await writeFile(path.join(dir, '.saasfoundry.json'), integrationManifest)
+      await writeFile(
+        path.join(dir, 'event.json'),
+        JSON.stringify({
+          ...event,
+          repository: { ...event.repository, default_branch: 'main' },
+          pull_request: { ...event.pull_request, body, base: { ...event.pull_request.base, ref: 'integration' } }
+        })
+      )
+      return { LIVE: JSON.stringify({ ...live, baseRefName: 'integration', body, closingIssuesReferences: [] }) }
+    }
+
+    it('moves every ticket of its Resolves lines into review when it targets a branch other than the default one', async () => {
+      const result = await run(await integrationPullRequest('Five stories\n\nResolves #42\nResolves #43\nResolves #44'))
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('tool update-status 42 In review')
+      expect(calls()).toContain('tool update-status 43 In review')
+      expect(calls()).toContain('tool update-status 44 In review')
+      expect(result.stdout).toContain('Pull request #100 resolves 3 tickets: #42 #43 #44')
+    })
+
+    it('reads the tickets of a default-branch pull request from the closing references GitHub verified', async () => {
+      const result = await run({
+        LIVE: JSON.stringify({
+          ...live,
+          body: 'Resolves #42\nResolves #43\nResolves #45',
+          closingIssuesReferences: [issue(42), issue(43), { number: 45, url: 'https://github.com/Other/Repo/issues/45' }]
+        })
+      })
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('tool update-status 42 In review')
+      expect(calls()).toContain('tool update-status 43 In review')
+      expect(calls()).not.toContain('update-status 45')
+    })
+
+    it('names the cause for each ticket it cannot synchronize, and still moves the others', async () => {
+      const result = await run({ ...(await integrationPullRequest('Resolves #42\nResolves #43\nResolves #44')), STATUS_43: 'Backlog', STATUS_44: 'Blocked' })
+      expect(result.code).toBe(2)
+      expect(calls()).toContain('tool update-status 42 In review')
+      expect(calls()).not.toContain('update-status 43')
+      expect(calls()).not.toContain('update-status 44')
+      expect(result.stdout).toContain('#43: Ticket #43 is Backlog, not awaiting review yet')
+      expect(result.stdout).toContain('#44: not synchronized — Error: ticket #44 is not awaiting review (Blocked)')
+      expect(result.stderr).toContain('could not synchronize every ticket it resolves')
+    })
+
+    it('moves every ticket of a merged pull request to Done', async () => {
+      const mergeSha = 'c'.repeat(40)
+      const body = 'Resolves #42\nResolves #43'
+      await writeFile(path.join(dir, 'event.json'), JSON.stringify({ ...event, action: 'closed', pull_request: { ...event.pull_request, state: 'closed', merged: true, merge_commit_sha: mergeSha } }))
+      const mergedList = JSON.stringify([
+        {
+          number: 100,
+          title: '[#42] Delivery',
+          headRefName: 'feature/42-work',
+          headRefOid: head,
+          headRepository: { name: 'FakeRepo' },
+          headRepositoryOwner: { login: 'FakeOrg' },
+          isCrossRepository: false,
+          baseRefName: 'develop',
+          body,
+          mergedAt: '2026-10-01T12:00:00Z',
+          mergeCommit: { oid: mergeSha },
+          closingIssuesReferences: [issue(42), issue(43)]
+        }
+      ])
+      const result = await run({
+        LIVE: JSON.stringify({ ...live, state: 'MERGED', mergeCommit: { oid: mergeSha }, body, closingIssuesReferences: [issue(42), issue(43)] }),
+        MERGED_LIST: mergedList,
+        OPEN_LIST: '[]',
+        STATUS: 'In review'
+      })
+      expect(result.code).toBe(0)
+      expect(calls()).toContain('tool update-status 42 Done')
+      expect(calls()).toContain('tool update-status 43 Done')
     })
   })
 })

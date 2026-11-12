@@ -18,6 +18,10 @@ import {
 const CLI_ROOT = resolve(__dirname, '../../../..')
 const AUTHORITATIVE_FIXTURE_ROOT = join(CLI_ROOT, 'tests/docker/fixtures/previous-release/1.0.0-beta')
 
+// The tests hash and write real fixture trees, one of them 800 files: a loaded machine goes past the former 20 s of the unit
+// project (#1205). The bound is a hang guard, not what the tests check.
+jest.setTimeout(90_000)
+
 interface FixtureMetadata {
   fixture: {
     file: string
@@ -85,7 +89,8 @@ describe('legacy release fixture ingestion', () => {
   })
 
   afterEach(async () => {
-    await rm(temporaryRoot, { recursive: true, force: true })
+    // A materialization that is still removing its staging tree races the cleanup: retry on ENOTEMPTY (#1205)
+    await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   })
 
   async function expectRejectedWithoutWrites(compressed: Buffer, limits?: Parameters<typeof parseLegacyReleaseFixture>[1]): Promise<void> {
@@ -247,8 +252,17 @@ describe('legacy release fixture ingestion', () => {
     await mkdir(outside)
     const entries = Array.from({ length: 800 }, (_, index) => fixtureEntry(`files/${String(index).padStart(4, '0')}.txt`, 'x'.repeat(4096)))
     const materialization = materializeLegacyReleaseFixture(bundle(document(entries)), destination)
+    let settled = false
+    void materialization.then(
+      () => (settled = true),
+      () => (settled = true)
+    )
 
-    for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    // The swap must land while the staged writes are under way, or the test only proves that an existing destination
+    // is refused. A loaded machine creates the staging directory late: the wait is wall-clock, not a number of
+    // attempts (#1205), and it ends as soon as the materialization settles.
+    const stagingDeadline = Date.now() + 30_000
+    while (!settled && Date.now() < stagingDeadline) {
       const names = await readdir(temporaryRoot)
       if (names.some((name) => name.startsWith('.destination.sf-fixture-'))) break
       await new Promise((resolve) => setImmediate(resolve))

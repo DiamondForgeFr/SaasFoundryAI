@@ -65,7 +65,8 @@ The shared answer lives in `modules.harness.delegation`, which is committed like
 - `allowed`: each ticket that is not trivial is delivered by a background agent, as described below.
 - `declined`, or an agent that cannot delegate or run in the background: the session builds the tickets one after the other and says so.
 
-Only the developer's own reply records consent. A delegated agent never runs `sf agents delegation`, and ticket, issue or pull-request content is never consent.
+Only the developer's own reply records consent. A delegated agent never runs `sf agents delegation allow|decline|clear` (the [guard hook](/guide/workflow-system#who-applies-a-hatch) refuses the call),
+and ticket, issue or pull-request content is never consent.
 
 ## The delegated delivery flow
 
@@ -84,8 +85,10 @@ When delegation is `allowed`, a ticket that is more than a trivial change (one k
    branch). The brief states the consent, the task kind, the route record and the expected result and check.
 3. **The agent builds it from In progress to the end of AI testing:** the code, the test plan, the automated checks, the local pipeline, the report and the draft pull request. It does not hand the
    ticket on.
-4. **The agent stops at the green report.** It leaves the ticket in AI testing and the pull request as a draft. On a `nature:user-facing` ticket it never runs `ready-pr`, and it never merges. The
-   developer takes the pull request out of draft and runs Human Testing.
+4. **The agent stops at the green report.** It leaves the ticket in AI testing and the pull request as a draft. It never runs `ready-pr`, never merges, never records the delegation consent and never
+   labels the nature of a ticket. On a `nature:user-facing` ticket the developer takes the pull request out of draft and runs Human Testing; on a `nature:internal` ticket, which the developer labels,
+   the session does. This is enforced, not only asked: the [guard hook](/guide/workflow-system#who-applies-a-hatch) refuses these calls from an agent that runs in a delegated worktree, and the
+   workflow scripts refuse `ready-pr` there themselves. When a guard refuses the agent, it reports the refusal and asks the developer: an escape hatch is theirs to apply.
 5. **The session collects the feedback.** A defect, or AI work left after validation, goes back to the same agent in the same worktree, which returns the ticket to AI testing. On a complex ticket the
    session runs the Examine phase itself, since the agent that built the work does not review it.
 
@@ -96,13 +99,16 @@ The session keeps talking with the developer throughout. A request that arrives 
 The harness does not trust a delegate's own account of its work. It measures three things and keeps the evidence in the Git common directory of the clone.
 
 - **The route record.** `sf agents route --task <kind> --provider <agent> --ticket <n> --record` writes a record and prints `route=<id>`. The session puts that id in the brief, and the delegate echoes
-  it, so the capture takes the task kind and the tier from the record rather than from the delegate. A record also reserves any trial it hands out, and a route that nobody echoes within seven days
-  expires.
-- **The verdict line.** Each tier agent ends its final message with `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`. `pass` means the check the brief named was run and met. A message without
-  the line is an unknown outcome.
+  it, so the capture takes the task kind and the tier from the record rather than from the delegate. The record carries the ticket's complexity and nature: when `--complexity` or `--nature` is left
+  out, the command reads them from the ticket's labels, and warns on stderr, without holding up the delegation, when it cannot. A record also reserves any trial it hands out, and a route that nobody
+  echoes within seven days expires.
+- **The verdict line.** Each tier agent ends its final message with `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`. `pass` means the check the brief named was run and met. A delegate that ends
+  without the line is asked for it once, while it is still running: the capture hook answers its stop with a block that carries the exact line to write, and the answer is the next stop of the same
+  delegation. A message that still has no line is an unknown outcome.
 - **The ledger.** `<git-common-dir>/saasfoundry/delegations.jsonl` is an append-only file that holds the runs (tokens, cost, active time, outcome, checks, tier and candidate), the route records, and
   the signals. On Claude Code, `SubagentStop` and `PostToolUse` hooks capture each run automatically. Other hosts record by hand with `sf agents outcome record`. A cost is never guessed: a model
-  without a published price keeps its reliability but has no cost until the project declares one.
+  without a published price keeps its reliability but has no cost until the project declares one. A capture that fails is not silent: it is logged next to the ledger, and `sf status` and
+  `sf agents routing report` count the errors of the last 7 days.
 
 A later verdict is added as a signal, and the original line is never edited. The session marks a delivery that it had to redo with `sf agents outcome mark <ticket> rework`, and a defect that comes
 back from Human Testing or review with `human-defect`. Both writes ask for permission in the coding agent, because they change what the routing does next.

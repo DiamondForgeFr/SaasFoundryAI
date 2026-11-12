@@ -95,7 +95,8 @@ Après vérification, la même commande sans `--dry-run` :
 - crée uniquement le travail manquant ou partiel sans correspondance ;
 - relie chaque Story comme sous-issue native de l'Epic de version ;
 - rend son corps depuis la page FR : description, UR et leurs énoncés, critères d'acceptation, références DS et contraintes ;
-- place les tickets sur le tableau, en `Backlog`, pour leur workflow de code normal.
+- place les tickets sur le tableau, en `Backlog`, pour leur workflow de code normal. Un ticket réutilisé déjà sur le tableau garde son statut ; un ticket présent sans statut (l'ajout automatique du
+  tableau le dépose vide) passe en `Backlog`. Le résumé de la commande donne le statut que chaque ticket a sur le tableau et nomme ceux dont il a fixé le statut.
 
 La reprise est prudente : une réponse interrompue peut être rejouée avec le même plan. Les identifiants contradictoires, les correspondances multiples et le reparentage implicite sont refusés.
 

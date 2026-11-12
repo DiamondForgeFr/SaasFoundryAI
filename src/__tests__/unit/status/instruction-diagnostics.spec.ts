@@ -2,7 +2,16 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { collectInstructionDiagnostics, compareVersions, findShadowingFiles, importsOf, measureCodexInstructions, readClaudeCodeVersion } from '../../../status/instruction-diagnostics'
+import {
+  collectInstructionDiagnostics,
+  compareCliVersions,
+  compareVersions,
+  findShadowingFiles,
+  findStaleClaudeMdReferences,
+  importsOf,
+  measureCodexInstructions,
+  readClaudeCodeVersion
+} from '../../../status/instruction-diagnostics'
 
 let base: string
 
@@ -11,7 +20,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  rmSync(base, { recursive: true, force: true })
+  rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 function write(file: string, content: string): void {
@@ -49,23 +58,33 @@ describe('readClaudeCodeVersion', () => {
     process.env.PATH = originalPath
   })
 
-  function stubClaude(output: string): void {
+  // A stub answers in milliseconds idle, but a loaded machine can take seconds to start a shell: the production bound
+  // (3 s) is not what these tests check, so they give the probe a bound of their own (#1171).
+  const PROBE_TIMEOUT_MS = 15_000
+
+  function stubClaude(body: string): void {
     const bin = join(base, 'bin')
-    write(join(bin, 'claude'), `#!/bin/sh\necho '${output}'\n`)
+    write(join(bin, 'claude'), `#!/bin/sh\n${body}\n`)
     chmodSync(join(bin, 'claude'), 0o755)
     process.env.PATH = `${bin}:/usr/bin:/bin`
   }
 
   it('reads the version the local binary prints', async () => {
-    stubClaude('2.1.200 (Claude Code)')
-    await expect(readClaudeCodeVersion(base)).resolves.toEqual({ version: '2.1.200' })
+    stubClaude("echo '2.1.200 (Claude Code)'")
+    await expect(readClaudeCodeVersion(base, PROBE_TIMEOUT_MS)).resolves.toEqual({ version: '2.1.200' })
   })
 
   it('names why no version was read', async () => {
-    stubClaude('unexpected')
-    await expect(readClaudeCodeVersion(base)).resolves.toEqual({ reason: '`claude --version` printed no version' })
+    stubClaude("echo 'unexpected'")
+    await expect(readClaudeCodeVersion(base, PROBE_TIMEOUT_MS)).resolves.toEqual({ reason: '`claude --version` printed no version' })
     process.env.PATH = join(base, 'empty')
-    await expect(readClaudeCodeVersion(base)).resolves.toEqual({ reason: '`claude` not found on PATH' })
+    await expect(readClaudeCodeVersion(base, PROBE_TIMEOUT_MS)).resolves.toEqual({ reason: '`claude` not found on PATH' })
+  })
+
+  it('gives up on a binary that does not answer within its bound', async () => {
+    // `exec` so that the timeout's signal reaches the sleep itself, which holds the output pipe.
+    stubClaude('exec sleep 30')
+    await expect(readClaudeCodeVersion(base, 200)).resolves.toEqual({ reason: '`claude --version` did not answer' })
   })
 })
 
@@ -74,6 +93,36 @@ describe('compareVersions', () => {
     expect(compareVersions('2.1.276', '2.1.277')).toBeLessThan(0)
     expect(compareVersions('2.1.277', '2.1.277')).toBe(0)
     expect(compareVersions('2.10.0', '2.9.999')).toBeGreaterThan(0)
+  })
+})
+
+describe('compareCliVersions (#1103)', () => {
+  it('orders x.y.z numerically, like compareVersions', () => {
+    expect(compareCliVersions('1.0.1', '1.1.0')).toBeLessThan(0)
+    expect(compareCliVersions('1.1.0', '1.1.0')).toBe(0)
+    expect(compareCliVersions('1.10.0', '1.9.9')).toBeGreaterThan(0)
+  })
+
+  it('reads a prerelease: older than its release, newer than the release before', () => {
+    expect(compareCliVersions('1.1.0-rc.1', '1.1.0')).toBeLessThan(0)
+    expect(compareCliVersions('1.1.0', '1.1.0-rc.1')).toBeGreaterThan(0)
+    expect(compareCliVersions('1.1.0-rc.1', '1.0.9')).toBeGreaterThan(0)
+    expect(compareCliVersions('1.0.0-beta', '1.0.0-beta')).toBe(0)
+  })
+
+  it('orders prerelease tags the way semver does', () => {
+    const ordered = ['1.0.0-alpha', '1.0.0-alpha.1', '1.0.0-alpha.beta', '1.0.0-beta', '1.0.0-beta.2', '1.0.0-beta.11', '1.0.0-rc.1', '1.0.0']
+    for (let i = 0; i < ordered.length - 1; i++) expect(compareCliVersions(ordered[i], ordered[i + 1])).toBeLessThan(0)
+  })
+
+  it('ignores build metadata', () => {
+    expect(compareCliVersions('1.1.0+abc', '1.1.0')).toBe(0)
+  })
+
+  it('answers undefined for what is not a version, where compareVersions answers NaN', () => {
+    expect(compareCliVersions('1.1', '1.1.0')).toBeUndefined()
+    expect(compareCliVersions('latest', '1.1.0')).toBeUndefined()
+    expect(compareVersions('1.1.0-rc.1', '1.1.0')).toBeNaN()
   })
 })
 
@@ -128,5 +177,52 @@ describe('collectInstructionDiagnostics', () => {
 
   it('diagnoses nothing where there is no instruction file', async () => {
     await expect(collectInstructionDiagnostics(base, [], null)).resolves.toEqual({ shadowing: [] })
+  })
+
+  it('reports the missing CLAUDE.md files an AGENTS.md still names (#1152)', async () => {
+    project(['claude-code'])
+    write(join(base, 'AGENTS.md'), '# acme\n\n- **App-specific context**: Check `apps/api/CLAUDE.md` and `apps/web/CLAUDE.md`\n')
+
+    const diagnostics = await collectInstructionDiagnostics(base, ['apps/api', 'apps/web'], null)
+
+    expect(diagnostics.staleReferences).toEqual([
+      { file: 'AGENTS.md', line: 3, reference: 'apps/api/CLAUDE.md', target: 'apps/api/CLAUDE.md' },
+      { file: 'AGENTS.md', line: 3, reference: 'apps/web/CLAUDE.md', target: 'apps/web/CLAUDE.md' }
+    ])
+  })
+})
+
+describe('findStaleClaudeMdReferences (#1152)', () => {
+  it('reads a bare name from the directory of the AGENTS.md that holds it', () => {
+    write(join(base, 'AGENTS.md'), 'tree\n│   └── CLAUDE.md     # API-specific context\n')
+    write(join(base, 'apps', 'api', 'AGENTS.md'), 'Update this CLAUDE.md as the project evolves.\n')
+
+    expect(findStaleClaudeMdReferences(base, ['apps/api', 'apps/web'])).toEqual([
+      { file: 'AGENTS.md', line: 2, reference: 'CLAUDE.md', target: 'CLAUDE.md' },
+      { file: 'apps/api/AGENTS.md', line: 1, reference: 'CLAUDE.md', target: 'apps/api/CLAUDE.md' }
+    ])
+  })
+
+  it('does not report a CLAUDE.md that is there', () => {
+    write(join(base, 'AGENTS.md'), 'Check `apps/api/CLAUDE.md`.\n')
+    write(join(base, 'apps', 'api', 'CLAUDE.md'), '# api\n')
+
+    expect(findStaleClaudeMdReferences(base, ['apps/api'])).toEqual([])
+  })
+
+  it('does not report a file it does not look for: CLAUDE.local.md, the home directory, a URL', () => {
+    write(join(base, 'AGENTS.md'), 'Notes in CLAUDE.local.md, ~/.claude/CLAUDE.md, https://example.com/CLAUDE.md.\n')
+
+    expect(findStaleClaudeMdReferences(base, [])).toEqual([])
+  })
+
+  it('does not read the heading and the comments the migration writes as references', () => {
+    write(join(base, 'AGENTS.md'), '<!-- saasfoundry:migrated-from-claude-md — the sections below come from CLAUDE.md. -->\n\n## Kept from CLAUDE.md for review\n\nSome text.\n')
+
+    expect(findStaleClaudeMdReferences(base, [])).toEqual([])
+  })
+
+  it('reports nothing where there is no AGENTS.md', () => {
+    expect(findStaleClaudeMdReferences(base, ['apps/api'])).toEqual([])
   })
 })

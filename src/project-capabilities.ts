@@ -17,12 +17,26 @@ export function hasManagedHarnessEvidence(manifest: SaaSFoundryManifest): boolea
   return manifest.workflow !== undefined || manifest.aiRules !== undefined
 }
 
+/**
+ * A `cli` project whose only technical marker is `modules.email = { provider: 'none' }`.
+ *
+ * Manifest migration 002 (restructure-email) writes that block into every manifest that has a
+ * `modules` object, stackless ones included, so on a project with no generated stack it is the
+ * migration's residue, not the email module. Any other marker, or a provider other than `none`,
+ * is not residue: `technicalStackCapability` keeps reading those as contradictory.
+ */
+function hasStacklessEmailResidue(manifest: SaaSFoundryManifest): boolean {
+  const modules = manifest.modules
+  return manifest.structure === 'cli' && modules?.email?.provider === 'none' && modules.s3Setup === undefined && modules.dbSetup === undefined && modules.includeAnalytics === undefined
+}
+
 function technicalStackCapability(manifest: SaaSFoundryManifest): TechnicalStackCapability {
   const modules = manifest.modules
   const structural = [modules?.email, modules?.s3Setup, modules?.dbSetup, modules?.includeAnalytics]
   const present = structural.filter((value) => value !== undefined).length
 
   if (present === 0) return manifest.structure === 'cli' ? 'absent' : 'inconsistent'
+  if (hasStacklessEmailResidue(manifest)) return 'absent'
   if (present !== structural.length || modules?.advancedSkills === undefined) return 'inconsistent'
   return manifest.structure === 'cli' ? 'inconsistent' : 'present'
 }
@@ -56,7 +70,10 @@ export function hasLegacyMultirepoChildShape(manifest: SaaSFoundryManifest): boo
   if (manifest.projection || manifest.structure !== 'cli' || !/-((api)|(web))$/.test(manifest.projectName)) return false
   const technicalKeys = [manifest.modules?.email, manifest.modules?.s3Setup, manifest.modules?.dbSetup, manifest.modules?.includeAnalytics]
   return (
-    technicalKeys.every((value) => value === undefined) &&
+    // The stackless email residue of migration 002 is no technical key. A child that carries it is still
+    // a child: left out, it would stop reading as inconsistent and read as a standalone harness that a
+    // full-profile transition could scaffold a second application into.
+    (technicalKeys.every((value) => value === undefined) || hasStacklessEmailResidue(manifest)) &&
     manifest.modules?.harness !== undefined &&
     Array.isArray(manifest.modules?.advancedSkills) &&
     manifest.mainBranch !== undefined &&

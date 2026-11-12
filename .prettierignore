@@ -20,6 +20,14 @@ pnpm-lock.yaml
 .DS_Store
 coverage/
 *.log
+# Scratch output of the test lanes (Docker artifacts, generated projects): written while format:check runs
+.tmp/
+# Other local artefacts .gitignore drops: format:check reads only this file (--ignore-path), not .gitignore (#1128)
+.temp/
+.nyc_output/
+.claude/worktrees/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
 
 # Generated shared agent adapters are byte-hash managed
 .agents/

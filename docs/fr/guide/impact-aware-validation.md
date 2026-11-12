@@ -49,6 +49,14 @@ Le hook de pre-commit valide l'instantané préparé dans l'index Git, pas les m
 npm run test:staged
 ```
 
+Le script fige l'arbre indexé dans un commit jetable, l'extrait dans un worktree Git temporaire et y lance les commandes retenues. Git transmet à ses hooks l'emplacement du dépôt en cours de commit
+(`GIT_INDEX_FILE`, `GIT_PREFIX`, et `GIT_DIR` depuis un worktree lié) ; le script retire ces variables, celles que liste `git rev-parse --local-env-vars` hors variables de configuration, pour créer et
+supprimer le worktree temporaire et pour les commandes qu'il y lance. Un commit fait depuis un worktree lié ou un sous-dossier valide donc l'instantané sans toucher à l'index du dépôt.
+
+L'instantané reprend les dépendances installées du dépôt : le `node_modules` racine et celui qui se trouve à côté de chaque `package.json` suivi par Git. Un workspace qui fixe sa propre version d'un
+outil (TypeScript, par exemple) l'utilise donc aussi dans l'instantané. Chaque `node_modules` y est reconstruit en liens vers les entrées du dépôt, sauf les liens de workspace
+(`node_modules/@scope/pkg -> ../../packages/pkg`), qui mènent à la copie du paquet dans l'instantané : ce que la validation y construit est ce qu'importent les autres workspaces.
+
 Pour les **contributeurs au dépôt SaaSFoundryAI lui-même**, cette commande utilise `.saasfoundry/validation.commit.json` : même classifieur, même isolation de l'index, mais aucune commande Docker au
 commit. Les changements de documentation, frontend, backend et harness conservent leurs contrôles ciblés. Un changement limité au cycle de vie lance les gardes et tests de contrat ; ses vrais
 scénarios Docker restent obligatoires avant livraison. Un changement du cœur, partagé, de la racine ou d'un fichier inconnu passe par `test:commit:scoped`, qui vérifie ce que le commit touche :
@@ -63,16 +71,19 @@ npm test
 npm run test:pre-push
 ```
 
-Quand le projet déclare un pipeline MoltenTerm (`.molten/project.json`) et que `molten ci status` répond, la validation lourde est `molten ci run <branche>` sur le commit poussé à la place ; la suite
-npm sert de repli. `sf status` signale le pipeline déclaré par une ligne `local-ci:` et se contente de lire le fichier. Consignez le commit testé et l'environnement dans le rapport du ticket. Il ne
-s'agit pas d'un cache automatique de résultats : toute modification pertinente du code ou de l'environnement exige une nouvelle validation, et la CI valide la PR indépendamment. La revue humaine et
-les éventuelles étapes Human testing restent inchangées. Ces contrôles de commit ciblés sont réservés aux contributeurs et ne modifient pas la politique de release des projets générés.
+Quand le projet déclare un pipeline MoltenTerm (`.molten/project.json` avec au moins un job dans `ci.jobs`) et que `molten ci status` répond, la validation lourde est `molten ci run <branche>` sur le
+commit poussé à la place ; la suite npm sert de repli. `sf status` signale le pipeline déclaré par une ligne `local-ci:` et se contente de lire le fichier. Consignez le commit testé et l'environnement
+dans le rapport du ticket. Il ne s'agit pas d'un cache automatique de résultats : toute modification pertinente du code ou de l'environnement exige une nouvelle validation, et la CI valide la PR
+indépendamment. La revue humaine et les éventuelles étapes Human testing restent inchangées. Ces contrôles de commit ciblés sont réservés aux contributeurs et ne modifient pas la politique de release
+des projets générés.
 
 **Dans les projets générés**, `npm run test:staged` lit lui aussi `.saasfoundry/validation.commit.json`. Il reprend les voies de `.saasfoundry/validation.json` à deux exceptions près : la voie de
 cycle de vie lance les gardes au lieu de `test:e2e`, et la validation complète lance les gardes et les contrôles du contrat partagé. Tout changement de l'API ou du web sélectionne la voie de cycle de
 vie : un hook qui lançait la suite E2E la lançait donc à presque chaque commit. La CI garde `.saasfoundry/validation.json`, où la voie de cycle de vie lance toujours `test:e2e`. Le `.prettierignore`
 généré exclut de `npm run format:check` les fichiers que SaaSFoundryAI écrit et rafraîchit à chaque `sf update` (`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, instructions des agents, workflow
-de validation) ainsi que les artefacts générés : les formater transformerait la mise à jour suivante en conflits.
+de validation) ainsi que les artefacts générés : les formater transformerait la mise à jour suivante en conflits. Il exclut aussi ce qu'écrivent les outils de test et de build (`test-results/`,
+`playwright-report/`, `blob-report/`, `coverage/`, `coverage-e2e/`, `.nyc_output/`, `dev-dist/`), que les configurations ESLint générées ignorent également : un rapport Playwright contient des
+mégaoctets de scripts minifiés.
 
 Inspectez une plage sans exécuter les commandes :
 

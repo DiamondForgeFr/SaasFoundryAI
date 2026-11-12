@@ -40,6 +40,7 @@ import { auditHighProductionWorkspaces } from './npm-audit'
 import { createArtifactSink } from './lifecycle/artifacts'
 import { verifyHarnessBrowsers } from './lifecycle/browser'
 import { runLiveSuite } from './lifecycle/live-suite'
+import { isNpmEnvironmentFailure } from './lifecycle/npm-network'
 import { runSupervisedProcess, startSupervisedProcess } from './lifecycle/process'
 import { startPrivatePostgres, type PrivatePostgres } from './lifecycle/postgres'
 import { runProductPhase } from './lifecycle/product'
@@ -72,6 +73,8 @@ const LIFECYCLE_ABORT = new AbortController()
 const TEARDOWN_RESERVE_MS = 30_000
 let ACTIVE_SCENARIO_DEADLINE: number | undefined
 let ACTIVE_LIFECYCLE_TIMING: LifecycleTimingStart | undefined
+/** The first step of the running scenario that failed on the npm install environment, not on the product (#1198). */
+let ACTIVE_ENVIRONMENT_FAILURE: string | undefined
 
 function scenarioDeadline(timeoutSeconds: number): number {
   return ACTIVE_SCENARIO_DEADLINE ?? Date.now() + timeoutSeconds * 1_000
@@ -983,6 +986,10 @@ async function runStep<T>(label: string, fn: () => Promise<T> | T): Promise<T> {
   } catch (err) {
     ACTIVE_LIFECYCLE_TIMING?.phases.push(finishLifecyclePhase(phase, 'failed'))
     const detail = formatErrorDetails(err)
+    if (isNpmEnvironmentFailure(detail)) {
+      ACTIVE_ENVIRONMENT_FAILURE ??= label
+      throw new Error(`step "${label}" failed on the environment (npm install), not on the product under test: ${detail}`)
+    }
     throw new Error(`step "${label}" failed: ${detail}`)
   }
 }
@@ -1667,7 +1674,7 @@ async function main() {
 
   console.log(`\nRunning ${scenarios.length} scenario(s): ${scenarios.map((s) => s.name).join(', ')}`)
 
-  const results: { name: string; passed: boolean }[] = []
+  const results: { name: string; passed: boolean; environmentFailure?: string }[] = []
 
   const abort = (signal: NodeJS.Signals) => LIFECYCLE_ABORT.abort(new Error(`Lifecycle received ${signal}; completing supervised teardown.`))
   const onSigint = () => abort('SIGINT')
@@ -1685,6 +1692,7 @@ async function main() {
     const deadline = Date.now() + scenario.timeoutSeconds * 1_000
     ACTIVE_SCENARIO_DEADLINE = deadline
     ACTIVE_LIFECYCLE_TIMING = timing
+    ACTIVE_ENVIRONMENT_FAILURE = undefined
     const budgetTimer = setTimeout(
       () => {
         LIFECYCLE_ABORT.abort(new Error(`Lifecycle scenario ${scenario.name} reached its teardown reserve within the ${scenario.timeoutSeconds}s budget.`))
@@ -1693,7 +1701,7 @@ async function main() {
     )
     try {
       const passed = await runScenario(scenario)
-      results.push({ name: scenario.name, passed })
+      results.push({ name: scenario.name, passed, ...(passed ? {} : { environmentFailure: ACTIVE_ENVIRONMENT_FAILURE }) })
       const status = LIFECYCLE_ABORT.signal.aborted ? 'aborted' : passed ? 'passed' : 'failed'
       await writeLifecycleTiming(scenario.name, LIVE_DEPTH, timing, status, {
         budgetMs: scenario.timeoutSeconds * 1_000,
@@ -1702,7 +1710,7 @@ async function main() {
       console.log(`[sf-progress] scenario ${index + 1}/${scenarios.length} ${scenario.name} — ${passed ? 'passed' : 'failed'}`)
     } catch (error) {
       console.error(`\nScenario "${scenario.name}" crashed:`, error instanceof Error ? error.message : error)
-      results.push({ name: scenario.name, passed: false })
+      results.push({ name: scenario.name, passed: false, environmentFailure: ACTIVE_ENVIRONMENT_FAILURE })
       await writeLifecycleTiming(scenario.name, LIVE_DEPTH, timing, LIFECYCLE_ABORT.signal.aborted ? 'aborted' : 'crashed', {
         budgetMs: scenario.timeoutSeconds * 1_000,
         teardownReserveMs: TEARDOWN_RESERVE_MS
@@ -1712,6 +1720,7 @@ async function main() {
       clearTimeout(budgetTimer)
       ACTIVE_SCENARIO_DEADLINE = undefined
       ACTIVE_LIFECYCLE_TIMING = undefined
+      ACTIVE_ENVIRONMENT_FAILURE = undefined
     }
   }
 
@@ -1724,7 +1733,8 @@ async function main() {
   const failed = results.filter((r) => !r.passed).length
 
   for (const result of results) {
-    console.log(`  ${result.passed ? 'PASS' : 'FAIL'} ${result.name}`)
+    const environment = result.environmentFailure ? ` — ENVIRONMENT FAILURE at "${result.environmentFailure}" (npm install, not the product under test; rerun)` : ''
+    console.log(`  ${result.passed ? 'PASS' : 'FAIL'} ${result.name}${environment}`)
   }
 
   console.log(`\n${passed} passed, ${failed} failed out of ${results.length} scenarios`)

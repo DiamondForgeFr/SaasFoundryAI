@@ -35,6 +35,11 @@ dist-ssr
 /blob-report/
 /playwright/.cache/
 
+# Coverage and the PWA dev build
+/coverage/
+/.nyc_output/
+/dev-dist/
+
 # Claude Code - Track configuration but ignore credentials
 !.claude/
 !.claude/**

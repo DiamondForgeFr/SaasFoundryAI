@@ -303,4 +303,81 @@ describe('Auth Module (e2e)', () => {
       expect(response.body).toHaveProperty('permissions')
     })
   })
+
+  /**
+   * A user an account admin deactivates loses access at once: the access token and the refresh token
+   * it already holds are both refused, and reactivation followed by a new sign-in restores access.
+   */
+  describe('Deactivated user', () => {
+    const password = 'deactivationpassword'
+    const adminConfig = { email: 'deactivation-admin@diamondforge.fr', password, firstname: 'Alfred', lastname: 'Pennyworth', roles: ['account-admin'] }
+    const memberConfig = { email: 'deactivation-member@diamondforge.fr', password, firstname: 'Dick', lastname: 'Grayson', roles: ['account-user'] }
+
+    let adminAgent: ReturnType<typeof request.agent>
+    let adminAccountId: string
+    let memberId: string
+
+    /** Sign the member in and return its two cookies, each usable on its own. */
+    const signInMember = async (): Promise<{ accessCookie: string; refreshCookie: string }> => {
+      const response = await request(app.getHttpServer()).post('/api/auth/signin').send({ email: memberConfig.email, password }).expect(200)
+      const setCookies = ([] as string[]).concat(response.headers['set-cookie'] ?? [])
+      const cookie = (name: string) => {
+        const found = setCookies.find((value) => value.startsWith(`${name}=`))
+        expect(found).toBeDefined()
+        return found!.split(';')[0]
+      }
+      return { accessCookie: cookie('access_token'), refreshCookie: cookie('refresh_token') }
+    }
+
+    const setMemberActive = (isActive: boolean) => adminAgent.patch(`/api/accounts/${adminAccountId}/users/${memberId}`).send({ isActive }).expect(200)
+
+    beforeAll(async () => {
+      const admin = await setupTestUser(prismaService, adminConfig)
+      const member = await setupTestUser(prismaService, memberConfig)
+      adminAccountId = admin.accountId
+      memberId = member.id
+      await prismaService.userAccountLink.create({ data: { userId: memberId, accountId: adminAccountId } })
+
+      adminAgent = request.agent(app.getHttpServer())
+      await adminAgent.post('/api/auth/signin').send({ email: adminConfig.email, password }).expect(200)
+    })
+
+    afterAll(async () => {
+      await cleanupTestUser(prismaService, memberConfig.email)
+      await cleanupTestUser(prismaService, adminConfig.email)
+    })
+
+    it('refuses the access token and the refresh token the user held before its deactivation', async () => {
+      const { accessCookie, refreshCookie } = await signInMember()
+      await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', accessCookie).expect(200)
+
+      await setMemberActive(false)
+
+      await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', accessCookie).expect(401)
+      await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', refreshCookie).expect(401)
+      await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', [accessCookie, refreshCookie]).expect(401)
+      expect(await prismaService.userToken.count({ where: { userId: memberId, type: 'SESSION_REFRESH' } })).toBe(0)
+    })
+
+    it('refuses a refresh token that survived a deactivation made outside the account routes', async () => {
+      await setMemberActive(true)
+      const { refreshCookie } = await signInMember()
+
+      // The flag alone, as a direct write would set it: the refresh token row is still there
+      await prismaService.user.update({ where: { id: memberId }, data: { isActive: false } })
+      expect(await prismaService.userToken.count({ where: { userId: memberId, type: 'SESSION_REFRESH' } })).toBe(1)
+
+      await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', refreshCookie).expect(401)
+    })
+
+    it('refuses a new sign-in while deactivated, and accepts one after reactivation', async () => {
+      await request(app.getHttpServer()).post('/api/auth/signin').send({ email: memberConfig.email, password }).expect(401)
+
+      await setMemberActive(true)
+
+      const { accessCookie, refreshCookie } = await signInMember()
+      await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', accessCookie).expect(200)
+      await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', refreshCookie).expect(200)
+    })
+  })
 })

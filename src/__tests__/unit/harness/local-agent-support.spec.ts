@@ -17,6 +17,11 @@ const own = (paths: string[]): string[] => paths.filter((path) => !TIER_AGENT_PA
 const exec = promisify(execFile)
 const manifest = { version: '1', structure: 'cli', projectName: 'local-test' }
 
+// Each test starts with a git init and commit, then enables, refreshes or replaces agents, each of which reads the
+// index and the excludes through git: a loaded machine goes past the former 20 s of the unit project (#1205). The bound is a
+// hang guard, not what the tests check.
+jest.setTimeout(90_000)
+
 describe('checkout-local agent support', () => {
   let root: string
   const git = async (...args: string[]) => (await exec('git', args, { cwd: root })).stdout.trim()
@@ -42,7 +47,7 @@ describe('checkout-local agent support', () => {
   })
   afterEach(async () => {
     jest.restoreAllMocks()
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   })
 
   it('defaults to local, keeps manifest/index/tracked diff unchanged, and hides only local artifacts', async () => {

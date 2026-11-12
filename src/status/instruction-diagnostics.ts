@@ -4,6 +4,8 @@ import path from 'path'
 
 import type { HarnessAgent } from '../harness/agent-registry'
 import { readAgentSupport } from '../harness/agent-support'
+import { MAX_FILE_BYTES, measureCodexInstructions, readProjectCodexDocLimit, type CodexInstructionSize } from '../harness/codex-instruction-size'
+import { findClaudeMdReferences, isMigrationMarker, resolveClaudeMdReference } from '../harness/instruction-references'
 
 /**
  * Facts about the instruction files the declared coding agents will load (#939).
@@ -22,6 +24,20 @@ export interface InstructionDiagnostics {
   claudeCode?: ClaudeCodeVersion
   /** What Codex loads for each directory holding an AGENTS.md; absent when Codex is not declared. */
   codexSizes?: CodexInstructionSize[]
+  /** The `project_doc_max_bytes` the project's `.codex/config.toml` sets; absent when it sets none (#1154). */
+  codexLimit?: number
+  /** Mentions in an AGENTS.md of a CLAUDE.md that is not there (#1152); absent when the declaration could not be read. */
+  staleReferences?: StaleInstructionReference[]
+}
+
+export interface StaleInstructionReference {
+  /** The AGENTS.md that holds the mention, relative to the project root. */
+  file: string
+  line: number
+  /** The path as written in the file. */
+  reference: string
+  /** The file it names, relative to the project root. */
+  target: string
 }
 
 export interface ClaudeCodeVersion {
@@ -31,28 +47,15 @@ export interface ClaudeCodeVersion {
   reason?: string
 }
 
-export interface CodexInstructionSize {
-  /** Directory, relative to the project root ('.' for the root). */
-  directory: string
-  /** Bytes of every AGENTS.md from the Git root down to `directory`, imports included. */
-  bytes: number
-  /** The files counted, relative to the project root. */
-  files: string[]
-}
+// The measurement is shared with the harness refresh, which raises the limit (#1154).
+export { CODEX_INSTRUCTION_LIMIT, importsOf, measureCodexInstructions } from '../harness/codex-instruction-size'
+export type { CodexInstructionSize } from '../harness/codex-instruction-size'
 
 /** First Claude Code release that reads AGENTS.md (#937). */
 export const MIN_CLAUDE_CODE_VERSION = '2.1.277'
-/** Codex's default `project_doc_max_bytes`: instructions past this are silently cut. */
-export const CODEX_INSTRUCTION_LIMIT = 32 * 1024
 
 const SHADOWING_FILES = ['CLAUDE.md', path.join('.claude', 'CLAUDE.md'), 'CLAUDE.local.md']
 const VERSION_TIMEOUT_MS = 3000
-/** Claude Code follows imports five hops deep; so does the count. */
-const MAX_IMPORT_DEPTH = 5
-const MAX_FILE_BYTES = 1024 * 1024
-
-const FENCE = /^ {0,3}(`{3,}|~{3,})/
-const IMPORT = /(?:^|\s)@([^\s`]+)/g
 
 export async function collectInstructionDiagnostics(projectRoot: string, appDirs: string[], gitRoot: string | null): Promise<InstructionDiagnostics> {
   const agents = await declaredAgents(projectRoot)
@@ -62,7 +65,12 @@ export async function collectInstructionDiagnostics(projectRoot: string, appDirs
     diagnostics.shadowing = findShadowingFiles(projectRoot, appDirs)
     diagnostics.claudeCode = await readClaudeCodeVersion(projectRoot)
   }
-  if (agents.includes('codex')) diagnostics.codexSizes = measureCodexInstructions(projectRoot, appDirs, gitRoot)
+  if (agents.includes('codex')) {
+    diagnostics.codexSizes = measureCodexInstructions(projectRoot, appDirs, gitRoot)
+    const limit = readProjectCodexDocLimit(projectRoot)
+    if (limit !== undefined) diagnostics.codexLimit = limit
+  }
+  diagnostics.staleReferences = findStaleClaudeMdReferences(projectRoot, appDirs)
   return diagnostics
 }
 
@@ -97,13 +105,39 @@ export function findShadowingFiles(projectRoot: string, appDirs: string[]): stri
 }
 
 /**
+ * The AGENTS.md of the project and of each app that names a CLAUDE.md the project does not hold (#1152).
+ * The v3 → v4 migration deletes the CLAUDE.md files and, until it rewrote the references in the sections it
+ * moved, left lines such as `apps/api/CLAUDE.md` behind; a project migrated by that release still has them.
+ * The mentions the migration writes itself, to say where a block came from, are not references.
+ */
+export function findStaleClaudeMdReferences(projectRoot: string, appDirs: string[]): StaleInstructionReference[] {
+  const root = path.resolve(projectRoot)
+  const stale: StaleInstructionReference[] = []
+  for (const dir of ['', ...appDirs]) {
+    const file = dir ? `${dir}/AGENTS.md` : 'AGENTS.md'
+    const absolute = path.join(root, file)
+    if (!isFile(absolute) || fs.statSync(absolute).size > MAX_FILE_BYTES) continue
+    const lines = fs.readFileSync(absolute, 'utf8').split('\n')
+    lines.forEach((text, index) => {
+      if (isMigrationMarker(text)) return
+      for (const reference of findClaudeMdReferences(text)) {
+        const target = resolveClaudeMdReference(dir, reference)
+        if (target !== undefined && !isFile(path.join(root, target))) stale.push({ file, line: index + 1, reference: reference.text, target })
+      }
+    })
+  }
+  return stale
+}
+
+/**
  * Asked of the binary itself, locally: `claude --version` makes no network call. The path on
  * disk cannot be trusted for this — a terminal's launcher shim resolves to a file whose path
- * carries no version.
+ * carries no version. The probe is bounded by `timeoutMs`; the tests pass their own, because a
+ * stub that answers in milliseconds idle can take seconds to start on a loaded machine (#1171).
  */
-export function readClaudeCodeVersion(cwd: string): Promise<ClaudeCodeVersion> {
+export function readClaudeCodeVersion(cwd: string, timeoutMs: number = VERSION_TIMEOUT_MS): Promise<ClaudeCodeVersion> {
   return new Promise((resolve) => {
-    execFile('claude', ['--version'], { cwd, env: process.env, timeout: VERSION_TIMEOUT_MS, encoding: 'utf8' }, (error, stdout) => {
+    execFile('claude', ['--version'], { cwd, env: process.env, timeout: timeoutMs, encoding: 'utf8' }, (error, stdout) => {
       if (error) {
         const code = (error as NodeJS.ErrnoException).code
         resolve({ reason: code === 'ENOENT' ? '`claude` not found on PATH' : '`claude --version` did not answer' })
@@ -123,64 +157,42 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
+const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/
+
+/** Semver precedence of two prerelease tags: numeric identifiers by value and before the others, a longer tag after its prefix. */
+function comparePrerelease(a: string | undefined, b: string | undefined): number {
+  if (a === b) return 0
+  // A release outranks every prerelease of the same version.
+  if (a === undefined) return 1
+  if (b === undefined) return -1
+  const left = a.split('.')
+  const right = b.split('.')
+  for (let i = 0; i < Math.min(left.length, right.length); i++) {
+    if (left[i] === right[i]) continue
+    const leftNumeric = /^\d+$/.test(left[i])
+    const rightNumeric = /^\d+$/.test(right[i])
+    if (leftNumeric && rightNumeric) return Number(left[i]) - Number(right[i])
+    if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1
+    return left[i] < right[i] ? -1 : 1
+  }
+  return left.length - right.length
+}
+
 /**
- * What Codex loads when started in each directory holding an AGENTS.md: it concatenates the
- * AGENTS.md (or AGENTS.override.md) of every directory from the Git root down to the working
- * directory, and stops at `project_doc_max_bytes`.
+ * Negative, zero or positive as CLI version `a` is older than, equal to or newer than `b`, or
+ * undefined when either is not a semver string. Unlike `compareVersions`, it reads a prerelease
+ * (`1.1.0-rc.1` is older than `1.1.0`) instead of returning NaN: a CLI version is whatever the
+ * package or a release candidate carries.
  */
-export function measureCodexInstructions(projectRoot: string, appDirs: string[], gitRoot: string | null): CodexInstructionSize[] {
-  const root = path.resolve(projectRoot)
-  const top = gitRoot && isWithin(root, path.resolve(gitRoot)) ? path.resolve(gitRoot) : root
-  const sizes: CodexInstructionSize[] = []
-  for (const dir of ['.', ...appDirs]) {
-    const target = path.join(root, dir)
-    if (!instructionFileIn(target)) continue
-    const chain: string[] = []
-    for (let current = target; ; current = path.dirname(current)) {
-      const file = instructionFileIn(current)
-      if (file) chain.unshift(file)
-      if (current === top || path.dirname(current) === current) break
-    }
-    const counted = new Set<string>()
-    for (const file of chain) collectImports(file, root, counted, 0)
-    let bytes = 0
-    for (const file of counted) bytes += fs.statSync(file).size
-    sizes.push({ directory: dir, bytes, files: [...counted].map((file) => path.relative(root, file) || file) })
+export function compareCliVersions(a: string, b: string): number | undefined {
+  const left = SEMVER.exec(a.trim())
+  const right = SEMVER.exec(b.trim())
+  if (!left || !right) return undefined
+  for (let i = 1; i <= 3; i++) {
+    const difference = Number(left[i]) - Number(right[i])
+    if (difference !== 0) return difference
   }
-  return sizes
-}
-
-function instructionFileIn(dir: string): string | undefined {
-  return ['AGENTS.override.md', 'AGENTS.md'].map((name) => path.join(dir, name)).find(isFile)
-}
-
-/** Add `file` and, recursively, every `@path` it imports that stays inside the project. */
-function collectImports(file: string, projectRoot: string, counted: Set<string>, depth: number): void {
-  if (counted.has(file)) return
-  counted.add(file)
-  if (depth >= MAX_IMPORT_DEPTH || fs.statSync(file).size > MAX_FILE_BYTES) return
-  for (const target of importsOf(fs.readFileSync(file, 'utf8'))) {
-    const resolved = path.resolve(path.dirname(file), target)
-    if (isWithin(resolved, projectRoot) && isFile(resolved)) collectImports(resolved, projectRoot, counted, depth + 1)
-  }
-}
-
-/** `@path` references outside fenced blocks and inline code, as Claude Code reads them. */
-export function importsOf(content: string): string[] {
-  const imports: string[] = []
-  let fence: string | undefined
-  for (const line of content.split('\n')) {
-    const fenceMatch = FENCE.exec(line)
-    if (fenceMatch) {
-      const marker = fenceMatch[1]
-      if (!fence) fence = marker
-      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = undefined
-      continue
-    }
-    if (fence) continue
-    for (const match of line.replace(/`[^`]*`/g, '').matchAll(IMPORT)) imports.push(match[1].replace(/[.,;:!?)\]]+$/, ''))
-  }
-  return imports
+  return comparePrerelease(left[4], right[4])
 }
 
 function isFile(candidate: string): boolean {
@@ -189,9 +201,4 @@ function isFile(candidate: string): boolean {
   } catch {
     return false
   }
-}
-
-function isWithin(candidate: string, root: string): boolean {
-  const relative = path.relative(root, candidate)
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
 }

@@ -1,0 +1,4 @@
+#!/bin/sh
+# The lifecycle container's npm: fetch retries, a per-install budget and an environment-failure
+# message for a stalled install, then the real npm (#1198). See npm-lane.cjs.
+exec node "$(dirname "$0")/npm-lane.cjs" "$@"

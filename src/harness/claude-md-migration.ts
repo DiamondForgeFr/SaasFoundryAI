@@ -3,6 +3,7 @@ import { lstat, mkdir, readFile, unlink, writeFile } from 'fs/promises'
 import { dirname, join, posix } from 'path'
 
 import { CLAUDE_CODE_RULE_PATH, isGeneratedBridge as isBridgeOfKind, withGeneratedInstructions, withGeneratedRegion } from './agent-instructions'
+import { KEPT_FOR_REVIEW_HEADING, MIGRATED_FROM_CLAUDE_MD_MARKER, ReferenceRewrite, rewriteRemovedClaudeMdReferences } from './instruction-references'
 import { MarkdownSection, sectionHash, splitSections } from './markdown-sections'
 import { SHIPPED_SECTIONS, TemplateKind } from './shipped-instruction-sections'
 import type { ModuleMigrationPreview } from '../migrations/module/types'
@@ -18,7 +19,10 @@ import { hashFileContent } from '../utils'
  *   region regenerates it; an edited copy is kept verbatim under a marked heading for review;
  * - a section still identical to a shipped template version is refreshed to the current,
  *   tool-neutral wording when the template still has it;
- * - everything else (the user's sections, the workflow section) moves verbatim, in order.
+ * - everything else (the user's sections, the workflow section) moves verbatim, in order, except that a
+ *   reference to a CLAUDE.md this migration removes is pointed at the AGENTS.md beside it (#1152) when
+ *   it is a path with a directory ("Check `apps/api/CLAUDE.md`") or an entry of a drawn tree. A bare name
+ *   in running text can label the file as well as name it, so it is kept as written and reported.
  *
  * CLAUDE.md is removed only once AGENTS.md is written and every moved section is read back in it.
  * An AGENTS.md the user wrote is never overwritten: the proposal goes to a `.saasfoundry.new`
@@ -29,14 +33,15 @@ import { hashFileContent } from '../utils'
 export const REGION_HEADINGS = [
   'Coding-agent identity and onboarding',
   'Managed project capabilities',
+  'Reading the project status',
   'File edits and shell calls',
   'Execution capabilities',
   'Session orchestration and delegated ticket delivery',
   'Parallel implementation and Git worktrees'
 ]
 
-export const KEPT_FOR_REVIEW_HEADING = '## Kept from CLAUDE.md for review'
-const KEPT_FOR_REVIEW = `<!-- saasfoundry:migrated-from-claude-md — these sections share a heading with the generated region and were edited: merge what you still need into your own sections, then delete them. -->
+export { KEPT_FOR_REVIEW_HEADING }
+const KEPT_FOR_REVIEW = `${MIGRATED_FROM_CLAUDE_MD_MARKER} — these sections share a heading with the generated region and were edited: merge what you still need into your own sections, then delete them. -->
 ${KEPT_FOR_REVIEW_HEADING}
 `
 const SIDECAR_SUFFIX = '.saasfoundry.new'
@@ -55,6 +60,10 @@ export type SectionAction = 'move' | 'refresh' | 'drop' | 'keep-for-review'
 export interface SectionMove {
   heading?: string
   action: SectionAction
+  /** References to a CLAUDE.md this migration removes, pointed at the AGENTS.md beside it (#1152). */
+  rewrites?: ReferenceRewrite[]
+  /** Lines of CLAUDE.md where a bare name in running text names a removed file and was left as written (#1152). */
+  mentions?: number[]
 }
 
 export interface InstructionDirectoryPlan {
@@ -143,9 +152,40 @@ function isGeneratedBridge(content: string, recordedHash: string | undefined): b
   return BRIDGE_HEADINGS.includes(firstLine) && recordedHash === hashFileContent(Buffer.from(content))
 }
 
-async function planDirectory(projectDir: string, manifest: SaaSFoundryManifest, dir: string, kind: TemplateKind, region: boolean): Promise<InstructionDirectoryPlan | undefined> {
-  const claude = await readRegular(join(projectDir, dir, 'CLAUDE.md'))
-  const localShadow = existsSync(join(projectDir, dir, 'CLAUDE.local.md'))
+/** What a directory holds of the two instruction files, read once for the whole plan. */
+interface DirectoryFiles {
+  dir: string
+  kind: TemplateKind
+  region: boolean
+  claude?: string
+  agents?: string
+  localShadow: boolean
+}
+
+async function readDirectory(projectDir: string, entry: { dir: string; kind: TemplateKind; region: boolean }): Promise<DirectoryFiles> {
+  const [claude, agents] = await Promise.all([readRegular(join(projectDir, entry.dir, 'CLAUDE.md')), readRegular(join(projectDir, entry.dir, 'AGENTS.md'))])
+  return { ...entry, claude, agents, localShadow: existsSync(join(projectDir, entry.dir, 'CLAUDE.local.md')) }
+}
+
+/**
+ * Whether this migration deletes the directory's CLAUDE.md: the generated bridge goes as is, a CLAUDE.md
+ * moved into an AGENTS.md the harness wrote goes once read back. A CLAUDE.md beside an AGENTS.md the user
+ * wrote stays (the proposal goes to a sidecar), so a reference to it still names a file that exists.
+ */
+function removesClaudeMd(manifest: SaaSFoundryManifest, files: DirectoryFiles): boolean {
+  if (files.claude === undefined) return false
+  if (isBridgeOfKind('claudeBridge', files.claude)) return true
+  return files.agents === undefined || isGeneratedBridge(files.agents, manifest.fileHashes?.[rel(files.dir, 'AGENTS.md')])
+}
+
+const newlines = (text: string): number => text.split('\n').length - 1
+const references = (rewrites: ReferenceRewrite[], mentions: number[]): Pick<SectionMove, 'rewrites' | 'mentions'> => ({
+  ...(rewrites.length > 0 ? { rewrites } : {}),
+  ...(mentions.length > 0 ? { mentions } : {})
+})
+
+async function planDirectory(manifest: SaaSFoundryManifest, files: DirectoryFiles, removed: ReadonlySet<string>): Promise<InstructionDirectoryPlan | undefined> {
+  const { dir, kind, region, claude, agents, localShadow } = files
   if (claude === undefined) return localShadow ? { dir, outcome: 'migrate', sections: [], mustContain: [], localShadow } : undefined
   // The bridge to AGENTS.md of any release, not only this one: kept, it hides AGENTS.md from Claude Code and
   // reads as a CLAUDE.md the user wrote, which turns the AGENTS.md beside it into a sidecar (#935).
@@ -156,21 +196,31 @@ async function planDirectory(projectDir: string, manifest: SaaSFoundryManifest, 
   const placed: string[] = []
   const kept: string[] = []
   const verbatim: string[] = []
+  let line = 1
   for (const section of splitSections(claude)) {
+    const firstLine = line
+    line += newlines(section.text)
     if (!section.text.trim()) continue
     if (section.heading && REGION_HEADINGS.includes(section.heading)) {
       if (isShippedAnywhere(section)) moves.push({ heading: section.heading, action: 'drop' })
       else {
-        moves.push({ heading: section.heading, action: 'keep-for-review' })
-        kept.push(section.text)
-        verbatim.push(section.text.trimEnd())
+        const { text, rewrites, mentions } = rewriteRemovedClaudeMdReferences(section.text, dir, removed, firstLine)
+        moves.push({ heading: section.heading, action: 'keep-for-review', ...references(rewrites, mentions) })
+        kept.push(text)
+        verbatim.push(text.trimEnd())
       }
       continue
     }
     const refreshed = section.heading && isShipped(kind, section) ? template.get(section.heading) : undefined
-    moves.push({ heading: section.heading, action: refreshed ? 'refresh' : 'move' })
-    placed.push(refreshed ?? section.text)
-    if (!refreshed) verbatim.push(section.text.trimEnd())
+    if (refreshed) {
+      moves.push({ heading: section.heading, action: 'refresh' })
+      placed.push(refreshed)
+      continue
+    }
+    const { text, rewrites, mentions } = rewriteRemovedClaudeMdReferences(section.text, dir, removed, firstLine)
+    moves.push({ heading: section.heading, action: 'move', ...references(rewrites, mentions) })
+    placed.push(text)
+    verbatim.push(text.trimEnd())
   }
 
   let body = placed.map(block).join('')
@@ -178,20 +228,23 @@ async function planDirectory(projectDir: string, manifest: SaaSFoundryManifest, 
   body = `${body.trimEnd()}\n`
   if (region) body = withGeneratedInstructions(withGeneratedRegion(body)) ?? body
 
-  const agents = await readRegular(join(projectDir, dir, 'AGENTS.md'))
   if (agents === undefined || isGeneratedBridge(agents, manifest.fileHashes?.[rel(dir, 'AGENTS.md')])) {
     return { dir, outcome: 'migrate', sections: moves, agentsContent: body, mustContain: verbatim, localShadow }
   }
   // The user's own AGENTS.md: propose it followed by what CLAUDE.md held, overwrite nothing
-  const proposal = `${agents.trimEnd()}\n\n<!-- saasfoundry:migrated-from-claude-md — the sections below come from CLAUDE.md. -->\n\n${body}`
+  const proposal = `${agents.trimEnd()}\n\n${MIGRATED_FROM_CLAUDE_MD_MARKER} — the sections below come from CLAUDE.md. -->\n\n${body}`
   return { dir, outcome: 'sidecar', sections: moves, agentsContent: region ? (withGeneratedInstructions(proposal) ?? proposal) : proposal, mustContain: verbatim, localShadow }
 }
 
 /** Read-only: what the migration would do. Empty when no directory holds a CLAUDE.md. */
 export async function planClaudeMdMigration(projectDir: string, manifest: SaaSFoundryManifest): Promise<ClaudeMdMigrationPlan> {
+  const files: DirectoryFiles[] = []
+  for (const entry of instructionDirs(manifest)) files.push(await readDirectory(projectDir, entry))
+  // Decided before any section is read: a reference in the root names an app's CLAUDE.md, and the app decides its fate
+  const removed = new Set(files.filter((entry) => removesClaudeMd(manifest, entry)).map((entry) => rel(entry.dir, 'CLAUDE.md')))
   const dirs: InstructionDirectoryPlan[] = []
-  for (const { dir, kind, region } of instructionDirs(manifest)) {
-    const plan = await planDirectory(projectDir, manifest, dir, kind, region)
+  for (const entry of files) {
+    const plan = await planDirectory(manifest, entry, removed)
     if (plan) dirs.push(plan)
   }
   const agents = manifest.modules?.harness?.agents
@@ -217,7 +270,19 @@ export function previewClaudeMdMigration(plan: ClaudeMdMigrationPlan): ModuleMig
     if (dirPlan.outcome === 'remove-bridge') entries.push({ action: 'delete', source: claude, reason: 'generated bridge to AGENTS.md; it would hide AGENTS.md from Claude Code' })
     const target = dirPlan.outcome === 'sidecar' ? `${agents}${SIDECAR_SUFFIX}` : agents
     for (const move of dirPlan.sections) {
-      entries.push({ action: move.action, source: `${claude}#${move.heading ?? '(preamble)'}`, ...(move.action === 'drop' ? {} : { target }), reason: REASONS[move.action] })
+      const source = `${claude}#${move.heading ?? '(preamble)'}`
+      entries.push({ action: move.action, source, ...(move.action === 'drop' ? {} : { target }), reason: REASONS[move.action] })
+      for (const rewrite of move.rewrites ?? []) {
+        entries.push({ action: 'rewrite', source, target, reason: `${claude} line ${rewrite.line}: ${rewrite.from} → ${rewrite.to}; the file it names is removed by this migration` })
+      }
+      for (const line of move.mentions ?? []) {
+        entries.push({
+          action: 'report',
+          source,
+          target,
+          reason: `${claude} line ${line} names a removed CLAUDE.md in running text; left as written, because a bare name can be a label. Edit it if it means the file`
+        })
+      }
     }
     if (dirPlan.agentsContent !== undefined && dirPlan.outcome === 'migrate') entries.push({ action: 'delete', source: claude, reason: 'every section is placed in AGENTS.md' })
     if (dirPlan.outcome === 'sidecar')
@@ -235,11 +300,13 @@ export interface ClaudeMdMigrationResult {
   removedBridges: string[]
   keptForReview: string[]
   localShadows: string[]
+  /** The AGENTS.md files that got references to a removed CLAUDE.md pointed at their replacement, and the bare names left as written (#1152). */
+  rewritten: { path: string; rewrites: number; mentions: number }[]
 }
 
 /** Apply a plan. Idempotent: once CLAUDE.md is gone, a new plan has nothing left to move. */
 export async function applyClaudeMdMigration(projectDir: string, manifest: SaaSFoundryManifest, plan: ClaudeMdMigrationPlan): Promise<ClaudeMdMigrationResult> {
-  const result: ClaudeMdMigrationResult = { migrated: [], sidecars: [], removedBridges: [], keptForReview: [], localShadows: [] }
+  const result: ClaudeMdMigrationResult = { migrated: [], sidecars: [], removedBridges: [], keptForReview: [], localShadows: [], rewritten: [] }
   const hashes = manifest.fileHashes
   for (const dirPlan of plan.dirs) {
     const claudePath = join(projectDir, dirPlan.dir, 'CLAUDE.md')
@@ -279,6 +346,9 @@ export async function applyClaudeMdMigration(projectDir: string, manifest: SaaSF
     }
     result.migrated.push(rel(dirPlan.dir, 'CLAUDE.md'))
     if (dirPlan.sections.some((move) => move.action === 'keep-for-review')) result.keptForReview.push(rel(dirPlan.dir, 'AGENTS.md'))
+    const rewrites = dirPlan.sections.reduce((total, move) => total + (move.rewrites?.length ?? 0), 0)
+    const mentions = dirPlan.sections.reduce((total, move) => total + (move.mentions?.length ?? 0), 0)
+    if (rewrites > 0 || mentions > 0) result.rewritten.push({ path: rel(dirPlan.dir, 'AGENTS.md'), rewrites, mentions })
   }
 
   if (plan.claudeRule && result.migrated.length > 0) {

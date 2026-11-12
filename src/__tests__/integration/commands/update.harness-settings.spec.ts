@@ -32,7 +32,9 @@ jest.mock('ora', () => () => {
 
 import { updateCommand } from '../../../commands/update'
 import { GENERATED_REGION_START } from '../../../harness/agent-instructions'
-import { CLAUDE_CAPTURE_COMMAND } from '../../../harness/delegation-hooks'
+import { CLAUDE_CAPTURE_COMMAND, CODEX_CAPTURE_COMMAND, CODEX_HOOKS_PATH, CODEX_RETRUST_NOTICE, V1_1_0_CAPTURE_COMMANDS } from '../../../harness/delegation-hooks'
+import { CLAUDE_GUARD_COMMAND, CLAUDE_GUARD_HOOKS, CODEX_GUARD_COMMAND, CODEX_GUARD_TRUST_NOTICE } from '../../../harness/guard-hook'
+import { SESSION_START_COMMAND } from '../../../harness/session-start-hook'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../../../installers/harness.installer'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
@@ -114,9 +116,11 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       expect(settings.permissions?.ask).toEqual(expect.arrayContaining(['Bash(sf agents route --record*)']))
       expect(settings.hooks?.SubagentStop?.some((group) => group.hooks.some((hook) => hook.command === CLAUDE_CAPTURE_COMMAND))).toBe(true)
       expect(settings.hooks?.PostToolUse?.some((group) => group.hooks.some((hook) => hook.command === CLAUDE_CAPTURE_COMMAND))).toBe(true)
+      expect(settings.hooks?.SessionStart?.flatMap((group) => group.hooks.map((hook) => hook.command))).toEqual([SESSION_START_COMMAND])
       expect(settings.model).toBe('opus')
-      expect(settings.hooks?.PreToolUse).toEqual(own.hooks.PreToolUse)
-      expect(output()).toContain('.claude/settings.json: delegation capture hooks and harness permissions merged in')
+      // #1106 — the guard hook is added next to the PreToolUse hook the project wrote
+      expect(settings.hooks?.PreToolUse).toEqual([...own.hooks.PreToolUse, ...CLAUDE_GUARD_HOOKS.PreToolUse])
+      expect(output()).toContain('.claude/settings.json: delegation capture and guard hooks and harness permissions merged in')
     })
 
     it('writes nothing the second time: same bytes, same modification time, nothing said', async () => {
@@ -247,6 +251,26 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       expect(await read(SETTINGS)).toBe(older)
     })
 
+    // #1103 — the bare `sf status` that 1.0.1 wrote runs whatever `sf` comes first on the PATH
+    it('replaces the bare sf status SessionStart command with the one that resolves the project CLI, keeping the project hook beside it', async () => {
+      const older = JSON.parse(await released('1.0.1', 'settings.json'))
+      const own = { hooks: [{ type: 'command', command: 'echo hello' }] }
+      const hashes = await installHarnessWith(JSON.stringify({ ...older, hooks: { ...older.hooks, SessionStart: [own, ...older.hooks.SessionStart] } }, null, 2))
+      await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true } }, workflow: { tool: 'none' }, fileHashes: hashes })
+      const before = await read(SETTINGS)
+
+      await updateCommand({ nonInteractive: true, dryRun: true })
+
+      expect(await read(SETTINGS)).toBe(before)
+      expect(JSON.parse(output().split('<sf-update-dry-run-report>')[1].split('</sf-update-dry-run-report>')[0]).harnessSettings).toEqual([{ path: SETTINGS, status: 'merged' }])
+
+      await updateCommand({ nonInteractive: true })
+
+      const commands = ((JSON.parse(await read(SETTINGS)) as Settings).hooks?.SessionStart ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+      expect(commands).toEqual(['echo hello', SESSION_START_COMMAND])
+      expect(commands).not.toContain('sf status --claude-friendly --no-network')
+    })
+
     it('shows what it would merge in the dry-run report, and writes nothing', async () => {
       const older = await released('1.0.1', 'settings.json')
       const hashes = await installHarnessWith(older)
@@ -258,6 +282,91 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       const report = JSON.parse(output().split('<sf-update-dry-run-report>')[1].split('</sf-update-dry-run-report>')[0])
       expect(report.harnessSettings).toEqual([{ path: SETTINGS, status: 'merged' }])
       expect(output()).toContain('would be merged in')
+    })
+  })
+
+  // #1105 — v1.1.0, the current npm release, wrote a capture command that discarded the CLI stdout. The command that
+  // replaces it lets the decision through, so the old text has to go: an update that left it beside the new one would
+  // run two capture hooks, and the old, silent one would go on dropping every delegation that ended without its line.
+  describe('a harness installed by v1.1.0 (#1105)', () => {
+    let warnSpy: jest.SpyInstance
+    const v110 = (name: string): Promise<string> => readFile(join(FIXTURES, 'harness', 'v1.1.0', name), 'utf8')
+    const commands = (config: Settings, event: string): string[] => (config.hooks?.[event] ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    beforeEach(async () => {
+      warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const hashes = await installHarnessWith(await v110('claude-settings.json'))
+      await put(CODEX_HOOKS_PATH, await v110('codex-hooks.json'))
+      await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true, agents: ['claude-code', 'codex'] } }, workflow: { tool: 'none' }, fileHashes: hashes })
+    })
+    afterEach(() => warnSpy.mockRestore())
+
+    it('has exactly one new capture hook per event after sf update, in the settings and in the Codex hooks file', async () => {
+      await updateCommand({ nonInteractive: true })
+
+      const settings = JSON.parse(await read(SETTINGS)) as Settings
+      expect(commands(settings, 'SubagentStop')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(commands(settings, 'PostToolUse')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      const codex = JSON.parse(await read(CODEX_HOOKS_PATH)) as Settings
+      expect(commands(codex, 'SubagentStop')).toEqual([CODEX_CAPTURE_COMMAND])
+      // nothing of v1.1.0 is left anywhere in either file
+      for (const old of V1_1_0_CAPTURE_COMMANDS) {
+        expect(await read(SETTINGS)).not.toContain(JSON.stringify(old).slice(1, -1))
+        expect(await read(CODEX_HOOKS_PATH)).not.toContain(JSON.stringify(old).slice(1, -1))
+      }
+    })
+
+    // #1106 — v1.1.0 had no PreToolUse hook: sf update adds the guard to both hosts, and keeps the hooks it had
+    it('adds the PreToolUse guard hook of both hosts, keeps the other hooks, and tells the developer that Codex has to trust it', async () => {
+      const before = JSON.parse(await read(SETTINGS)) as Settings
+      const codexBefore = JSON.parse(await read(CODEX_HOOKS_PATH)) as Settings
+      expect(before.hooks?.PreToolUse).toBeUndefined()
+      expect(codexBefore.hooks?.PreToolUse).toBeUndefined()
+
+      await updateCommand({ nonInteractive: true })
+
+      const settings = JSON.parse(await read(SETTINGS)) as Settings
+      expect(settings.hooks?.PreToolUse).toEqual(CLAUDE_GUARD_HOOKS.PreToolUse)
+      expect(commands(settings, 'PreToolUse')).toEqual([CLAUDE_GUARD_COMMAND])
+      expect(commands(settings, 'SessionStart')).toEqual([SESSION_START_COMMAND])
+      const codex = JSON.parse(await read(CODEX_HOOKS_PATH)) as Settings
+      expect(commands(codex, 'PreToolUse')).toEqual([CODEX_GUARD_COMMAND])
+      expect(commands(codex, 'SubagentStop')).toEqual([CODEX_CAPTURE_COMMAND])
+      expect(warnSpy.mock.calls.flat()).toContain(CODEX_GUARD_TRUST_NOTICE)
+
+      warnSpy.mockClear()
+      await updateCommand({ nonInteractive: true })
+      expect(warnSpy.mock.calls.flat()).not.toContain(CODEX_GUARD_TRUST_NOTICE)
+    })
+
+    it('tells the developer that Codex has to trust the replaced hook, once', async () => {
+      await updateCommand({ nonInteractive: true })
+      expect(warnSpy.mock.calls.flat()).toContain(CODEX_RETRUST_NOTICE)
+
+      warnSpy.mockClear()
+      await updateCommand({ nonInteractive: true })
+      expect(warnSpy.mock.calls.flat()).not.toContain(CODEX_RETRUST_NOTICE)
+    })
+
+    it('is byte-idempotent: a second sf update leaves both files as the first wrote them', async () => {
+      await updateCommand({ nonInteractive: true })
+      const once = [await read(SETTINGS), await read(CODEX_HOOKS_PATH)]
+      const mtimes = [(await stat(path(SETTINGS))).mtimeMs, (await stat(path(CODEX_HOOKS_PATH))).mtimeMs]
+
+      await updateCommand({ nonInteractive: true })
+
+      expect([await read(SETTINGS), await read(CODEX_HOOKS_PATH)]).toEqual(once)
+      expect([(await stat(path(SETTINGS))).mtimeMs, (await stat(path(CODEX_HOOKS_PATH))).mtimeMs]).toEqual(mtimes)
+    })
+
+    it('lists the replacement in the dry run and writes neither file', async () => {
+      const before = [await read(SETTINGS), await read(CODEX_HOOKS_PATH)]
+
+      await updateCommand({ nonInteractive: true, dryRun: true })
+
+      expect([await read(SETTINGS), await read(CODEX_HOOKS_PATH)]).toEqual(before)
+      const report = JSON.parse(output().split('<sf-update-dry-run-report>')[1].split('</sf-update-dry-run-report>')[0])
+      expect(report.harnessSettings).toEqual([{ path: SETTINGS, status: 'merged' }])
     })
   })
 
@@ -321,7 +430,7 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       const report = JSON.parse(output().split('<sf-update-dry-run-report>')[1].split('</sf-update-dry-run-report>')[0])
       const harness = report.moduleMigrations.find((pending: { module: string }) => pending.module === 'harness')
       const capture = harness.migrations.find((migration: { name: string }) => migration.name === 'wire-delegation-capture')
-      expect(capture.preview).toEqual([{ action: 'merge', source: SETTINGS, reason: expect.stringContaining('delegation capture hooks') }])
+      expect(capture.preview).toEqual([{ action: 'merge', source: SETTINGS, reason: expect.stringContaining('delegation capture and guard hooks') }])
       // The migration lists it: the every-run merge does not list it a second time
       expect(report.harnessSettings).toBeUndefined()
       expect(await read(SETTINGS)).toBe(await released('1.0.1', 'settings.json'))

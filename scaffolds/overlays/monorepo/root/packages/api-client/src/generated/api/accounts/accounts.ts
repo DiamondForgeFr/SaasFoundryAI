@@ -86,6 +86,10 @@ export const getAccountControllerFetchAllAccountsQueryOptions = <TData = Awaited
 export type AccountControllerFetchAllAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>>
 export type AccountControllerFetchAllAccountsQueryError = ErrorType<void>
 
+/**
+ * Paginated, searchable list of every account on the platform. Restricted to users holding the PLATFORM_ACCOUNTS section.
+ * @summary List all accounts (platform reach)
+ */
 export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError = ErrorType<void>>(
   params: undefined | AccountControllerFetchAllAccountsParams,
   options: {
@@ -94,6 +98,10 @@ export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Paginated, searchable list of every account on the platform. Restricted to users holding the PLATFORM_ACCOUNTS section.
+ * @summary List all accounts (platform reach)
+ */
 export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError = ErrorType<void>>(
   params?: AccountControllerFetchAllAccountsParams,
   options?: {
@@ -102,15 +110,19 @@ export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Paginated, searchable list of every account on the platform. Restricted to users holding the PLATFORM_ACCOUNTS section.
+ * @summary List all accounts (platform reach)
+ */
 export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError = ErrorType<void>>(
   params?: AccountControllerFetchAllAccountsParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Paginated, searchable list of every account on the platform. Restricted to users holding the PLATFORM_ACCOUNTS section.
  * @summary List all accounts (platform reach)
  */
-
 export function useAccountControllerFetchAllAccounts<TData = Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError = ErrorType<void>>(
   params?: AccountControllerFetchAllAccountsParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAllAccounts>>, TError, TData>> },
@@ -150,6 +162,10 @@ export const getAccountControllerFetchPermissionsCatalogQueryOptions = <TData = 
 export type AccountControllerFetchPermissionsCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>>
 export type AccountControllerFetchPermissionsCatalogQueryError = ErrorType<unknown>
 
+/**
+ * Drives the role-builder UI: returns every module + its permissions with their applicable scopes.
+ * @summary List the permissions catalog grouped by module
+ */
 export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError = ErrorType<unknown>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData>> &
@@ -157,6 +173,10 @@ export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<Retu
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Drives the role-builder UI: returns every module + its permissions with their applicable scopes.
+ * @summary List the permissions catalog grouped by module
+ */
 export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError = ErrorType<unknown>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData>> &
@@ -167,14 +187,18 @@ export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<Retu
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Drives the role-builder UI: returns every module + its permissions with their applicable scopes.
+ * @summary List the permissions catalog grouped by module
+ */
 export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Drives the role-builder UI: returns every module + its permissions with their applicable scopes.
  * @summary List the permissions catalog grouped by module
  */
-
 export function useAccountControllerFetchPermissionsCatalog<TData = Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPermissionsCatalog>>, TError, TData>> },
   queryClient?: QueryClient
@@ -214,6 +238,10 @@ export const getAccountControllerFetchSystemRolesQueryOptions = <TData = Awaited
 export type AccountControllerFetchSystemRolesQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>>
 export type AccountControllerFetchSystemRolesQueryError = ErrorType<unknown>
 
+/**
+ * Returns roles whose accountId is NULL — the system templates available to every account. Used by the platform-admin browsing the Roles tab without a specific account selected.
+ * @summary List platform-wide system roles
+ */
 export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError = ErrorType<unknown>>(
   params: undefined | AccountControllerFetchSystemRolesParams,
   options: {
@@ -222,6 +250,10 @@ export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns roles whose accountId is NULL — the system templates available to every account. Used by the platform-admin browsing the Roles tab without a specific account selected.
+ * @summary List platform-wide system roles
+ */
 export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError = ErrorType<unknown>>(
   params?: AccountControllerFetchSystemRolesParams,
   options?: {
@@ -230,15 +262,19 @@ export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns roles whose accountId is NULL — the system templates available to every account. Used by the platform-admin browsing the Roles tab without a specific account selected.
+ * @summary List platform-wide system roles
+ */
 export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError = ErrorType<unknown>>(
   params?: AccountControllerFetchSystemRolesParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Returns roles whose accountId is NULL — the system templates available to every account. Used by the platform-admin browsing the Roles tab without a specific account selected.
  * @summary List platform-wide system roles
  */
-
 export function useAccountControllerFetchSystemRoles<TData = Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError = ErrorType<unknown>>(
   params?: AccountControllerFetchSystemRolesParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchSystemRoles>>, TError, TData>> },
@@ -278,6 +314,10 @@ export const getAccountControllerFetchPlatformOverviewQueryOptions = <TData = Aw
 export type AccountControllerFetchPlatformOverviewQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>>
 export type AccountControllerFetchPlatformOverviewQueryError = ErrorType<unknown>
 
+/**
+ * Aggregated KPIs + recent users / entities across every account, plus the system roles catalog.
+ * @summary Platform-wide overview
+ */
 export function useAccountControllerFetchPlatformOverview<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError = ErrorType<unknown>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData>> &
@@ -285,6 +325,10 @@ export function useAccountControllerFetchPlatformOverview<TData = Awaited<Return
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Aggregated KPIs + recent users / entities across every account, plus the system roles catalog.
+ * @summary Platform-wide overview
+ */
 export function useAccountControllerFetchPlatformOverview<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError = ErrorType<unknown>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData>> &
@@ -292,14 +336,18 @@ export function useAccountControllerFetchPlatformOverview<TData = Awaited<Return
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Aggregated KPIs + recent users / entities across every account, plus the system roles catalog.
+ * @summary Platform-wide overview
+ */
 export function useAccountControllerFetchPlatformOverview<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Aggregated KPIs + recent users / entities across every account, plus the system roles catalog.
  * @summary Platform-wide overview
  */
-
 export function useAccountControllerFetchPlatformOverview<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformOverview>>, TError, TData>> },
   queryClient?: QueryClient
@@ -339,6 +387,10 @@ export const getAccountControllerFetchPlatformUsersQueryOptions = <TData = Await
 export type AccountControllerFetchPlatformUsersQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>>
 export type AccountControllerFetchPlatformUsersQueryError = ErrorType<unknown>
 
+/**
+ * Cross-account user listing — each user appears once with their aggregated account/entity attachments. Supports search, status filter and a multi-account-only flag.
+ * @summary Platform-wide users (deduplicated)
+ */
 export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError = ErrorType<unknown>>(
   params: undefined | AccountControllerFetchPlatformUsersParams,
   options: {
@@ -347,6 +399,10 @@ export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnTyp
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Cross-account user listing — each user appears once with their aggregated account/entity attachments. Supports search, status filter and a multi-account-only flag.
+ * @summary Platform-wide users (deduplicated)
+ */
 export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError = ErrorType<unknown>>(
   params?: AccountControllerFetchPlatformUsersParams,
   options?: {
@@ -355,15 +411,19 @@ export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnTyp
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Cross-account user listing — each user appears once with their aggregated account/entity attachments. Supports search, status filter and a multi-account-only flag.
+ * @summary Platform-wide users (deduplicated)
+ */
 export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError = ErrorType<unknown>>(
   params?: AccountControllerFetchPlatformUsersParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Cross-account user listing — each user appears once with their aggregated account/entity attachments. Supports search, status filter and a multi-account-only flag.
  * @summary Platform-wide users (deduplicated)
  */
-
 export function useAccountControllerFetchPlatformUsers<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError = ErrorType<unknown>>(
   params?: AccountControllerFetchPlatformUsersParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformUsers>>, TError, TData>> },
@@ -402,6 +462,7 @@ export const getAccountControllerFetchPlatformModulesQueryOptions = <TData = Awa
 export type AccountControllerFetchPlatformModulesQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>>
 export type AccountControllerFetchPlatformModulesQueryError = ErrorType<unknown>
 
+/** @summary List every platform module with its permissions and activation status */
 export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError = ErrorType<unknown>>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData>> &
@@ -409,6 +470,7 @@ export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnT
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List every platform module with its permissions and activation status */
 export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError = ErrorType<unknown>>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData>> &
@@ -416,14 +478,12 @@ export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnT
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/** @summary List every platform module with its permissions and activation status */
 export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary List every platform module with its permissions and activation status
- */
-
+/** @summary List every platform module with its permissions and activation status */
 export function useAccountControllerFetchPlatformModules<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError = ErrorType<unknown>>(
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformModules>>, TError, TData>> },
   queryClient?: QueryClient
@@ -465,6 +525,10 @@ export const getAccountControllerFetchPlatformReactivationRequestsQueryOptions =
 export type AccountControllerFetchPlatformReactivationRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>>
 export type AccountControllerFetchPlatformReactivationRequestsQueryError = ErrorType<unknown>
 
+/**
+ * Defaults to PENDING. Use ?status=APPROVED|REJECTED to view archived requests.
+ * @summary List reactivation requests (platform-admin)
+ */
 export function useAccountControllerFetchPlatformReactivationRequests<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError = ErrorType<unknown>>(
   params: undefined | AccountControllerFetchPlatformReactivationRequestsParams,
   options: {
@@ -480,6 +544,10 @@ export function useAccountControllerFetchPlatformReactivationRequests<TData = Aw
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Defaults to PENDING. Use ?status=APPROVED|REJECTED to view archived requests.
+ * @summary List reactivation requests (platform-admin)
+ */
 export function useAccountControllerFetchPlatformReactivationRequests<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError = ErrorType<unknown>>(
   params?: AccountControllerFetchPlatformReactivationRequestsParams,
   options?: {
@@ -495,15 +563,19 @@ export function useAccountControllerFetchPlatformReactivationRequests<TData = Aw
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Defaults to PENDING. Use ?status=APPROVED|REJECTED to view archived requests.
+ * @summary List reactivation requests (platform-admin)
+ */
 export function useAccountControllerFetchPlatformReactivationRequests<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError = ErrorType<unknown>>(
   params?: AccountControllerFetchPlatformReactivationRequestsParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Defaults to PENDING. Use ?status=APPROVED|REJECTED to view archived requests.
  * @summary List reactivation requests (platform-admin)
  */
-
 export function useAccountControllerFetchPlatformReactivationRequests<TData = Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError = ErrorType<unknown>>(
   params?: AccountControllerFetchPlatformReactivationRequestsParams,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchPlatformReactivationRequests>>, TError, TData>> },
@@ -551,6 +623,7 @@ export type AccountControllerApproveReactivationRequestMutationError = ErrorType
 export type AccountControllerApproveReactivationRequestMutationVariables = { requestId: string }
 
 /**
+ * Re-enables the account in the same transaction and clears the deactivation provenance.
  * @summary Approve a reactivation request
  */
 export const useAccountControllerApproveReactivationRequest = <TError = ErrorType<unknown>, TContext = unknown>(
@@ -594,6 +667,7 @@ export type AccountControllerRejectReactivationRequestMutationError = ErrorType<
 export type AccountControllerRejectReactivationRequestMutationVariables = { requestId: string }
 
 /**
+ * Account stays disabled. A note explaining the decision is required.
  * @summary Reject a reactivation request
  */
 export const useAccountControllerRejectReactivationRequest = <TError = ErrorType<unknown>, TContext = unknown>(
@@ -635,9 +709,7 @@ export type AccountControllerTogglePlatformModuleMutationResult = NonNullable<Aw
 export type AccountControllerTogglePlatformModuleMutationError = ErrorType<unknown>
 export type AccountControllerTogglePlatformModuleMutationVariables = { moduleId: number }
 
-/**
- * @summary Toggle a module activation status (platform-admin only)
- */
+/** @summary Toggle a module activation status (platform-admin only) */
 export const useAccountControllerTogglePlatformModule = <TError = ErrorType<unknown>, TContext = unknown>(
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerTogglePlatformModule>>, TError, AccountControllerTogglePlatformModuleMutationVariables, TContext> },
   queryClient?: QueryClient
@@ -677,9 +749,7 @@ export type AccountControllerToggleSubModuleMutationResult = NonNullable<Awaited
 export type AccountControllerToggleSubModuleMutationError = ErrorType<unknown>
 export type AccountControllerToggleSubModuleMutationVariables = { moduleId: number; subModuleId: number }
 
-/**
- * @summary Toggle a sub-module activation status (platform-admin only)
- */
+/** @summary Toggle a sub-module activation status (platform-admin only) */
 export const useAccountControllerToggleSubModule = <TError = ErrorType<unknown>, TContext = unknown>(
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerToggleSubModule>>, TError, AccountControllerToggleSubModuleMutationVariables, TContext> },
   queryClient?: QueryClient
@@ -718,6 +788,7 @@ export type AccountControllerCreateOwnAccountMutationResult = NonNullable<Awaite
 export type AccountControllerCreateOwnAccountMutationError = ErrorType<unknown>
 
 /**
+ * Multi-account feature — an account admin with ACCOUNT_OWN_CREATE creates a brand-new account they automatically become admin of. Independent account (no parent/child).
  * @summary Create an additional account owned by the current user
  */
 export const useAccountControllerCreateOwnAccount = <TError = ErrorType<unknown>, TContext = unknown>(
@@ -756,6 +827,10 @@ export const getAccountControllerFetchAccountQueryOptions = <TData = Awaited<Ret
 export type AccountControllerFetchAccountQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchAccount>>>
 export type AccountControllerFetchAccountQueryError = ErrorType<void>
 
+/**
+ * Fetch detailed account information including the 5 most recent users, entities, and roles with counts.
+ * @summary Fetch account details
+ */
 export function useAccountControllerFetchAccount<TData = Awaited<ReturnType<typeof accountControllerFetchAccount>>, TError = ErrorType<void>>(
   id: string,
   options: {
@@ -764,6 +839,10 @@ export function useAccountControllerFetchAccount<TData = Awaited<ReturnType<type
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch detailed account information including the 5 most recent users, entities, and roles with counts.
+ * @summary Fetch account details
+ */
 export function useAccountControllerFetchAccount<TData = Awaited<ReturnType<typeof accountControllerFetchAccount>>, TError = ErrorType<void>>(
   id: string,
   options?: {
@@ -772,15 +851,19 @@ export function useAccountControllerFetchAccount<TData = Awaited<ReturnType<type
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch detailed account information including the 5 most recent users, entities, and roles with counts.
+ * @summary Fetch account details
+ */
 export function useAccountControllerFetchAccount<TData = Awaited<ReturnType<typeof accountControllerFetchAccount>>, TError = ErrorType<void>>(
   id: string,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAccount>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Fetch detailed account information including the 5 most recent users, entities, and roles with counts.
  * @summary Fetch account details
  */
-
 export function useAccountControllerFetchAccount<TData = Awaited<ReturnType<typeof accountControllerFetchAccount>>, TError = ErrorType<void>>(
   id: string,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchAccount>>, TError, TData>> },
@@ -824,6 +907,10 @@ export const getAccountControllerFetchAccountUsersQueryOptions = <TData = Awaite
 export type AccountControllerFetchAccountUsersQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchAccountUsers>>>
 export type AccountControllerFetchAccountUsersQueryError = ErrorType<void>
 
+/**
+ * Fetch users linked to an account with pagination and filtering options.
+ * @summary Fetch account users
+ */
 export function useAccountControllerFetchAccountUsers<TData = Awaited<ReturnType<typeof accountControllerFetchAccountUsers>>, TError = ErrorType<void>>(
   id: string,
   params: undefined | AccountControllerFetchAccountUsersParams,
@@ -833,6 +920,10 @@ export function useAccountControllerFetchAccountUsers<TData = Awaited<ReturnType
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch users linked to an account with pagination and filtering options.
+ * @summary Fetch account users
+ */
 export function useAccountControllerFetchAccountUsers<TData = Awaited<ReturnType<typeof accountControllerFetchAccountUsers>>, TError = ErrorType<void>>(
   id: string,
   params?: AccountControllerFetchAccountUsersParams,
@@ -842,6 +933,10 @@ export function useAccountControllerFetchAccountUsers<TData = Awaited<ReturnType
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch users linked to an account with pagination and filtering options.
+ * @summary Fetch account users
+ */
 export function useAccountControllerFetchAccountUsers<TData = Awaited<ReturnType<typeof accountControllerFetchAccountUsers>>, TError = ErrorType<void>>(
   id: string,
   params?: AccountControllerFetchAccountUsersParams,
@@ -849,9 +944,9 @@ export function useAccountControllerFetchAccountUsers<TData = Awaited<ReturnType
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Fetch users linked to an account with pagination and filtering options.
  * @summary Fetch account users
  */
-
 export function useAccountControllerFetchAccountUsers<TData = Awaited<ReturnType<typeof accountControllerFetchAccountUsers>>, TError = ErrorType<void>>(
   id: string,
   params?: AccountControllerFetchAccountUsersParams,
@@ -900,6 +995,7 @@ export type AccountControllerUpdateAccountUsersMutationError = ErrorType<void>
 export type AccountControllerUpdateAccountUsersMutationVariables = { id: string; data: BodyType<UpdateAccountUsersDto> }
 
 /**
+ * Update the users linked to an account.
  * @summary Update account users
  */
 export const useAccountControllerUpdateAccountUsers = <TError = ErrorType<void>, TContext = unknown>(
@@ -939,6 +1035,10 @@ export const getAccountControllerFetchAccountEntitiesQueryOptions = <TData = Awa
 export type AccountControllerFetchAccountEntitiesQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchAccountEntities>>>
 export type AccountControllerFetchAccountEntitiesQueryError = ErrorType<void>
 
+/**
+ * Fetch entities linked to an account with pagination and filtering options.
+ * @summary Fetch account entities
+ */
 export function useAccountControllerFetchAccountEntities<TData = Awaited<ReturnType<typeof accountControllerFetchAccountEntities>>, TError = ErrorType<void>>(
   id: string,
   params: undefined | AccountControllerFetchAccountEntitiesParams,
@@ -948,6 +1048,10 @@ export function useAccountControllerFetchAccountEntities<TData = Awaited<ReturnT
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch entities linked to an account with pagination and filtering options.
+ * @summary Fetch account entities
+ */
 export function useAccountControllerFetchAccountEntities<TData = Awaited<ReturnType<typeof accountControllerFetchAccountEntities>>, TError = ErrorType<void>>(
   id: string,
   params?: AccountControllerFetchAccountEntitiesParams,
@@ -957,6 +1061,10 @@ export function useAccountControllerFetchAccountEntities<TData = Awaited<ReturnT
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch entities linked to an account with pagination and filtering options.
+ * @summary Fetch account entities
+ */
 export function useAccountControllerFetchAccountEntities<TData = Awaited<ReturnType<typeof accountControllerFetchAccountEntities>>, TError = ErrorType<void>>(
   id: string,
   params?: AccountControllerFetchAccountEntitiesParams,
@@ -964,9 +1072,9 @@ export function useAccountControllerFetchAccountEntities<TData = Awaited<ReturnT
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Fetch entities linked to an account with pagination and filtering options.
  * @summary Fetch account entities
  */
-
 export function useAccountControllerFetchAccountEntities<TData = Awaited<ReturnType<typeof accountControllerFetchAccountEntities>>, TError = ErrorType<void>>(
   id: string,
   params?: AccountControllerFetchAccountEntitiesParams,
@@ -1011,6 +1119,10 @@ export const getAccountControllerFetchAccountRolesQueryOptions = <TData = Awaite
 export type AccountControllerFetchAccountRolesQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchAccountRoles>>>
 export type AccountControllerFetchAccountRolesQueryError = ErrorType<void>
 
+/**
+ * Fetch roles linked to an account with pagination and filtering options.
+ * @summary Fetch account roles
+ */
 export function useAccountControllerFetchAccountRoles<TData = Awaited<ReturnType<typeof accountControllerFetchAccountRoles>>, TError = ErrorType<void>>(
   id: string,
   params: undefined | AccountControllerFetchAccountRolesParams,
@@ -1020,6 +1132,10 @@ export function useAccountControllerFetchAccountRoles<TData = Awaited<ReturnType
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch roles linked to an account with pagination and filtering options.
+ * @summary Fetch account roles
+ */
 export function useAccountControllerFetchAccountRoles<TData = Awaited<ReturnType<typeof accountControllerFetchAccountRoles>>, TError = ErrorType<void>>(
   id: string,
   params?: AccountControllerFetchAccountRolesParams,
@@ -1029,6 +1145,10 @@ export function useAccountControllerFetchAccountRoles<TData = Awaited<ReturnType
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Fetch roles linked to an account with pagination and filtering options.
+ * @summary Fetch account roles
+ */
 export function useAccountControllerFetchAccountRoles<TData = Awaited<ReturnType<typeof accountControllerFetchAccountRoles>>, TError = ErrorType<void>>(
   id: string,
   params?: AccountControllerFetchAccountRolesParams,
@@ -1036,9 +1156,9 @@ export function useAccountControllerFetchAccountRoles<TData = Awaited<ReturnType
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Fetch roles linked to an account with pagination and filtering options.
  * @summary Fetch account roles
  */
-
 export function useAccountControllerFetchAccountRoles<TData = Awaited<ReturnType<typeof accountControllerFetchAccountRoles>>, TError = ErrorType<void>>(
   id: string,
   params?: AccountControllerFetchAccountRolesParams,
@@ -1087,6 +1207,7 @@ export type AccountControllerCreateCustomRoleMutationError = ErrorType<unknown>
 export type AccountControllerCreateCustomRoleMutationVariables = { id: string }
 
 /**
+ * Create a non-system role attached to the given account. Permissions must be compatible with the chosen scope.
  * @summary Create a custom role
  */
 export const useAccountControllerCreateCustomRole = <TError = ErrorType<unknown>, TContext = unknown>(
@@ -1127,6 +1248,7 @@ export type AccountControllerCreatePlatformCustomRoleMutationResult = NonNullabl
 export type AccountControllerCreatePlatformCustomRoleMutationError = ErrorType<unknown>
 
 /**
+ * Creates a non-system role visible to every account on the platform — alongside the seeded system templates. Body scope can be PLATFORM, ACCOUNT or ENTITY: the resulting role is a reusable template at that scope tier.
  * @summary Create a global template role (platform-admin only)
  */
 export const useAccountControllerCreatePlatformCustomRole = <TError = ErrorType<unknown>, TContext = unknown>(
@@ -1168,9 +1290,7 @@ export type AccountControllerUpdateCustomRoleMutationResult = NonNullable<Awaite
 export type AccountControllerUpdateCustomRoleMutationError = ErrorType<unknown>
 export type AccountControllerUpdateCustomRoleMutationVariables = { roleId: number }
 
-/**
- * @summary Update a custom role
- */
+/** @summary Update a custom role */
 export const useAccountControllerUpdateCustomRole = <TError = ErrorType<unknown>, TContext = unknown>(
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerUpdateCustomRole>>, TError, AccountControllerUpdateCustomRoleMutationVariables, TContext> },
   queryClient?: QueryClient
@@ -1210,9 +1330,7 @@ export type AccountControllerDeleteCustomRoleMutationResult = NonNullable<Awaite
 export type AccountControllerDeleteCustomRoleMutationError = ErrorType<unknown>
 export type AccountControllerDeleteCustomRoleMutationVariables = { roleId: number }
 
-/**
- * @summary Delete a custom role
- */
+/** @summary Delete a custom role */
 export const useAccountControllerDeleteCustomRole = <TError = ErrorType<unknown>, TContext = unknown>(
   options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof accountControllerDeleteCustomRole>>, TError, AccountControllerDeleteCustomRoleMutationVariables, TContext> },
   queryClient?: QueryClient
@@ -1254,6 +1372,7 @@ export type AccountControllerToggleRoleStatusMutationError = ErrorType<unknown>
 export type AccountControllerToggleRoleStatusMutationVariables = { roleId: number }
 
 /**
+ * Service-layer enforces the matrix: platform-admin can toggle any role except platform-admin (self-lockout); account-admin can toggle only their own custom roles.
  * @summary Activate / deactivate a role
  */
 export const useAccountControllerToggleRoleStatus = <TError = ErrorType<unknown>, TContext = unknown>(
@@ -1297,6 +1416,7 @@ export type AccountControllerUpdateAccountStatusMutationError = ErrorType<void>
 export type AccountControllerUpdateAccountStatusMutationVariables = { id: string; data: BodyType<UpdateAccountStatusDto> }
 
 /**
+ * Activate or deactivate an account that the user has access to.
  * @summary Update account status
  */
 export const useAccountControllerUpdateAccountStatus = <TError = ErrorType<void>, TContext = unknown>(
@@ -1337,6 +1457,10 @@ export const getAccountControllerFetchLatestReactivationRequestQueryOptions = <T
 export type AccountControllerFetchLatestReactivationRequestQueryResult = NonNullable<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>>
 export type AccountControllerFetchLatestReactivationRequestQueryError = ErrorType<unknown>
 
+/**
+ * Returns the most recent request (any status), or null. Used by the disabled-account banner.
+ * @summary Latest reactivation request for this account
+ */
 export function useAccountControllerFetchLatestReactivationRequest<TData = Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError = ErrorType<unknown>>(
   id: string,
   options: {
@@ -1348,6 +1472,10 @@ export function useAccountControllerFetchLatestReactivationRequest<TData = Await
   },
   queryClient?: QueryClient
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns the most recent request (any status), or null. Used by the disabled-account banner.
+ * @summary Latest reactivation request for this account
+ */
 export function useAccountControllerFetchLatestReactivationRequest<TData = Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError = ErrorType<unknown>>(
   id: string,
   options?: {
@@ -1359,15 +1487,19 @@ export function useAccountControllerFetchLatestReactivationRequest<TData = Await
   },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * Returns the most recent request (any status), or null. Used by the disabled-account banner.
+ * @summary Latest reactivation request for this account
+ */
 export function useAccountControllerFetchLatestReactivationRequest<TData = Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError = ErrorType<unknown>>(
   id: string,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, TData>> },
   queryClient?: QueryClient
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
+ * Returns the most recent request (any status), or null. Used by the disabled-account banner.
  * @summary Latest reactivation request for this account
  */
-
 export function useAccountControllerFetchLatestReactivationRequest<TData = Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError = ErrorType<unknown>>(
   id: string,
   options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof accountControllerFetchLatestReactivationRequest>>, TError, TData>> },
@@ -1415,6 +1547,7 @@ export type AccountControllerCreateReactivationRequestMutationError = ErrorType<
 export type AccountControllerCreateReactivationRequestMutationVariables = { id: string }
 
 /**
+ * Account-admin of a self-deactivated account asks a platform-admin to re-enable it. Body must include a justification message.
  * @summary Submit a reactivation request
  */
 export const useAccountControllerCreateReactivationRequest = <TError = ErrorType<unknown>, TContext = unknown>(
@@ -1458,6 +1591,7 @@ export type AccountControllerUpdateAccountUserMutationError = ErrorType<unknown>
 export type AccountControllerUpdateAccountUserMutationVariables = { id: string; userId: string }
 
 /**
+ * Update a user attached to this account: their isActive flag and/or their scoped role assignments.
  * @summary Update account user
  */
 export const useAccountControllerUpdateAccountUser = <TError = ErrorType<unknown>, TContext = unknown>(

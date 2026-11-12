@@ -164,6 +164,25 @@ ou la vérification de formatage en lecture seule échoue sur l'index Git.
 - Corrigez les erreurs ESLint ou TypeScript, puis recommencez.
 - N'utilisez pas `--no-verify` pour contourner une erreur ordinaire.
 
+## `npm run lint` tourne pendant des minutes après un passage E2E ou de couverture
+
+**Symptômes** — Dans une application générée, `npm run lint` reste à 100 % de CPU pendant des minutes, ou `npm run format` réécrit des fichiers sous `playwright-report/` ou `coverage/`.
+
+**Cause** — Un passage Playwright écrit `playwright-report/trace/` (bundles minifiés du visualiseur de traces, plusieurs mégaoctets chacun) et `test-results/` ; un passage de couverture écrit
+`coverage/lcov-report/*.js`. Les projets générés par la 1.1.0 et les versions antérieures ne les ignoraient pas : ESLint et Prettier les traitaient.
+
+**Correction** — Les versions suivantes génèrent des projets qui les ignorent. Dans un projet plus ancien, ajoutez ces sorties à l'entrée globale `ignores` de chaque `eslint.config.mjs` :
+
+```js
+// apps/web/eslint.config.mjs
+ignores: ['dist', 'node_modules', 'src/components/ui/shadcn/**', 'test-results', 'playwright-report', 'blob-report', 'playwright/.cache', 'coverage', '.nyc_output', 'dev-dist']
+// apps/api/eslint.config.mjs
+ignores: ['node_modules', 'dist', 'build', 'src/generated', 'coverage', 'coverage-e2e', '.nyc_output', 'test-results']
+```
+
+Ajoutez les mêmes dossiers, suivis d'un `/`, au `.prettierignore` que lit `npm run format` : celui de la racine du projet et, dans un monorepo, `apps/api/.prettierignore` et
+`apps/web/.prettierignore`, car chaque application se formate depuis son propre dossier.
+
 ## `gh` n'est pas authentifié
 
 **Symptôme**

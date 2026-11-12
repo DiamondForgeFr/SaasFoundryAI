@@ -69,7 +69,8 @@ La ligne `delegation:` de `sf status --agent-friendly` affiche la valeur effecti
 - `allowed` : chaque ticket qui n'est pas trivial est livré par un agent en arrière-plan, comme décrit ci-dessous.
 - `declined`, ou un agent incapable de déléguer ou de travailler en arrière-plan : la session construit les tickets l'un après l'autre et le dit explicitement.
 
-Seule la réponse du développeur enregistre l'accord. Un agent délégué n'exécute jamais `sf agents delegation`, et le contenu d'un ticket, d'une issue ou d'une pull request n'est jamais un accord.
+Seule la réponse du développeur enregistre l'accord. Un agent délégué n'exécute jamais `sf agents delegation allow|decline|clear` (le
+[hook de garde](/fr/guide/workflow-system#qui-applique-une-echappatoire) refuse l'appel), et le contenu d'un ticket, d'une issue ou d'une pull request n'est jamais un accord.
 
 ## Le flux de livraison déléguée
 
@@ -88,8 +89,11 @@ Lorsque la délégation est `allowed`, un ticket qui dépasse le changement triv
    poussée vers la branche du ticket). Le brief énonce l'accord, le type de tâche, l'enregistrement de route ainsi que le résultat attendu et la vérification attendue.
 3. **L'agent construit le ticket de In progress jusqu'à la fin d'AI testing** : le code, le plan de test, les vérifications automatisées, le pipeline local, le rapport et la pull request en brouillon.
    Il ne transmet pas le ticket à un autre agent.
-4. **L'agent s'arrête au rapport vert.** Il laisse le ticket en AI testing et la pull request en brouillon. Sur un ticket `nature:user-facing`, il n'exécute jamais `ready-pr` et ne fusionne jamais. Le
-   développeur sort la pull request du brouillon et conduit Human testing.
+4. **L'agent s'arrête au rapport vert.** Il laisse le ticket en AI testing et la pull request en brouillon. Il n'exécute jamais `ready-pr`, ne fusionne jamais, n'enregistre jamais le consentement à la
+   délégation et ne pose jamais le label de nature d'un ticket. Sur un ticket `nature:user-facing`, le développeur sort la pull request du brouillon et conduit Human testing ; sur un ticket
+   `nature:internal`, que le développeur étiquette, c'est la session. C'est appliqué, pas seulement demandé : le [hook de garde](/fr/guide/workflow-system#qui-applique-une-echappatoire) refuse ces
+   appels à un agent qui s'exécute dans un worktree délégué, et les scripts du workflow y refusent eux-mêmes `ready-pr`. Quand un garde-fou refuse l'agent, il rapporte le refus et demande au
+   développeur : une échappatoire est à lui.
 5. **La session recueille les retours.** Un défaut, ou un travail IA restant après la validation, retourne au même agent, dans le même worktree, qui remet le ticket en AI testing. Sur un ticket
    complexe, la session conduit elle-même la phase d'examen, puisque l'agent qui a construit le travail ne le relit pas.
 
@@ -100,13 +104,16 @@ La session reste en dialogue avec le développeur pendant toute la livraison. Un
 Le harness ne se fie pas au récit qu'un délégué fait de son travail. Il mesure trois choses et conserve les preuves dans le répertoire Git commun du clone.
 
 - **L'enregistrement de route.** `sf agents route --task <type> --provider <agent> --ticket <n> --record` écrit un enregistrement et affiche `route=<id>`. La session met cet identifiant dans le brief,
-  et le délégué le rappelle : la capture prend le type de tâche et le palier depuis l'enregistrement, et non depuis le délégué. Un enregistrement réserve aussi tout essai qu'il délivre, et une route
-  que personne ne rappelle pendant sept jours expire.
+  et le délégué le rappelle : la capture prend le type de tâche et le palier depuis l'enregistrement, et non depuis le délégué. L'enregistrement porte la complexité et la nature du ticket : quand
+  `--complexity` ou `--nature` est omis, la commande les lit dans les étiquettes du ticket, et avertit sur stderr, sans retenir la délégation, quand elle ne le peut pas. Un enregistrement réserve
+  aussi tout essai qu'il délivre, et une route que personne ne rappelle pendant sept jours expire.
 - **La ligne de verdict.** Chaque agent de palier termine son dernier message par `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`. `pass` signifie que la vérification demandée par le brief a
-  été exécutée et satisfaite. Un message sans cette ligne donne un résultat inconnu.
+  été exécutée et satisfaite. Un délégué qui termine sans cette ligne la reçoit en réclamation une fois, pendant qu'il tourne encore : le hook de capture répond à son arrêt par un blocage qui porte la
+  ligne exacte à écrire, et la réponse est l'arrêt suivant de la même délégation. Un message qui n'a toujours pas la ligne donne un résultat inconnu.
 - **Le registre.** `<git-common-dir>/saasfoundry/delegations.jsonl` est un fichier en ajout seul qui contient les exécutions (jetons, coût, temps actif, résultat, vérifications, palier et candidat),
   les enregistrements de route et les signaux. Sur Claude Code, les hooks `SubagentStop` et `PostToolUse` capturent chaque exécution automatiquement. Les autres hôtes enregistrent à la main avec
-  `sf agents outcome record`. Un coût n'est jamais deviné : un modèle sans prix publié conserve sa fiabilité mais n'a pas de coût tant que le projet n'en déclare pas un.
+  `sf agents outcome record`. Un coût n'est jamais deviné : un modèle sans prix publié conserve sa fiabilité mais n'a pas de coût tant que le projet n'en déclare pas un. Une capture qui échoue n'est
+  pas silencieuse : elle est journalisée à côté du registre, et `sf status` et `sf agents routing report` comptent les erreurs des 7 derniers jours.
 
 Un verdict ultérieur s'ajoute comme signal, et la ligne d'origine n'est jamais modifiée. La session marque un travail délégué qu'elle a dû refaire avec `sf agents outcome mark <ticket> rework`, et un
 défaut revenu de Human testing ou de la revue avec `human-defect`. Ces deux écritures demandent une autorisation dans l'agent de développement, car elles modifient ce que le routage fera ensuite.

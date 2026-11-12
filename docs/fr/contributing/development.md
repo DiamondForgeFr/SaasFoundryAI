@@ -236,7 +236,8 @@ Le bouton **Ready for review** déclenche `.github/workflows/pr-review-sync.yml`
 trop tôt — ticket encore en `AI testing` avec `Human testing` requis, ou pas encore en test —, le job ne déplace rien et réussit avec une notice qui indique l'étape suivante ; il n'échoue que si
 l'événement, le lien vers le ticket ou les labels du ticket sont incorrects. Une PR dont la branche source ne désigne aucun ticket selon `workflow.branchNaming` (par exemple `chore/sync-back-v1.1.0`,
 la synchronisation post-release vers develop) n'a rien à synchroniser : le job réussit avec une notice et ne déplace rien. Une branche de release (`rc-*`) reste synchronisée lorsqu'elle cible la
-branche de release, et une branche de ticket échoue toujours sans sa ligne `Resolves #N`.
+branche de release, et une branche de ticket échoue toujours sans sa ligne `Resolves #N`. Une PR qui ne livre qu'une partie d'un ticket qui reste ouvert écrit `Part of #N` à la place, avec le ticket
+de sa branche : le job réussit avec une notice, au clic comme à la fusion, et le ticket ne bouge pas.
 
 Configurez le secret Actions `SF_PROJECTS_TOKEN` avec l'accès au dépôt et l'écriture sur le Project de l'organisation. Le token Actions par défaut n'accède pas à Projects.
 

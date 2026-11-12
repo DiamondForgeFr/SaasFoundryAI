@@ -7,7 +7,7 @@ import { ApiExtraModels, ApiOperation, ApiParam, ApiResponse, ApiTags, ApiUnauth
 /**
  * Dependencies
  */
-import { RequireAccess, RequirePermissions } from '@common/decorators/require-permissions.decorator'
+import { RequireAccess, RequirePermissions, ScopeFrom } from '@common/decorators/require-permissions.decorator'
 import { AccountAccessService } from '@common/services/account-access/account-access.service'
 import { AccountService } from '@modules/accounts/services/account.service'
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard'
@@ -226,8 +226,14 @@ export class AccountController {
     return this.accountService.createOwnAccount(req.user.id, body)
   }
 
+  // Every route that takes the account id (`:id`) declares it with @ScopeFrom, so PermissionsGuard counts only
+  // the roles that apply to THAT account. `includeEntityAssignments` is set on the routes an entity-admin
+  // legitimately reaches (reading the account, allocating roles in its entity); the service then narrows
+  // the action to the entity's subtree. Without @ScopeFrom the guard falls back to the union of every
+  // role the actor holds anywhere, which is what let one account's roles act on another.
   @Get(':id')
   @RequireAccess({ module: 'ACCOUNT_ADMINISTRATION', subModule: 'OVERVIEW' })
+  @ScopeFrom('id', 'ACCOUNT', { includeEntityAssignments: true })
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Fetch account details', description: 'Fetch detailed account information including the 5 most recent users, entities, and roles with counts.' })
@@ -242,6 +248,7 @@ export class AccountController {
 
   @Get(':id/users')
   @RequireAccess({ module: 'ACCOUNT_ADMINISTRATION', subModule: 'USERS' })
+  @ScopeFrom('id', 'ACCOUNT', { includeEntityAssignments: true })
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Fetch account users', description: 'Fetch users linked to an account with pagination and filtering options.' })
@@ -256,6 +263,7 @@ export class AccountController {
 
   @Get(':id/entities')
   @RequireAccess({ module: 'ACCOUNT_ADMINISTRATION', subModule: 'ENTITIES' })
+  @ScopeFrom('id', 'ACCOUNT', { includeEntityAssignments: true })
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Fetch account entities', description: 'Fetch entities linked to an account with pagination and filtering options.' })
@@ -270,6 +278,7 @@ export class AccountController {
 
   @Get(':id/roles')
   @RequireAccess({ module: 'ACCOUNT_ADMINISTRATION', subModule: 'ROLES' })
+  @ScopeFrom('id', 'ACCOUNT', { includeEntityAssignments: true })
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Fetch account roles', description: 'Fetch roles linked to an account with pagination and filtering options.' })
@@ -284,6 +293,7 @@ export class AccountController {
 
   @Post(':id/roles')
   @RequirePermissions(['ROLE_CUSTOM_MANAGEMENT'], 'ACCOUNT_ADMINISTRATION')
+  @ScopeFrom('id', 'ACCOUNT', { includeEntityAssignments: true })
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Create a custom role', description: 'Create a non-system role attached to the given account. Permissions must be compatible with the chosen scope.' })
@@ -356,6 +366,7 @@ export class AccountController {
 
   @Patch(':id/status')
   @RequirePermissions(['ACCOUNT_UPDATE'], 'ACCOUNT_ADMINISTRATION')
+  @ScopeFrom('id', 'ACCOUNT')
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Update account status', description: 'Activate or deactivate an account that the user has access to.' })
@@ -371,6 +382,7 @@ export class AccountController {
 
   @Get(':id/reactivation-requests/latest')
   @RequirePermissions(['ACCOUNT_UPDATE'], 'ACCOUNT_ADMINISTRATION')
+  @ScopeFrom('id', 'ACCOUNT')
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Latest reactivation request for this account', description: 'Returns the most recent request (any status), or null. Used by the disabled-account banner.' })
@@ -398,6 +410,7 @@ export class AccountController {
 
   @Post(':id/reactivation-requests')
   @RequirePermissions(['ACCOUNT_UPDATE'], 'ACCOUNT_ADMINISTRATION')
+  @ScopeFrom('id', 'ACCOUNT')
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({
@@ -412,6 +425,7 @@ export class AccountController {
 
   @Patch(':id/users/:userId')
   @RequirePermissions(['ACCOUNT_USER_MANAGEMENT', 'USER_ROLE_ALLOCATION'], 'ACCOUNT_ADMINISTRATION', { requireAll: false })
+  @ScopeFrom('id', 'ACCOUNT', { includeEntityAssignments: true })
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Update account user', description: 'Update a user attached to this account: their isActive flag and/or their scoped role assignments.' })
@@ -434,6 +448,7 @@ export class AccountController {
 
   @Patch(':id/users')
   @RequirePermissions(['ACCOUNT_USER_MANAGEMENT'], 'ACCOUNT_ADMINISTRATION')
+  @ScopeFrom('id', 'ACCOUNT')
   @UseGuards(PermissionsGuard)
   /** Start -- Documentation */
   @ApiOperation({ summary: 'Update account users', description: 'Update the users linked to an account.' })

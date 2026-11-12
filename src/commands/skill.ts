@@ -5,6 +5,7 @@ import { version as cliVersion } from '../../package.json'
 import { isRunningViaNpx, performSkillInstall, skillIsInstalled } from '../skill/install'
 import { resolveSkillInstallDir, SKILL_NAME, SkillScope } from '../skill/paths'
 import { updatePreferences } from '../skill/preferences'
+import { resolveSkillScope, SkillScopeConflictError } from '../skill/scope'
 import { performFullUninstall, performSkillUninstall } from '../skill/uninstall'
 import { checkSkillStatus } from '../skill/update'
 
@@ -12,6 +13,7 @@ type SkillSubcommand = 'install' | 'update' | 'uninstall'
 
 interface ParsedArgs {
   project: boolean
+  user: boolean
   force: boolean
   yes: boolean
   purge: boolean
@@ -22,19 +24,33 @@ interface ParsedArgs {
 function parseArgs(args: string[]): ParsedArgs {
   const positional: string[] = []
   let project = false
+  let user = false
   let force = false
   let yes = false
   let purge = false
   let all = false
   for (const arg of args) {
     if (arg === '--project') project = true
+    else if (arg === '--user') user = true
     else if (arg === '--force') force = true
     else if (arg === '--yes' || arg === '-y') yes = true
     else if (arg === '--purge') purge = true
     else if (arg === '--all') all = true
     else if (arg !== undefined && arg !== null && arg !== '') positional.push(arg)
   }
-  return { project, force, yes, purge, all, positional }
+  return { project, user, force, yes, purge, all, positional }
+}
+
+/** The scope the subcommand acts on (#1107); a conflicting pair of flags ends the command with a message. */
+async function scopeFor(opts: ParsedArgs, action: 'install' | 'update' | 'uninstall'): Promise<{ scope: SkillScope; defaulted: boolean } | undefined> {
+  try {
+    return await resolveSkillScope(opts, action)
+  } catch (error) {
+    if (!(error instanceof SkillScopeConflictError)) throw error
+    console.error(chalk.red(error.message))
+    process.exit(1)
+    return undefined
+  }
 }
 
 export async function skillCommand(subcommand?: string, ...args: string[]) {
@@ -67,17 +83,21 @@ function showHelp() {
   console.log(chalk.blue('  ' + '─'.repeat(60)))
   console.log(chalk.white('\n  Usage: sf skill <subcommand> [options]\n'))
   console.log(chalk.white('  Subcommands:'))
-  console.log(chalk.gray('    install   [--project] [--force]     Install the skill (user scope by default)'))
-  console.log(chalk.gray('    update    [--project]               Re-copy the skill if the bundled version is newer'))
-  console.log(chalk.gray('    uninstall [--project] [--purge]     Remove the skill (--purge also deletes preferences)'))
+  console.log(chalk.gray('    install   [--project|--user] [--force]     Install the skill (project scope inside a SaaSFoundryAI project, user scope elsewhere)'))
+  console.log(chalk.gray('    update    [--project|--user]               Re-copy the skill if the bundled version is newer'))
+  console.log(chalk.gray('    uninstall [--project|--user] [--purge]     Remove the skill (--purge also deletes preferences)'))
   console.log(chalk.white('\n  Scope:'))
-  console.log(chalk.gray('    (default)    ~/.claude/skills/tool-saasfoundry/   (user)'))
   console.log(chalk.gray('    --project    .claude/skills/tool-saasfoundry/    (team-scoped, commit to git)'))
+  console.log(chalk.gray('    --user       ~/.claude/skills/tool-saasfoundry/   (every project; hides the project copy in Claude Code)'))
+  console.log(chalk.gray('    (default)    the project inside a directory holding .saasfoundry.json, the user scope elsewhere'))
+  console.log(chalk.gray('                 update and uninstall follow an install: the project copy when it exists, the user copy otherwise'))
   console.log()
 }
 
 async function runInstall(opts: ParsedArgs) {
-  const scope: SkillScope = opts.project ? 'project' : 'user'
+  const resolved = await scopeFor(opts, 'install')
+  if (!resolved) return
+  const { scope } = resolved
   const targetDir = resolveSkillInstallDir(scope)
   const alreadyInstalled = await skillIsInstalled(scope)
 
@@ -106,6 +126,9 @@ async function runInstall(opts: ParsedArgs) {
   console.log(chalk.green(`\n  ✓ Installed ${SKILL_NAME} (v${cliVersion})`))
   console.log(chalk.gray(`    Target:  ${result.targetDir}`))
   console.log(chalk.gray(`    Source:  ${result.sourceDir}`))
+  if (resolved.defaulted) {
+    console.log(chalk.gray('    Scope:   project (this directory is a SaaSFoundryAI project); --user installs it for every project, where it hides the project copy'))
+  }
   if (result.previousVersion) {
     console.log(chalk.gray(`    Previous version: ${result.previousVersion} → ${cliVersion}`))
   }
@@ -120,12 +143,14 @@ async function runInstall(opts: ParsedArgs) {
 }
 
 async function runUpdate(opts: ParsedArgs) {
-  const scope: SkillScope = opts.project ? 'project' : 'user'
+  const resolved = await scopeFor(opts, 'update')
+  if (!resolved) return
+  const { scope } = resolved
   const status = await checkSkillStatus(scope, cliVersion)
 
   if (!status.installed) {
     console.error(chalk.red(`No ${SKILL_NAME} install found at ${status.targetDir}.`))
-    console.error(chalk.gray(`Run: sf skill install${scope === 'project' ? ' --project' : ''}`))
+    console.error(chalk.gray(`Run: sf skill install${scope === 'project' ? ' --project' : ' --user'}`))
     process.exit(1)
     return
   }
@@ -142,7 +167,9 @@ async function runUpdate(opts: ParsedArgs) {
 }
 
 async function runUninstall(opts: ParsedArgs) {
-  const scope: SkillScope = opts.project ? 'project' : 'user'
+  const resolved = await scopeFor(opts, 'uninstall')
+  if (!resolved) return
+  const { scope } = resolved
   const skillDir = resolveSkillInstallDir(scope)
 
   if (!opts.yes && process.stdin.isTTY) {

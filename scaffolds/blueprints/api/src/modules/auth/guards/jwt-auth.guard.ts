@@ -10,6 +10,7 @@ import { AuthGuard } from '@nestjs/passport'
  */
 import { Logger } from '@common/services/logger/logger.service'
 import { PrismaService } from '@configs/prisma/services/prisma.service'
+import { authenticatedUserInclude } from '@modules/auth/authenticated-user.include'
 import { AuthService } from '@modules/auth/services/auth.service'
 
 /**
@@ -77,45 +78,22 @@ export class JwtAuthGuard extends AuthGuard('jwt') implements OnModuleInit {
       const payload = this.authService.decodeToken(tokens.accessToken)
 
       // Get the user from the payload and set it directly in the request
-      // Include the same relations as JwtStrategy.validate() so PermissionsGuard can work
+      // Same relations as JwtStrategy.validate() (one shared include) so PermissionsGuard can work
       if (payload && payload.sub) {
         const user = await this.prismaService.user.findUnique({
           where: { id: payload.sub },
-          include: {
-            roleAssignments: {
-              where: {
-                role: {
-                  isActive: true
-                }
-              },
-              include: {
-                role: {
-                  include: {
-                    modulesLinked: {
-                      where: {
-                        module: {
-                          isActive: true
-                        }
-                      },
-                      include: {
-                        module: true
-                      }
-                    },
-                    permissionsLinked: {
-                      include: {
-                        permission: true
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
+          include: authenticatedUserInclude
         })
 
         if (!user) {
           this.logger.warn(`User not found after token refresh: ${payload.sub}`, 'JwtAuthGuard')
           throw new UnauthorizedException('User not found')
+        }
+
+        // Same rule as JwtStrategy.validate(): a user deactivated between the refresh and this read is refused
+        if (!user.isActive) {
+          this.logger.warn(`Inactive user after token refresh: ${payload.sub}`, 'JwtAuthGuard')
+          throw new UnauthorizedException('User is inactive')
         }
 
         // Define the user in the request

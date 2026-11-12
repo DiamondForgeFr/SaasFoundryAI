@@ -1,3 +1,4 @@
+import { CAPTURE_ERROR_WINDOW_DAYS, captureErrorWindowStart, readCaptureErrors, type CaptureErrorSummary } from './capture-errors'
 import { captureState, type CaptureProbe, type CaptureState } from './delegation-hooks'
 import type { Complexity, LedgerRun, Nature, TicketStatusRecord } from './delegation-ledger'
 import type { AdjustPolicy } from './routing-adjust-config'
@@ -105,6 +106,8 @@ export interface RoutingReport {
   /** Models that ran with a token count but have no price: their runs count for reliability, never for cost. Declare them in routing.adjust.prices. */
   unpricedModels: string[]
   capture: { agent: string; state: CaptureState }[]
+  /** The failures the capture hooks logged in the last 7 days (#1105): delegations a failed hook could not record are missing above. */
+  captureErrors: CaptureErrorSummary
   kinds: KindRow[]
   tickets: { byComplexity: ComplexityRow[]; perTicket: TicketRow[] }
   localAdjustments: {
@@ -300,6 +303,7 @@ export async function buildRoutingReport(state: RoutingState, now: Date = new Da
     policy: { ...policy, declaredPrices: Object.keys(prices).sort() },
     unpricedModels: [...new Set(all.flatMap((run) => (run.tokens !== null && run.cost === null && run.metering !== 'partial' && run.candidate.model ? [run.candidate.model] : [])))].sort(),
     capture: await Promise.all(state.project.agents.map(async (agent) => ({ agent, state: await captureState(state.root, agent, options.probe) }))),
+    captureErrors: state.dir ? await readCaptureErrors(state.dir, { since: captureErrorWindowStart(now) }) : { count: 0, since: captureErrorWindowStart(now).toISOString() },
     kinds: kindRows(state),
     tickets: { byComplexity: complexityRows(tickets), perTicket },
     localAdjustments: listLocalAdjustments(state.local).map(({ kind, provider, adjustment }) => ({
@@ -338,6 +342,12 @@ export function renderRoutingReport(report: RoutingReport): string {
   if (ledger.stops > ledger.runs) lines.push(`${ledger.stops - ledger.runs} further stop${ledger.stops - ledger.runs === 1 ? '' : 's'} of resumed agents are counted in their delegation.`)
   if (ledger.skippedLines) lines.push(`${ledger.skippedLines} ledger line${ledger.skippedLines === 1 ? ' was' : 's were'} not a valid record and skipped.`)
   lines.push(`Capture: ${report.capture.map((entry) => `${entry.agent} ${entry.state}`).join(', ') || 'no declared coding agent'}.`)
+  const { captureErrors } = report
+  lines.push(
+    captureErrors.count === 0
+      ? `Capture errors: none in ${CAPTURE_ERROR_WINDOW_DAYS} days.`
+      : `Capture errors: ${captureErrors.count} in ${CAPTURE_ERROR_WINDOW_DAYS} days${captureErrors.last ? ` (last ${captureErrors.last.at.slice(0, 10)}, ${captureErrors.last.stage}: ${captureErrors.last.message})` : ''}. A delegation a failed hook could not record is missing from this report; the errors are in capture-errors.jsonl next to the ledger.`
+  )
   lines.push(
     `Adjustment: ${report.policy.enabled ? 'on' : 'off'} (escalate ${report.policy.escalateFailures} failures in ${report.policy.escalateOf}, de-escalate ${report.policy.deescalateSuccesses} trial successes with at most ${report.policy.deescalateFailures} failures, trials at most ${Math.round(report.policy.trialShare * 100)}% of the runs).`
   )

@@ -61,7 +61,10 @@ describe('tier agent rendering (#929)', () => {
     expect(WHOLE_TICKET_LINE).toContain('from In progress to the end of AI Testing')
     expect(WHOLE_TICKET_LINE).toContain('stop there with the ticket still in AI Testing')
     expect(WHOLE_TICKET_LINE).toContain('Never merge')
-    expect(WHOLE_TICKET_LINE).toContain('never run `ready-pr` on a ticket that goes through Human Testing')
+    expect(WHOLE_TICKET_LINE).toContain('never run `ready-pr`')
+    // #1106 — the agent is told whose a hatch is, and that a hook refuses its call
+    expect(WHOLE_TICKET_LINE).toContain('An escape hatch, and the nature label of a ticket, are the developer')
+    expect(WHOLE_TICKET_LINE).toContain('a hook refuses your call if you set one')
     expect(WHOLE_TICKET_LINE).toContain('never record the delegation consent')
     expect(WHOLE_TICKET_LINE).toContain('never hand it on again')
   })

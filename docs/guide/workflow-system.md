@@ -91,9 +91,9 @@ Nature adds guarded exceptions. A bundled child has no PR because its atomic com
 
 For the team preset:
 
-1. commit and push before AI testing;
+1. commit and push before AI testing: the pushed-commits guard refuses a ticket whose tracked files are not committed or whose commits `origin` lacks, and names the command to run;
 2. publish the test plan and the report as ticket comments, starting with the headings `## Test plan` and `## Test report`;
-3. create or reuse a **draft PR** before Human testing;
+3. create or reuse a **draft PR** before Human testing, and make the project's local CI green on its head commit: the local CI guard refuses the move to Human testing otherwise (see below);
 4. let the developer perform functional feature testing;
 5. after approval and non-regression tests, the developer marks the same PR ready (the agent never does on this route);
 6. enter In review for code review and full CI;
@@ -113,6 +113,23 @@ $WORKFLOW update-status 42 Done
 
 Without Human testing (the Solo preset, or a `nature:internal` ticket), the agent also opens the draft during AI testing, and marks it ready itself with `ready-pr` at the end of AI testing: In review
 is then the human gate.
+
+### Two guards at the edges of AI testing
+
+`update-status` checks two things that used to be instructions only:
+
+- **`→ AI testing` needs pushed work.** The guard reads git alone, so it holds for every workflow tool. It inspects the checkout that holds the work: the ticket branch, the delivery parent's branch
+  for a bundled child, a branch the host named (`worktree-agent-<id>`) against the one ticket branch of `origin`, or, from the primary checkout, the worktree of the ticket branch. Tracked changes
+  (staged or not), a branch `origin` lacks, a commit it does not have, a branch it moved past, an unreachable `origin` and a detached HEAD are refused, and the message names the commit, push or
+  `git pull --rebase` command. Untracked files only warn. The same check covers the return from Human testing to AI testing after a fix.
+- **`→ Human testing` needs a green local CI.** With GitHub Projects, the guard reads the head commit of the draft PR it just matched, from any checkout, and requires the project's local CI statuses
+  green on it. They come from `workflow.localCi.requiredStatuses` when it is recorded (`sf workflow set-local-ci`), otherwise from `local-<job>` for each job of `.molten/project.json` when it
+  publishes to GitHub, otherwise from the `AI testing / Local CI` status the agent publishes with `workflow-cli.sh ai-status <ticket> "Local CI" success` once the project's suite is green. The refusal
+  names the source and the command to run (`molten ci run <branch>`, or the suite and the `ai-status` call). `workflow-cli.sh local-ci-gate <ticket>` runs the same check on its own. A project with no
+  local CI records that with `sf workflow set-local-ci --none`.
+
+A recorded list is pinned: a job added to `.molten/project.json` afterwards is not required until the list is recorded again, or cleared with `sf workflow set-local-ci --clear` to follow the pipeline.
+`sf workflow show` and `sf status` print the effective list and where it comes from.
 
 ## The first ticket
 
@@ -141,6 +158,7 @@ The Done guard accepts that ticket because the repository's single root commit n
 sf workflow show
 sf workflow validate
 sf workflow set-working-branch develop
+sf workflow set-local-ci --from-molten
 sf workflow set-ai-rules
 
 .claude/skills/sf-workflow/workflow-cli.sh status 42
@@ -202,27 +220,57 @@ Use `workflow-cli.sh transition-drafting`; the CLI rejects code-path transitions
 ## Escape hatches
 
 A guard refusal means a condition or a piece of proof is missing; the answer is to supply it. For the rare case where a guard is wrong or cannot be satisfied, the scripts accept a few explicit escape
-hatches. Set a variable inline for one command only, never with `export`, with `SF_WORKFLOW_BYPASS_REASON="<why>"` beside it. `update-status` then prints a warning naming the variable and records it,
-with the reason, as a ticket comment; add the evidence to that comment. A coding agent never sets one on its own; it stops and asks you.
+hatches. They are yours to apply, not the agent's: set a variable inline for one command only, never with `export`, with `SF_WORKFLOW_BYPASS_REASON="<why>"` beside it. `update-status` then prints a
+warning naming the variable and records it, with the reason, as a ticket comment; add the evidence to that comment. A refusal does not tell a coding agent how to get past the guard: it names the next
+legitimate command and sends the agent back to you, and a hook refuses the agent that sets a hatch anyway ([below](#who-applies-a-hatch)).
 
-| Hatch                                                                       | What it switches off                                                         |
-| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                            | Keeps `srs:*` tickets off the code-path statuses                             |
-| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                     | Requires a `complexity:` label to leave Backlog                              |
-| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                         | Routes by `nature:*` (Human testing, In review, bundled-PR to Done)          |
-| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                       | Requires every native child to be Done before the parent                     |
-| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                 | Requires a verified, non-Epic native parent for a bundled-PR child           |
-| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                   | Requires a matching open PR (draft or ready) for Human testing and In review |
-| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                      | Requires a verified merged PR before Done                                    |
-| `--bypass-srs <reason>` on `create-ticket`, `create-subtask`, `create-epic` | Rule 8: tickets of an SRS-enabled project come from the SRS spawner          |
-| `--bypass-reason <text>` on `srs-cli.sh spawn`                              | Sets the `--bypass-srs` reason of spawned tickets; disables no check         |
-| `--skip-local-ci "<reason>"` on `create-pr` and `ready-pr`                  | Requires the declared local CI statuses to be green on the head commit       |
-| `SF_CACHE_BUST=1`                                                           | Not a guard: refetches the cached board schema                               |
-| `SF_DISABLE_SRS_HOOK=1`                                                     | Not a guard: silences the SRS intent-detector reminder                       |
+| Hatch                                                                                      | What it switches off                                                         |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                           | Keeps `srs:*` tickets off the code-path statuses                             |
+| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                    | Requires a `complexity:` label to leave Backlog                              |
+| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                        | Routes by `nature:*` (Human testing, In review, bundled-PR to Done)          |
+| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                      | Requires every native child to be Done before the parent                     |
+| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                | Requires a verified, non-Epic native parent for a bundled-PR child           |
+| `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                        | Requires the ticket work to be committed and pushed before AI testing        |
+| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                                  | Requires a matching open PR (draft or ready) for Human testing and In review |
+| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                                     | Requires a verified merged PR before Done                                    |
+| `--bypass-srs <reason>` on `create-ticket`, `create-subtask`, `create-epic`                | Rule 8: tickets of an SRS-enabled project come from the SRS spawner          |
+| `--bypass-reason <text>` on `srs-cli.sh spawn`                                             | Sets the `--bypass-srs` reason of spawned tickets; disables no check         |
+| `--skip-local-ci "<reason>"` on `create-pr`, `ready-pr`, `update-status … "Human testing"` | Requires the local CI statuses to be green on the head commit                |
+| `SF_CACHE_BUST=1`                                                                          | Not a guard: refetches the cached board schema                               |
+| `SF_DISABLE_SRS_HOOK=1`                                                                    | Not a guard: silences the SRS intent-detector reminder                       |
 
 `--bypass-srs` and `--skip-local-ci` carry a mandatory reason. The reason is the record: choose a grep-able token such as `meta-srs-tooling`. `--bypass-srs` posts it on the created ticket and
-`--skip-local-ci` writes it on the pull request. The legitimate and illegitimate uses of each hatch, and the record to leave, are in `.claude/skills/sf-workflow/escape-hatches.md` in every project
-that installs the workflow.
+`--skip-local-ci` writes it on the pull request (or on the ticket when no pull request can carry it). The legitimate and illegitimate uses of each hatch, and the record to leave, are in
+`.claude/skills/sf-workflow/escape-hatches.md` in every project that installs the workflow.
+
+### Who applies a hatch
+
+An escape hatch is your decision, and so is every choice a guard protects: whether a ticket skips Human testing, whether a pull request is ready, whether it merges. A `PreToolUse` hook, written into
+`.claude/settings.json` and `.codex/hooks.json` by `sf new`, `sf update` and `sf agents refresh`, refuses an agent's Bash call before it runs (and PowerShell on Claude Code). It refuses, in the main
+session as well as in a delegated agent:
+
+- a `SF_WORKFLOW_BYPASS_<X>=…` assignment in front of a command, in `export`, `env`, `bash -c` or `eval` (the reason variable alone is not refused);
+- `--skip-local-ci` given to `workflow-cli.sh` or `github-projects-cli.sh`;
+- `nature:internal` or `nature:bundled-pr` put on a ticket with `gh issue edit` or `gh api`.
+
+For a **delegated agent** only (an agent id in the event, or a working directory under `.claude/worktrees/` or `.codex/worktrees/`) it also refuses `sf agents delegation allow|decline|clear`,
+`ready-pr` and `gh pr ready`, `gh pr merge`, and `create-ticket … --nature internal`. The same calls from the primary checkout are allowed. The scripts add a second barrier that does not depend on the
+hook: `update-status`, `create-pr`, `ready-pr`, `draft-pr` and `local-ci-gate` refuse a hatch, `--skip-local-ci` and `ready-pr` themselves when they run in a delegated worktree.
+
+You apply a hatch from the primary checkout, in either of two ways:
+
+- **Claude Code:** type the command in the session with a leading `!`. It runs directly, without going through the agent's Bash tool, so the hook does not fire, and its output joins the conversation.
+  `! SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1 SF_WORKFLOW_BYPASS_REASON="hotfix a1b2c3d pushed directly" .claude/skills/sf-workflow/workflow-cli.sh update-status 42 Done`. The script still posts the
+  bypass comment.
+- **Any host:** your own terminal, at the root of the primary checkout. `update-status` and `local-ci-gate` find the ticket's worktree or pull request from there.
+
+Nature labels are added by you on GitHub, or with `!` in Claude Code.
+
+The hook is a guardrail against the ordinary path the refusals used to teach, not a security boundary: it reads the command the agent wrote, covers the Bash tool only, and fails open (no CLI, an old
+CLI or a payload it cannot read lets the call through). `sf status` says so on its `routing:` line (`guard enforced`, `guard declared`, `guard hook missing`…) and warns when the hook cannot work.
+Claude Code reads its settings when a session starts, so a running session keeps its old hooks until it restarts. Codex runs a project hook only once the `.codex/` layer and the hook are trusted:
+after `sf update`, review and trust the guard with `/hooks`. See [`sf agents guard`](/cli/sf-agents#the-guard-hook).
 
 ## Continue
 

@@ -1,0 +1,56 @@
+# Dependabot configuration of this repository (#1111): security updates only, one group per surface.
+#
+# `open-pull-requests-limit: 0` is GitHub's documented switch for "security updates only": it turns
+# version updates off for the entry, and the `groups` below keep applying to security updates through
+# `applies-to: security-updates`. A positive limit would start version updates (every minor and patch
+# of every pin) on templates that hold their versions on purpose. Security update pull requests have
+# their own limit, which this file cannot change.
+#
+# This file only shapes the pull requests. Dependabot security updates themselves are switched on in
+# the repository settings (Settings, Advanced Security).
+#
+# Read .claude/docs/embedded-dependencies.md ("Dependabot") before merging or adapting a pull request
+# from this configuration: a scaffold pin has to move in every overlay and installer at once.
+version: 2
+updates:
+  # CLI root: the published saasfoundryai-cli package and its development tooling.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      cli:
+        applies-to: security-updates
+        patterns:
+          - '*'
+
+  # Scaffold API: both topologies of the generated API. The monorepo root carries the API's security
+  # overrides, so an advisory on an API dependency can land there too.
+  - package-ecosystem: npm
+    directories:
+      - /scaffolds/overlays/multirepo/api
+      - /scaffolds/overlays/monorepo/api
+      - /scaffolds/overlays/monorepo/root
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      scaffold-api:
+        applies-to: security-updates
+        patterns:
+          - '*'
+
+  # Scaffold web: both topologies of the generated web app.
+  - package-ecosystem: npm
+    directories:
+      - /scaffolds/overlays/multirepo/web
+      - /scaffolds/overlays/monorepo/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      scaffold-web:
+        applies-to: security-updates
+        patterns:
+          - '*'

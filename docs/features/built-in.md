@@ -61,6 +61,9 @@ async signIn(dto: SignInDto, response: Response) {
 Passwords are hashed with bcrypt, authenticated routes use `JwtAuthGuard`, and refresh-token state can be invalidated on signout. The web application includes the corresponding signin, signup,
 confirmation and reset screens.
 
+A deactivated user loses access at once. Both the access token and the refresh token are refused for a user whose `isActive` flag is off (`401`), and deactivating a member from the account routes
+deletes its refresh tokens. Access returns only after reactivation and a new signin.
+
 Continue with [RBAC and tenancy](/features/rbac) to see how identity becomes authorization.
 
 ### Tenant, account and entity model

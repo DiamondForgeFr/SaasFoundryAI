@@ -19,6 +19,7 @@ import {
   installPlannedAgentInstructions,
   planAgentInstructions,
   resolveInstructionFile,
+  STATUS_OUTPUT_INSTRUCTIONS,
   withGeneratedInstructions
 } from '../../../harness/agent-instructions'
 import { REGION_HEADINGS } from '../../../harness/claude-md-migration'
@@ -177,11 +178,31 @@ describe('shared agent instructions', () => {
       expect(instructions).toMatch(/never switches to coding a\s+ticket mid-delivery/)
       expect(instructions).toMatch(/becomes a ticket of its own, handed to its own\s+agent/)
       expect(instructions).toMatch(/deliver the tickets\s+in the session, one after the other, and say so explicitly/)
-      expect(instructions).toMatch(/never merges and, on a ticket that goes through Human Testing, never runs\s+`ready-pr`/)
+      expect(instructions).toMatch(
+        /never merges, never runs `ready-pr` \(the developer takes the draft pull\s+request out of draft on a ticket that goes through Human Testing, the session on one that does\s+not\)/
+      )
       expect(instructions).toMatch(/hands a defect, or AI work left after the validation, back to the\s+ticket's agent in the same worktree/)
       // The decision belongs to the developer and to the manifest, never to a model name.
       expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
       expect(instructions).not.toMatch(/\bdevelop\b/)
+    }
+  })
+
+  // #1106 — a guard refusal is reported, never worked around: the escape hatch is the developer's, and a hook enforces it.
+  it('says an escape hatch is the developer to apply, and that a hook refuses an agent that sets one (#1106)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(/An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook\s+refuses an agent call that sets one/)
+      expect(instructions).toMatch(/never labels the nature of a ticket/)
+    }
+  })
+
+  // The test strategy (#1157): affected tests while the agent works, the full suites once at AI Testing, the CI as the final check
+  it('has the delegated agent run the affected tests while it works and the full suites once, in the generated region (#1157)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(/runs the tests the change\s+affects while it works, and the full suites once, at the end of AI Testing/)
+      expect(instructions).toMatch(/After a rebase it reruns the affected tests, and the full suites only when the rebase\s+brought changes to shared files/)
+      expect(instructions).toMatch(/ready pull request's CI stays the final check/)
+      expect(instructions).toMatch(/the workflow status documents hold it/)
     }
   })
 
@@ -229,7 +250,10 @@ describe('shared agent instructions', () => {
 
   it('says where the recorded answer is committed and that the brief states it (Examine 7)', () => {
     for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
-      expect(instructions).toMatch(/commit that manifest change with the current ticket's\s+branch \(or in a `chore` commit on the working branch\)/)
+      expect(instructions).toMatch(/commit that manifest change with the current ticket's\s+branch\. A `chore` commit on the working branch is only for a branch with no required status\s+check/)
+      // #1124: a protected working branch is reached through a pull request, never a direct commit.
+      expect(instructions).toMatch(/on a protected one, go through a pull request, never a direct commit/)
+      expect(instructions).not.toMatch(/\(or in a `chore` commit on the working branch\)/)
       expect(instructions).toMatch(/The brief states the consent: a worktree cut from the remote working\s+branch reads `not-asked` until the answer is committed/)
     }
   })
@@ -738,5 +762,40 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
   it('keeps the generated blocks free of Claude-only instructions', () => {
     expect(GENERATED_INSTRUCTIONS).not.toMatch(/\.claude\/settings\.json|--claude-friendly|SessionStart/)
     expect(withGeneratedInstructions('# No region\n')).toBeUndefined()
+  })
+
+  // #1103 — the rules for reading the status report moved here from the foot of the report.
+  it('carries the rules for reading the project status, in the generated region only', () => {
+    expect(GENERATED_INSTRUCTIONS).toContain('## Reading the project status')
+    expect(GENERATED_INSTRUCTIONS).toContain(STATUS_OUTPUT_INSTRUCTIONS.trimEnd())
+    for (const rule of [
+      'A `fail` precondition is resolved before any project action',
+      'A `warn` precondition can block a specific flow',
+      'A `skip` means the check did not apply',
+      'The language of the conversation is not the signal',
+      'The `cli:` line names the CLI'
+    ]) {
+      expect(STATUS_OUTPUT_INSTRUCTIONS).toContain(rule)
+    }
+    // The bridges and the common instructions are recognised by released bytes: the section is not added to them.
+    expect(COMMON_INSTRUCTIONS).not.toContain('## Reading the project status')
+    expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## Reading the project status')
+  })
+
+  // #1155 — a .molten/project.json with no job is no pipeline: AI Testing falls back to the npm suite.
+  it('counts a Molten pipeline only when it declares a job, in the generated region', () => {
+    expect(GENERATED_INSTRUCTIONS).toContain('The `local-ci:` line names the heavy validation of AI Testing.')
+    expect(GENERATED_INSTRUCTIONS.replace(/\s+/g, ' ')).toContain(
+      "A Molten pipeline counts only when `.molten/project.json` declares at least one job in `ci.jobs` and `molten ci status` answers; otherwise run the project's npm suite"
+    )
+    expect(GENERATED_INSTRUCTIONS).not.toContain('when `.molten/project.json` exists and')
+  })
+
+  it('refreshes the section into an AGENTS.md whose generated region predates it', () => {
+    const older = `# Mine\n\n${GENERATED_REGION_START}\n## File edits and shell calls\nold text\n${GENERATED_REGION_END}\n\nMy notes.\n`
+    const refreshed = withGeneratedInstructions(older)
+    expect(refreshed).toContain('## Reading the project status')
+    expect(refreshed).toContain('My notes.')
+    expect(refreshed).not.toContain('old text')
   })
 })

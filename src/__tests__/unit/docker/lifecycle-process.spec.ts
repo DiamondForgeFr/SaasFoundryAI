@@ -6,6 +6,14 @@ import { join } from 'node:path'
 import { buildLifecycleEnvironment, runSupervisedProcess, startSupervisedProcess } from '../../../../tests/docker/lifecycle/process'
 import { LifecycleRuntimeError } from '../../../../tests/docker/lifecycle/types'
 
+// Every test starts one or more Node processes, and a loaded machine can take seconds to start each (#1171). The
+// deadlines and grace periods below are safety nets the tests do not measure: they are wide so that load cannot turn a
+// success into a `deadline` or `teardown` failure. Where a bound is the subject (the deadline test, the failed
+// verification), it stays tight, because the child never ends or the port never closes.
+jest.setTimeout(90_000)
+const SAFETY_DEADLINE_MS = 30_000
+const GRACE_MS = 10_000
+
 describe('lifecycle process supervisor', () => {
   let temporaryRoot: string
 
@@ -14,7 +22,7 @@ describe('lifecycle process supervisor', () => {
   })
 
   afterEach(async () => {
-    await rm(temporaryRoot, { recursive: true, force: true })
+    await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   })
 
   it('preserves literal argv, never invokes a shell, and inherits only allowlisted environment', async () => {
@@ -28,7 +36,7 @@ describe('lifecycle process supervisor', () => {
         args: [script, `$(touch ${marker})`, '; echo injected'],
         cwd: temporaryRoot,
         env: { SAFE_VALUE: 'kept' },
-        deadline: Date.now() + 5_000
+        deadline: Date.now() + SAFETY_DEADLINE_MS
       })
       expect(JSON.parse(result.stdout)).toEqual({ argv: [`$(touch ${marker})`, '; echo injected'], safe: 'kept' })
       await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' })
@@ -50,7 +58,7 @@ describe('lifecycle process supervisor', () => {
       args: [script],
       stdin: 'select 1;',
       cwd: temporaryRoot,
-      deadline: Date.now() + 5_000
+      deadline: Date.now() + SAFETY_DEADLINE_MS
     })
     expect(result.stdout).toBe('select 1;\n')
   })
@@ -64,7 +72,7 @@ describe('lifecycle process supervisor', () => {
       args: [redactionScript],
       cwd: temporaryRoot,
       secrets: [secret],
-      deadline: Date.now() + 5_000
+      deadline: Date.now() + SAFETY_DEADLINE_MS
     })
     expect(redacted.stdout).toBe('before <redacted> after\n')
     expect(redacted.stdout).not.toContain(secret)
@@ -78,8 +86,9 @@ describe('lifecycle process supervisor', () => {
         cwd: temporaryRoot,
         maxOutputBytes: 128,
         termGraceMs: 50,
-        killGraceMs: 1_000,
-        deadline: Date.now() + 5_000
+        killGraceMs: GRACE_MS,
+        verificationTimeoutMs: GRACE_MS,
+        deadline: Date.now() + SAFETY_DEADLINE_MS
       })
     ).rejects.toMatchObject({ code: 'output-limit' })
   })
@@ -94,7 +103,9 @@ describe('lifecycle process supervisor', () => {
         cwd: temporaryRoot,
         fatalPatterns: [/^FATAL\b/],
         termGraceMs: 50,
-        deadline: Date.now() + 5_000
+        killGraceMs: GRACE_MS,
+        verificationTimeoutMs: GRACE_MS,
+        deadline: Date.now() + SAFETY_DEADLINE_MS
       })
     ).rejects.toMatchObject({ code: 'fatal-log' })
 
@@ -106,6 +117,8 @@ describe('lifecycle process supervisor', () => {
         args: [blockingScript],
         cwd: temporaryRoot,
         termGraceMs: 50,
+        killGraceMs: GRACE_MS,
+        verificationTimeoutMs: GRACE_MS,
         deadline: Date.now() + 100
       })
     ).rejects.toMatchObject({ code: 'deadline' })
@@ -135,9 +148,9 @@ describe('lifecycle process supervisor', () => {
       cwd: temporaryRoot,
       ports: [port],
       termGraceMs: 75,
-      killGraceMs: 2_000,
-      verificationTimeoutMs: 2_000,
-      deadline: Date.now() + 5_000
+      killGraceMs: GRACE_MS,
+      verificationTimeoutMs: GRACE_MS,
+      deadline: Date.now() + SAFETY_DEADLINE_MS
     })
     await waitForPort(port, true)
 
@@ -168,8 +181,9 @@ describe('lifecycle process supervisor', () => {
       args: [script],
       cwd: temporaryRoot,
       termGraceMs: 50,
-      killGraceMs: 2_000,
-      deadline: Date.now() + 5_000
+      killGraceMs: GRACE_MS,
+      verificationTimeoutMs: GRACE_MS,
+      deadline: Date.now() + SAFETY_DEADLINE_MS
     })
     await expectPidGone(JSON.parse(await readFile(pidFile, 'utf8')) as number)
   })
@@ -206,9 +220,9 @@ describe('lifecycle process supervisor', () => {
         args: [script],
         cwd: temporaryRoot,
         termGraceMs: 100,
-        killGraceMs: 2_000,
-        verificationTimeoutMs: 2_000,
-        deadline: Date.now() + 5_000
+        killGraceMs: GRACE_MS,
+        verificationTimeoutMs: GRACE_MS,
+        deadline: Date.now() + SAFETY_DEADLINE_MS
       })
       escapedPid = Number(await readFile(pidFile, 'utf8'))
       expect(Number.isSafeInteger(escapedPid) && escapedPid > 0).toBe(true)
@@ -240,7 +254,7 @@ describe('lifecycle process supervisor', () => {
       executable: '/usr/bin/python3',
       args: ['-c', script],
       cwd: temporaryRoot,
-      deadline: Date.now() + 5_000
+      deadline: Date.now() + SAFETY_DEADLINE_MS
     })
     expect(result.status).toBe(0)
   })
@@ -261,7 +275,7 @@ describe('lifecycle process supervisor', () => {
         ports: [port],
         termGraceMs: 50,
         verificationTimeoutMs: 100,
-        deadline: Date.now() + 5_000
+        deadline: Date.now() + SAFETY_DEADLINE_MS
       })
       const primary = new LifecycleRuntimeError('database', 'primary database failure')
       try {
@@ -293,8 +307,10 @@ async function freePort(): Promise<number> {
   return port
 }
 
+/** Polls until the port is in the expected state; the bound is wall-clock, not a number of attempts, and wide (#1171). */
 async function waitForPort(port: number, expected: boolean): Promise<void> {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  const deadline = Date.now() + SAFETY_DEADLINE_MS
+  while (Date.now() < deadline) {
     if ((await canConnect(port)) === expected) return
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
@@ -316,12 +332,18 @@ function canConnect(port: number): Promise<boolean> {
   })
 }
 
+/**
+ * ESRCH: the process is gone. EPERM: the pid now belongs to another user's process, so ours is gone too; a busy machine
+ * recycles pids fast enough to hit it (#1171). A killed process that is not reaped yet still answers, hence the wait.
+ */
 async function expectPidGone(pid: number): Promise<void> {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  const deadline = Date.now() + GRACE_MS
+  while (Date.now() < deadline) {
     try {
       process.kill(pid, 0)
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ESRCH' || code === 'EPERM') return
       throw error
     }
     await new Promise((resolve) => setTimeout(resolve, 25))

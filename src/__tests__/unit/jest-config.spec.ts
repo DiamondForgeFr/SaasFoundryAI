@@ -33,8 +33,8 @@ describe('jest configuration', () => {
    * a budget nobody applies, or a setup file with nothing to apply.
    */
   it.each([
-    ['unit', 20000],
-    ['integration', 30000],
+    ['unit', 60000],
+    ['integration', 120000],
     ['e2e', 60000],
     ['smoke', 120000]
   ])('gives %s a %ims budget, and the setup file that applies it', (name, expected) => {

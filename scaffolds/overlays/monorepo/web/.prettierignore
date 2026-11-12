@@ -1,0 +1,10 @@
+# `npm run format` runs in this folder, where the root .gitignore and .prettierignore do not apply.
+# Build, test and tool outputs: a Playwright report holds megabytes of minified scripts (#1092).
+dist/
+dev-dist/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+coverage/
+.nyc_output/

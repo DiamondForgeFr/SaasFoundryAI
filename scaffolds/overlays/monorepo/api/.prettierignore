@@ -1,0 +1,8 @@
+# `npm run format` runs in this folder, where the root .gitignore and .prettierignore do not apply.
+# Build, test and tool outputs: coverage reports hold minified scripts (#1092).
+dist/
+build/
+coverage/
+coverage-e2e/
+.nyc_output/
+test-results/

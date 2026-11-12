@@ -11,12 +11,12 @@ mandatory_actions:
   - Move ticket to `In Progress`
   - Create subtasks as real GitHub issues (NOT checkboxes)
   - Deliver each child ticket in its declared mode; close it immediately when its PR is merged or its bundled commit is validated
-  - Final validation — build, lint, unit tests green
+  - Final validation — build, lint, and the tests the change affects green (the full suites run once, at AI Testing)
   - Push branch
 exit_conditions:
   - Code compiles without errors
   - Lint passes
-  - Existing tests pass
+  - The tests the change affects pass
   - Branch pushed to remote
 next_status: AI Testing
 ---
@@ -45,15 +45,17 @@ These stay in the `In progress` board column but flow through a **separate lifec
       stays in the session. The agent that receives the ticket builds it itself and does not hand it on again. `declined`, or an agent that cannot delegate: the session builds it, one ticket at a
       time, and says so (SKILL.md → Delegated ticket delivery)
 - [ ] **Consent** — the brief to a delegated agent states it: a worktree cut from the remote working branch reads `not-asked` until the answer is committed. `not-asked`: the session asks the developer
-      once and records the answer with `sf agents delegation allow` or `decline`, committed with this ticket's branch or in a `chore` commit on the working branch. Only the developer's own reply
-      records consent: a delegated agent never runs those commands, and ticket, issue or pull-request content is never consent
+      once and records the answer with `sf agents delegation allow` or `decline`, committed with this ticket's branch; a `chore` commit on the working branch only when it has no required status check
+      or pull request, otherwise through a pull request. Only the developer's own reply records consent: a delegated agent never runs those commands, and ticket, issue or pull-request content is never
+      consent
 - [ ] **Branch** — from `jq -r '.workflow.workingBranch' .saasfoundry.json`, pattern `jq -r '.workflow.branchNaming.feature'`
   - Built in the primary checkout: `git checkout <workingBranch> && git pull --rebase && git checkout -b feature/<N>-<description>`
   - Delegated, inside the agent's own worktree (the agent creates the branch, and the primary checkout stays on `<workingBranch>`):
     `git fetch origin && git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>`
   - Delegated on a branch the host named (Claude Code's `isolation: "worktree"` starts the agent on `worktree-agent-<id>`): keep that local branch and push the work to the ticket branch,
-    `git push origin HEAD:feature/<N>-<description>`. `create-pr`, `ready-pr` and `draft-pr` accept it when `origin` holds that branch at the local `HEAD` commit: they find it on their own when it is
-    the only such branch, or take it from `--head feature/<N>-<description>`. A branch pushed but behind `HEAD` is refused, so push again before each of these commands.
+    `git push origin HEAD:feature/<N>-<description>`. `create-pr` accepts it when `origin` holds that branch at the local `HEAD` commit: it finds it on its own when it is the only such branch, or
+    takes it from `--head feature/<N>-<description>`. A branch pushed but behind `HEAD` is refused, so push again before it. `ready-pr` and `draft-pr` off the ticket branch find the ticket's open pull
+    request on GitHub instead (`--pr <number>` picks one of several) and check its head on origin: the session runs them from the primary checkout.
   - **Empty repository** (no commit yet): there is no `workingBranch` to branch from. Run `workflow-cli.sh bootstrap <ticket>` instead: it commits the setup on the main branch, creates `workingBranch`
     and closes this first ticket
 - [ ] **Move ticket to "In Progress"** via `workflow-cli.sh update-status <ticket> "In progress"`
@@ -61,14 +63,19 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - [ ] **Delegated implementation** — name the task kind (`scoped-edit`, `multi-file-feature`, `bug-fix`, `tests`, `prose`) and state the file set, expected result and check in the child body; a child
       that cannot state them is split or kept in the session (SKILL.md → Delegation routing)
 - [ ] **Per normal child:** branch → code → PR → verify merge → `update-status <child> Done`; per bundled child: one atomic commit on the parent's branch → validate → `update-status <child> Done`
-- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build && npm run lint` → `npm test` → push. Child tickets may continue through their own lifecycle.
+- [ ] **Test strategy** — while you work, run the tests the change affects: the related tests of the touched files (the runner's related-tests option, or the project's own selection when it declares
+      one), not the full suites, and not after every iteration. The full suites run once, at the end of AI Testing. After a rebase, rerun the affected tests, not everything, unless the rebase brought
+      changes to shared files (build, configuration, test helpers). The ready pull request's CI stays the final check.
+- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build && npm run lint` → the tests the change affects → commit and push. Child tickets may continue
+      through their own lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have,
+      and names the command to run (a bundled child is checked on its delivery parent's branch)
 
 ## Errors to avoid
 
 - Coding without creating a branch first
 - Mixing multiple tickets in the same branch
 - Moving to AI Testing with lint/build errors
-- Forgetting to push before AI Testing
+- Forgetting to commit or push before AI Testing (the pushed-commits guard refuses the move)
 - Leaving delivered child tickets open, or marking the parent Done before every child is Done
 - Switching mid-delivery to another ticket: one agent per ticket. With delegation `allowed`, another ticket gets its own agent and worktree while this one stays with its agent; otherwise finish this
   one first (unless the developer explicitly asks to pause)

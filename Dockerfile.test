@@ -1,4 +1,4 @@
-ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.59.1-noble@sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
 
 # Use the same Ubuntu/glibc and Node 24 runtime in both stages. Copying
 # node_modules built on Alpine/musl into the Playwright image is not portable,
@@ -64,8 +64,14 @@ RUN npm ci --ignore-scripts \
 COPY --from=cli-builder /cli /cli
 COPY tests/docker/ /workspace/
 
-LABEL org.saasfoundry.playwright.version="1.59.1" \
-  org.saasfoundry.playwright.image="mcr.microsoft.com/playwright:v1.59.1-noble" \
-  org.saasfoundry.playwright.manifest-digest="sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53"
+# Every npm the lifecycle runs, the CLI's own `npm install` included, goes through the lane's
+# wrapper first: fetch retries and timeouts, a per-install budget, and an environment-failure
+# message for a stalled install (#1198). Generated projects ship none of it.
+RUN chmod 0755 /workspace/lifecycle/npm-lane/npm
+ENV PATH="/workspace/lifecycle/npm-lane:${PATH}"
+
+LABEL org.saasfoundry.playwright.version="1.64.0" \
+  org.saasfoundry.playwright.image="mcr.microsoft.com/playwright:v1.64.0-noble" \
+  org.saasfoundry.playwright.manifest-digest="sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f"
 
 ENTRYPOINT ["node", "--import", "tsx", "/workspace/generate-and-build.ts"]

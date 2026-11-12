@@ -1,7 +1,10 @@
 import chalk from 'chalk'
 
+import { describeCliVersion } from '../cli-channel'
+import { CAPTURE_ERROR_WINDOW_DAYS } from '../harness/capture-errors'
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
-import type { StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
+import { localCiGateSummary } from '../local-ci-gate'
+import type { StatusCli, StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
 export interface RenderPayload {
@@ -47,7 +50,36 @@ export function routingSummary(routing: StatusRouting): string {
         .join('; ')}; sf agents routing report, promote or reset)`
     : 'shipped grid and shared overrides, no local adjustment'
   const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry.agent)}`).join('; ')
-  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${guardSummary(routing.guard)}${captureErrorsSummary(routing.captureErrors)}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+}
+
+/**
+ * Whether the PreToolUse hook that refuses an agent's own bypass of a guard is in place for each declared coding
+ * agent (#1106): `; claude-code guard enforced; codex guard declared (...)`. Said for every agent, like the capture
+ * hook: a fail-open hook is acceptable only if its absence is visible.
+ */
+export function guardSummary(guard: StatusRoutingState['guard']): string {
+  if (!guard?.length) return ''
+  return `; ${guard.map((entry) => `${entry.agent} ${GUARD_TEXT[entry.state](entry.agent)}`).join('; ')}`
+}
+
+const GUARD_TEXT: Record<NonNullable<StatusRoutingState['guard']>[number]['state'], (agent: string) => string> = {
+  enforced: () => 'guard enforced',
+  declared: (agent) => `guard declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
+  'declared-not-runnable': () =>
+    'guard hook declared but no CLI can run it (install saasfoundryai-cli in the project, or put saasfoundryai on the PATH): an agent is not stopped from setting an escape hatch',
+  missing: () => 'guard hook missing (run sf agents refresh --scope shared)',
+  'not-enforced': () => 'guard not enforced (the guard hook is for Claude Code and Codex; an agent here is told to ask the developer, nothing stops it)'
+}
+
+/**
+ * The failures the capture hooks logged (#1105), said only when there are some: the host discards a hook's output,
+ * so this is where a capture that went wrong shows. `; 2 capture errors in 7 days, last 2026-11-06: <message>`.
+ */
+export function captureErrorsSummary(errors: StatusRoutingState['captureErrors']): string {
+  if (!errors || errors.count === 0) return ''
+  const last = errors.last ? `, last ${errors.last.at.slice(0, 10)}: ${errors.last.message}` : ''
+  return `; ${errors.count} capture error${errors.count === 1 ? '' : 's'} in ${CAPTURE_ERROR_WINDOW_DAYS} days${last}`
 }
 
 const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (agent: string) => string> = {
@@ -77,6 +109,7 @@ function holdsSummary(holds: StatusRoutingState['holds']): string {
  */
 export function localCiSummary(localCi: StatusLocalCi): string {
   if ('error' in localCi) return `unreadable (${localCi.error})`
+  if (localCi.runner === 'npm') return 'npm suite (.molten/project.json declares no CI job)'
   return `MoltenTerm pipeline (${localCi.jobs} job${localCi.jobs === 1 ? '' : 's'})`
 }
 
@@ -103,6 +136,7 @@ export function renderHuman(payload: RenderPayload): string {
   lines.push('')
   if (report.manifest) {
     lines.push(`${chalk.gray('Project:')} ${report.manifest.projectName} (${report.manifest.structure}) — v${report.manifest.version}`)
+    if (report.cli) lines.push(`${chalk.gray('CLI:')} ${cliSummary(report.cli)}`)
     if (report.capabilities) {
       lines.push(`${chalk.gray('Profile:')} ${report.capabilities.effectiveProfile}`)
       lines.push(`${chalk.gray('Capabilities:')} stack ${report.capabilities.technicalStack}, harness ${report.capabilities.collaborationHarness}`)
@@ -113,6 +147,7 @@ export function renderHuman(payload: RenderPayload): string {
     if (report.routing) lines.push(`${chalk.gray('Routing:')} ${routingSummary(report.routing)}`)
   } else {
     lines.push(chalk.red('Not a SaaSFoundryAI project (no .saasfoundry.json)'))
+    if (report.cli) lines.push(`${chalk.gray('CLI:')} ${cliSummary(report.cli)}`)
   }
   if (report.git.available) {
     const dirty = report.git.isClean === false ? chalk.yellow(' (dirty)') : ''
@@ -121,6 +156,7 @@ export function renderHuman(payload: RenderPayload): string {
     lines.push(`${chalk.gray('Git:')} ${report.git.branch ?? 'detached'}${unborn}${dirty}${tracking}`)
   }
   if (report.localCi) lines.push(`${chalk.gray('local-ci:')} ${localCiSummary(report.localCi)}`)
+  if (report.localCiGate) lines.push(`${chalk.gray('local-ci gate:')} ${localCiGateSummary(report.localCiGate)}`)
   if (report.installedSkills.length > 0) {
     lines.push(`${chalk.gray('Skills:')} ${report.installedSkills.join(', ')}`)
   }
@@ -172,8 +208,14 @@ export function renderJson(payload: RenderPayload): string {
     routing: report.routing ?? null,
     // Additive (#943): the local CI pipeline the project declares in .molten/project.json, null without that file
     localCi: report.localCi ?? null,
+    // Additive (#1104): the commit statuses the local CI gate requires and where that list comes from, null unless the workflow tool is github-projects
+    localCiGate: report.localCiGate ?? null,
+    // Additive (#1103): the CLI that produced the report and, in the CLI's own repository, how its build stands
+    cli: report.cli ?? null,
     git: report.git,
     installedSkills: report.installedSkills,
+    // Additive (#1107): the personal skills set against the project's, null without a manifest
+    personalSkills: report.personalSkills ?? null,
     // Additive: the facts behind the three instruction preconditions (#939)
     instructions: report.instructions ?? null,
     preconditions: preconditions.map((p) => ({
@@ -187,6 +229,19 @@ export function renderJson(payload: RenderPayload): string {
   return JSON.stringify(out, null, 2)
 }
 
+/**
+ * The CLI that produced the report (#1103): its version and where it comes from, so a session sees which CLI
+ * answered. The rules for reading the report are not part of it; they live in the project instructions.
+ */
+export function cliSummary(cli: StatusCli): string {
+  return cli.channel.channel === 'package' ? `${cli.version} (package)` : describeCliVersion(cli.version, cli.channel)
+}
+
+/**
+ * The status report states facts. What an agent does with a `fail`, a `warn` or a `skip` is written once, in the
+ * generated region of the project's `AGENTS.md` (`STATUS_OUTPUT_INSTRUCTIONS`), where it is read with the rest of
+ * the rules: a hook that ends in "you MUST" repeats an order the instructions already give.
+ */
 export function renderAgentFriendly(payload: RenderPayload): string {
   const { report, preconditions } = payload
   const lines: string[] = []
@@ -194,6 +249,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
   lines.push('')
   if (report.manifest) {
     lines.push(`- project: ${report.manifest.projectName} (${report.manifest.structure}, v${report.manifest.version})`)
+    if (report.cli) lines.push(`- cli: ${cliSummary(report.cli)}`)
     if (report.capabilities) {
       lines.push(`- effective profile: ${report.capabilities.effectiveProfile}`)
       lines.push(`- technical stack: ${report.capabilities.technicalStack}`)
@@ -208,12 +264,14 @@ export function renderAgentFriendly(payload: RenderPayload): string {
     lines.push(`- srs: ${srs?.enabled ? `${srs.backend} — ${srs.rootPage?.name ?? 'no root page'}` : 'not installed'}`)
   } else {
     lines.push('- project: NOT a SaaSFoundryAI project (no .saasfoundry.json)')
+    if (report.cli) lines.push(`- cli: ${cliSummary(report.cli)}`)
   }
   if (report.git.available) {
     const state = [report.git.unborn ? 'no commits yet' : null, report.git.isClean === false ? 'dirty' : 'clean'].filter(Boolean).join(', ')
     lines.push(`- git: ${report.git.branch ?? 'detached'} (${state})`)
   }
   if (report.localCi) lines.push(`- local-ci: ${localCiSummary(report.localCi)}`)
+  if (report.localCiGate) lines.push(`- local-ci-gate: ${localCiGateSummary(report.localCiGate)}`)
   if (report.installedSkills.length > 0) {
     lines.push(`- skills: ${report.installedSkills.join(', ')}`)
   }
@@ -229,14 +287,6 @@ export function renderAgentFriendly(payload: RenderPayload): string {
       lines.push(`  - remediation: ${p.remediation}`)
     }
   }
-  lines.push('')
-  lines.push('## How to use this output')
-  lines.push('- Any `fail` precondition means you MUST resolve it before taking project actions; read the remediation.')
-  lines.push('- `warn` preconditions may block specific flows (e.g. workflow transitions, SRS drafters); treat the remediation as required for that flow.')
-  lines.push('- `skip` means the check was not applicable or not requested; do not act on it.')
-  lines.push(
-    '- Write every artefact in the `output language` above — SRS pages, tickets and their comments, code comments, commit messages. The language of the conversation is NOT the signal: a session held in French still produces English artefacts when the project says `en`.'
-  )
   lines.push('')
   return lines.join('\n')
 }

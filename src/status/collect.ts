@@ -2,18 +2,24 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
+import { type CliChannel, isCliSourceRepository } from '../cli-channel'
 import type { ManagedFileState } from '../harness/agent-instructions'
 import { inspectTierAgents } from '../harness/agent-support'
+import { captureErrorWindowStart, readCaptureErrors, type CaptureErrorSummary } from '../harness/capture-errors'
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
 import { captureState, type CaptureProbe, type CaptureState } from '../harness/delegation-hooks'
 import { resolveLedgerDir } from '../harness/delegation-ledger'
+import { guardState, type GuardProbe, type GuardState } from '../harness/guard-hook'
 import { ROUTING_GRID_VERSION, type RoutingOverrides } from '../harness/routing-grid'
 import { emptyLocalRouting, listLocalAdjustments, listLocalHolds, readLocalRouting } from '../harness/routing-local'
+import { type LocalCiGateResult, resolveLocalCiGate } from '../local-ci-gate'
+import { readMoltenCiJobs } from '../molten-pipeline'
 import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
 import type { HarnessAgent, SaaSFoundryManifest } from '../types'
 import { readManifest } from '../utils'
 import { collectInstructionDiagnostics, type InstructionDiagnostics } from './instruction-diagnostics'
+import { collectPersonalSkills, type StatusPersonalSkills } from './personal-skills'
 
 export interface GitInfo {
   available: boolean
@@ -44,6 +50,8 @@ export interface StatusReport {
   tools: ToolAvailability[]
   checkedNetwork: boolean
   installedSkills: string[]
+  /** The personal skills (`~/.claude/skills`) set against the project's (#1107); absent without a manifest. */
+  personalSkills?: StatusPersonalSkills
   /** Derived installation profile. Optional only for callers constructing legacy reports. */
   capabilities?: StatusCapabilities | null
   /**
@@ -59,6 +67,35 @@ export interface StatusReport {
   routing?: StatusRouting
   /** The local CI pipeline the project declares in `.molten/project.json` (#943); absent without that file. */
   localCi?: StatusLocalCi
+  /** The commit statuses the local CI gate requires and where that list comes from (#1104); absent unless the workflow tool is github-projects. */
+  localCiGate?: LocalCiGateResult
+  /** The CLI that produced this report (#1103); absent for a caller that does not say which CLI runs. */
+  cli?: StatusCli
+}
+
+/**
+ * The CLI that runs `sf status`, and what the project's checkout says about it. Nothing here runs a
+ * process: the caller hands in the running version and channel, the rest is read from the file system.
+ */
+export interface StatusCli {
+  /** Version of the running CLI (`package.json`). */
+  version: string
+  channel: CliChannel
+  /** `currentVersion` of the harness installer the running CLI ships: the newest harness it knows how to install. */
+  harnessCurrentVersion?: number
+  /** The project root is the SaaSFoundryAI CLI's own source repository (`isCliSourceRepository`). */
+  sourceRepository: boolean
+  /** Only on the CLI source repository: how `dist/` stands against `src/`. */
+  build?: StatusCliBuild
+}
+
+/** `dist/index.js` against the newest file under `src/` (tests excluded), as modification times. */
+export interface StatusCliBuild {
+  /** Absent when the build is missing. */
+  distMtimeMs?: number
+  newestSourceMtimeMs?: number
+  /** Path of the newest source file, relative to the root. */
+  newestSource?: string
 }
 
 /** The effective consent with both layers, or why it could not be read: status never fails on it. */
@@ -95,15 +132,26 @@ export interface StatusRoutingState {
   /** Kinds the adjustment looked at and left where they are, with the reason (also in the log of the local layer). */
   holds: { kind: string; provider: string; reason: string; since: string }[]
   capture: { agent: string; state: CaptureState }[]
+  /**
+   * Whether the PreToolUse guard hook (#1106), which refuses an agent's own bypass of a guard, is declared for each
+   * declared coding agent and could run. Optional for a caller that builds a report by hand.
+   */
+  guard?: { agent: string; state: GuardState }[]
+  /**
+   * The failures the capture hooks logged in the last 7 days (#1105): a hook that fails leaves no other trace, since
+   * the host discards its output. Optional for a caller that builds a report without reading the log.
+   */
+  captureErrors?: CaptureErrorSummary
 }
 export type StatusRouting = StatusRoutingState | { error: string }
 
 /**
  * The local CI pipeline the project declares (#943): MoltenTerm's `.molten/project.json`, with the number of
- * jobs it runs. Status reads that file only: it never runs `molten` or any project code, and a damaged file
- * is said, not raised.
+ * jobs it runs. A file that declares no job in `ci.jobs` is no pipeline: the npm suite is the heavy validation
+ * (#1155). Status reads that file only: it never runs `molten` or any project code, and a damaged file is said,
+ * not raised.
  */
-export type StatusLocalCi = { runner: 'molten'; jobs: number } | { error: string }
+export type StatusLocalCi = { runner: 'molten'; jobs: number } | { runner: 'npm'; reason: 'no-ci-jobs' } | { error: string }
 
 export interface StatusCapabilities extends ProjectCapabilities {
   reason: string
@@ -117,9 +165,25 @@ export interface DatabaseReachability {
 
 const FULL_PROFILE_PREVIEW = 'sf update --target-profile full --dry-run --json'
 
+/** What the project root adds to the manifest when the profile is described. */
+export interface DescribeCapabilitiesOptions {
+  /** The root is the SaaSFoundryAI CLI's own source repository (`isCliSourceRepository`). */
+  cliSourceRepository?: boolean
+}
+
 /** Turn the shared capability classification into stable, actionable status data. */
-export function describeProjectCapabilities(manifest: SaaSFoundryManifest): StatusCapabilities {
+export function describeProjectCapabilities(manifest: SaaSFoundryManifest, options: DescribeCapabilitiesOptions = {}): StatusCapabilities {
   const classified = classifyProjectCapabilities(manifest)
+
+  // The CLI repository runs the harness it ships and generates no application of its own: a full-profile
+  // preview there would offer to scaffold a stack into the generator.
+  if (options.cliSourceRepository && classified.effectiveProfile === 'harness') {
+    return {
+      ...classified,
+      reason: 'SaaSFoundryAI CLI source repository: it runs the managed harness on itself and has no generated technical stack.',
+      previewCommand: null
+    }
+  }
 
   switch (classified.effectiveProfile) {
     case 'full':
@@ -178,6 +242,18 @@ export interface CollectOptions {
   checkGh?: boolean
   /** Whether the project's CLI can run the capture hook; defaults to asking the CLI it resolves. Injectable for a spec that spawns nothing. */
   captureProbe?: CaptureProbe
+  /** Whether the project's CLI can run the guard hook (#1106); defaults to the capture probe when only that one is injected, otherwise to asking the CLI it resolves. */
+  guardProbe?: GuardProbe
+  /** Version of the running CLI. Without it the report carries no `cli` block, and the CLI preconditions are left out. */
+  cliVersion?: string
+  /** Where the running CLI comes from; defaults to a published package. */
+  cliChannel?: CliChannel
+  /** `currentVersion` of the harness installer the running CLI ships. */
+  harnessCurrentVersion?: number
+  /** The home directory whose `.claude/skills` holds the personal skills; defaults to the current user's (`$HOME`). Injectable for a spec. */
+  userHome?: string
+  /** The clock the capture error window is counted from; defaults to now. Injectable for a spec. */
+  now?: () => Date
 }
 
 function runSafe(cmd: string, cwd: string): string | null {
@@ -304,12 +380,21 @@ function routingOverrides(routing: RoutingOverrides | undefined): StatusRoutingO
   return { kinds, tiers }
 }
 
-async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest | null, declaredAgents: HarnessAgent[] | undefined, probe?: CaptureProbe): Promise<StatusRouting | undefined> {
+async function collectRouting(
+  projectRoot: string,
+  manifest: SaaSFoundryManifest | null,
+  declaredAgents: HarnessAgent[] | undefined,
+  probe?: CaptureProbe,
+  now: () => Date = () => new Date(),
+  guardProbe?: GuardProbe
+): Promise<StatusRouting | undefined> {
   const harness = manifest?.modules?.harness
   if (!manifest || !harness) return undefined
   try {
     const dir = await resolveLedgerDir(projectRoot)
     const local = dir ? await readLocalRouting(dir) : emptyLocalRouting()
+    const since = captureErrorWindowStart(now())
+    const captureErrors = dir ? await readCaptureErrors(dir, { since }) : { count: 0, since: since.toISOString() }
     // The effective declaration (shared and local) when the instruction files let it be read, otherwise what the manifest says.
     const tiers = await inspectTierAgents(projectRoot, manifest, declaredAgents ?? harness.agents ?? ['claude-code'])
     return {
@@ -327,7 +412,9 @@ async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest
         at: adjustment.at
       })),
       holds: listLocalHolds(local).map(({ kind, provider, hold }) => ({ kind, provider, reason: hold.reason, since: hold.since })),
-      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent, probe) })))
+      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent, probe) }))),
+      guard: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await guardState(projectRoot, agent, guardProbe) }))),
+      captureErrors
     }
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }
@@ -336,21 +423,69 @@ async function collectRouting(projectRoot: string, manifest: SaaSFoundryManifest
 
 /** The pipeline MoltenTerm declares for the project (#943), counted from its file; undefined when there is no file. */
 function collectLocalCi(projectRoot: string): StatusLocalCi | undefined {
-  const file = path.join(projectRoot, '.molten', 'project.json')
-  if (!fs.existsSync(file)) return undefined
   try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
-    const ci = isRecord(parsed) ? parsed.ci : undefined
-    return { runner: 'molten', jobs: isRecord(ci) && Array.isArray(ci.jobs) ? ci.jobs.length : 0 }
+    const jobs = readMoltenCiJobs(projectRoot)
+    if (jobs === undefined) return undefined
+    // A pipeline with no job is not a local CI (#1155): the heavy validation falls back to the npm suite.
+    return jobs.length > 0 ? { runner: 'molten', jobs: jobs.length } : { runner: 'npm', reason: 'no-ci-jobs' }
   } catch (error) {
     return { error: `.molten/project.json: ${error instanceof Error ? error.message : String(error)}` }
+  }
+}
+
+/** The newest modification time under `dir`, tests excluded: what a build of the sources has to be newer than. */
+function newestSourceFile(root: string, dir: string): { mtimeMs: number; file: string } | undefined {
+  let newest: { mtimeMs: number; file: string } | undefined
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return undefined
+  }
+  for (const entry of entries) {
+    if (entry.name === '__tests__' || entry.name === 'node_modules') continue
+    const full = path.join(dir, entry.name)
+    const candidate = entry.isDirectory() ? newestSourceFile(root, full) : entry.isFile() ? statMtime(root, full) : undefined
+    if (candidate && (!newest || candidate.mtimeMs > newest.mtimeMs)) newest = candidate
+  }
+  return newest
+}
+
+function statMtime(root: string, file: string): { mtimeMs: number; file: string } | undefined {
+  try {
+    return { mtimeMs: fs.statSync(file).mtimeMs, file: path.relative(root, file) }
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The CLI that produced the report (#1103), and for the CLI's own repository how its build stands: `bin/sf.js`
+ * runs `dist/`, which nothing rebuilds after a pull. Modification times, not commit times: they catch a pull, a
+ * checkout and a local edit, and do not warn after a build that was committed afterwards.
+ */
+function collectCli(projectRoot: string, options: CollectOptions): StatusCli | undefined {
+  if (options.cliVersion === undefined) return undefined
+  const sourceRepository = isCliSourceRepository(projectRoot)
+  let build: StatusCliBuild | undefined
+  if (sourceRepository) {
+    const dist = statMtime(projectRoot, path.join(projectRoot, 'dist', 'index.js'))
+    const source = newestSourceFile(projectRoot, path.join(projectRoot, 'src'))
+    build = { ...(dist ? { distMtimeMs: dist.mtimeMs } : {}), ...(source ? { newestSourceMtimeMs: source.mtimeMs, newestSource: source.file } : {}) }
+  }
+  return {
+    version: options.cliVersion,
+    channel: options.cliChannel ?? { channel: 'package' },
+    ...(options.harnessCurrentVersion !== undefined ? { harnessCurrentVersion: options.harnessCurrentVersion } : {}),
+    sourceRepository,
+    ...(build ? { build } : {})
   }
 }
 
 export async function collectStatus(projectRoot: string, options: CollectOptions = {}): Promise<StatusReport> {
   const manifest = await readManifest(projectRoot)
   const manifestPath = path.join(projectRoot, '.saasfoundry.json')
-  const capabilities = manifest ? describeProjectCapabilities(manifest) : null
+  const capabilities = manifest ? describeProjectCapabilities(manifest, { cliSourceRepository: isCliSourceRepository(projectRoot) }) : null
 
   const git = collectGit(projectRoot)
   const apps = appPaths(manifest)
@@ -360,9 +495,13 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
   if (options.checkGh) tools.push(checkTool('gh', 'gh --version', projectRoot))
 
   const installedSkills = collectInstalledSkills(projectRoot, manifest)
+  const personalSkills = collectPersonalSkills(projectRoot, manifest, options.userHome)
   const delegation = await collectDelegation(projectRoot, manifest)
-  const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe)
+  const routing = await collectRouting(projectRoot, manifest, instructions.agents, options.captureProbe, options.now, options.guardProbe ?? options.captureProbe)
   const localCi = collectLocalCi(projectRoot)
+  // The gate is applied by the github-projects tool's pull request commands only
+  const localCiGate = manifest?.workflow?.tool === 'github-projects' ? resolveLocalCiGate(projectRoot, manifest) : undefined
+  const cli = collectCli(projectRoot, options)
 
   // Only asked when the project hosts a database and the network may be touched. On
   // `--no-network` the answer stays absent rather than becoming a guess.
@@ -381,11 +520,14 @@ export async function collectStatus(projectRoot: string, options: CollectOptions
     tools,
     checkedNetwork: options.checkNetwork === true,
     installedSkills,
+    ...(personalSkills ? { personalSkills } : {}),
     capabilities,
     instructions,
     ...(delegation ? { delegation } : {}),
     ...(routing ? { routing } : {}),
     ...(localCi ? { localCi } : {}),
+    ...(localCiGate ? { localCiGate } : {}),
+    ...(cli ? { cli } : {}),
     ...(database ? { database } : {})
   }
 }

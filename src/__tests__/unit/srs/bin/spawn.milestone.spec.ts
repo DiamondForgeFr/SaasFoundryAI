@@ -75,7 +75,7 @@ function makeIO(overrides?: Partial<SpawnIO>): TestIO {
       createEpic: jest.fn(() => ({ epicNumber: String(nextNumber++) })),
       inspectTickets: jest.fn(() => []),
       linkSubtask: jest.fn(() => undefined),
-      addToProject: jest.fn(() => undefined),
+      addToProject: jest.fn(() => ({ action: 'added' as const, status: 'Backlog' })),
       ensureMilestone: jest.fn(() => ({ created: true })),
       assignMilestone: jest.fn(() => undefined),
       associateMilestone: jest.fn(() => undefined),

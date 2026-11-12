@@ -2,10 +2,12 @@ import fs from 'fs'
 import path from 'path'
 
 import type { HarnessAgent } from '../harness/agent-registry'
+import { CAPTURE_ERROR_WINDOW_DAYS } from '../harness/capture-errors'
 import { BOOTSTRAP_COMMAND } from '../installers/harness-provisioning'
 import { boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { appPaths, type StatusReport } from './collect'
-import { CODEX_INSTRUCTION_LIMIT, compareVersions, MIN_CLAUDE_CODE_VERSION } from './instruction-diagnostics'
+import { CODEX_INSTRUCTION_LIMIT, compareCliVersions, compareVersions, MIN_CLAUDE_CODE_VERSION } from './instruction-diagnostics'
+import { checkPersonalSkills } from './personal-skills'
 
 export type PreconditionStatus = 'ok' | 'warn' | 'fail' | 'skip'
 
@@ -302,18 +304,46 @@ function checkClaudeCodeVersion(report: StatusReport): Precondition {
 
 function checkCodexInstructionSize(report: StatusReport): Precondition {
   const name = 'codexInstructionSize'
-  const description = `AGENTS.md fits Codex's ${CODEX_INSTRUCTION_LIMIT / 1024} KiB limit`
+  // The limit `.codex/config.toml` sets, once `sf update` or `sf agents refresh` raised it (#1154), or Codex's default.
+  const configured = report.instructions?.codexLimit
+  const limit = configured ?? CODEX_INSTRUCTION_LIMIT
+  const description = configured === undefined ? `AGENTS.md fits Codex's ${limit / 1024} KiB limit` : `AGENTS.md fits Codex's project_doc_max_bytes (${limit} bytes, .codex/config.toml)`
   const skipped = agentNotDeclared(name, description, report, 'codex')
   if (skipped) return skipped
   const sizes = report.instructions?.codexSizes ?? []
-  const over = sizes.filter((size) => size.bytes > CODEX_INSTRUCTION_LIMIT)
-  if (over.length === 0) return { name, description, status: 'ok', details: sizes.map((size) => `${size.directory}: ${size.bytes} bytes`).join(', ') || 'No AGENTS.md' }
+  const over = sizes.filter((size) => size.bytes > limit)
+  if (over.length === 0) {
+    const measured = sizes.map((size) => `${size.directory}: ${size.bytes} bytes`).join(', ') || 'No AGENTS.md'
+    // Codex reads a project's `.codex/config.toml` only once it trusts the project.
+    return { name, description, status: 'ok', details: configured === undefined ? measured : `${measured} (applies once Codex trusts the project)` }
+  }
   return {
     name,
     description,
     status: 'warn',
-    details: `Codex cuts what it loads past ${CODEX_INSTRUCTION_LIMIT} bytes: ${over.map((size) => `${size.directory} loads ${size.bytes} bytes (${size.files.join(' + ')})`).join('; ')}`,
-    remediation: 'Move detail out of AGENTS.md and its imports into docs or skills it names, or raise `project_doc_max_bytes` in `.codex/config.toml`.'
+    details: `Codex cuts what it loads past ${limit} bytes: ${over.map((size) => `${size.directory} loads ${size.bytes} bytes (${size.files.join(' + ')})`).join('; ')}`,
+    remediation: 'Run `sf agents refresh` (or `sf update`) to raise `project_doc_max_bytes` in `.codex/config.toml`, or move detail out of AGENTS.md and its imports into docs or skills it names.'
+  }
+}
+
+/** A reference that names a CLAUDE.md the project does not hold: the file the v3 → v4 migration deleted (#1152). Listed up to this many. */
+const STALE_REFERENCES_SHOWN = 5
+
+function checkInstructionReferences(report: StatusReport): Precondition {
+  const name = 'instructionReferences'
+  const description = 'AGENTS.md names no CLAUDE.md that is missing'
+  const stale = report.instructions?.staleReferences
+  if (!stale) return { name, description, status: 'skip', details: 'No instruction file or agent declaration to diagnose' }
+  if (stale.length === 0) return { name, description, status: 'ok' }
+  const shown = stale.slice(0, STALE_REFERENCES_SHOWN).map((reference) => `${reference.file}:${reference.line} names ${reference.reference}`)
+  const more = stale.length > shown.length ? `, and ${stale.length - shown.length} more` : ''
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: `${shown.join('; ')}${more}: ${stale.length === 1 ? 'that file does not' : 'those files do not'} exist`,
+    remediation:
+      'Point each mention at the AGENTS.md that replaced the file, or delete it. `sf update` does this for the sections it moves out of a CLAUDE.md; a project already migrated by an earlier release is edited by hand.'
   }
 }
 
@@ -353,8 +383,131 @@ function checkTierAgents(report: StatusReport): Precondition {
   return { name, description, status: 'warn', details: off.map((agent) => `${agent.path} ${agent.state}`).join('; '), remediation: remediation.join(' ') }
 }
 
+/**
+ * Guard hook — whether the PreToolUse hook that refuses an agent's own bypass of a guard is in place (#1106). The
+ * hook fails open by design, so its absence must not be silent: a project whose hook is missing, or declared but with
+ * no CLI that can run it, lets an agent set an escape hatch or label its own ticket. A `warn`: the guards of the
+ * workflow scripts still refuse, it is the agent's way round them that is no longer stopped. Codex runs a project
+ * hook only once it is trusted, which nothing here can see: `declared` is an `ok`, said as such on the `routing:` line.
+ */
+function checkGuardHook(report: StatusReport): Precondition {
+  const name = 'guardHook'
+  const description = 'Guard hook stops an agent from bypassing a guard'
+  const routing = report.routing
+  if (!routing) return { name, description, status: 'skip', details: 'No managed harness' }
+  if ('error' in routing) return { name, description, status: 'skip', details: 'The routing could not be read' }
+  const guard = routing.guard
+  if (!guard?.length) return { name, description, status: 'skip', details: 'The guard hook was not read' }
+  const off = guard.filter((entry) => entry.state === 'missing' || entry.state === 'declared-not-runnable')
+  if (off.length === 0) return { name, description, status: 'ok', details: guard.map((entry) => `${entry.agent} ${entry.state}`).join('; ') }
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: off.map((entry) => `${entry.agent} guard hook ${entry.state === 'missing' ? 'missing' : 'declared but no CLI can run it'}`).join('; '),
+    remediation:
+      'Run `sf agents refresh --scope shared` to add the PreToolUse guard hook, and make sure the project resolves a CLI that has `sf agents guard` (saasfoundryai-cli installed in the project, or saasfoundryai on the PATH). Until then an agent is told to ask the developer for an escape hatch, but nothing refuses it when it sets one.'
+  }
+}
+
+/**
+ * Capture errors — whether the hooks that record every delegation have failed lately (#1105). The host discards a
+ * hook's output and the hook always exits 0, so a payload that could not be read, a ledger that could not be written
+ * or a routing adjustment that was skipped left no trace, and the routing learned from fewer outcomes. The capture now
+ * logs each failure in the Git directory of the clone; this counts the last 7 days, so an old failure does not warn
+ * for ever. A `warn`, not a `fail`: a delegation still runs, it is the measure that is lost.
+ */
+function checkCaptureErrors(report: StatusReport): Precondition {
+  const name = 'captureErrors'
+  const description = 'Delegation capture records every run'
+  const routing = report.routing
+  if (!routing) return { name, description, status: 'skip', details: 'No managed harness' }
+  if ('error' in routing) return { name, description, status: 'skip', details: 'The routing could not be read' }
+  const errors = routing.captureErrors
+  if (!errors) return { name, description, status: 'skip', details: 'The capture error log was not read' }
+  if (errors.count === 0) return { name, description, status: 'ok', details: `No capture error in the last ${CAPTURE_ERROR_WINDOW_DAYS} days` }
+  const last = errors.last ? `; last ${errors.last.at} (${errors.last.stage}): ${errors.last.message}` : ''
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: `${errors.count} capture error${errors.count === 1 ? '' : 's'} in the last ${CAPTURE_ERROR_WINDOW_DAYS} days${last}`,
+    remediation:
+      'The hooks that record delegations failed, so those delegations are missing from the ledger the routing learns from. The errors are in capture-errors.jsonl, in the Git directory of the clone (the saasfoundry folder next to delegations.jsonl). Fix the cause the last error names, then run `sf agents routing report` to see what was recorded; `sf agents refresh --scope shared` replaces an outdated hook.'
+  }
+}
+
+/**
+ * Whether the CLI that produced the report is at least as new as what last wrote the project (#1103). A
+ * project records the CLI version that last updated it (`version`) and the harness version it installed
+ * (`modules.harness.version`); a CLI older than either reads a layout it predates, and its report can lack
+ * lines the project's instructions rely on (`delegation:`, `routing:`). Left out when the caller did not say
+ * which CLI runs. Nothing here runs a process.
+ */
+function checkCliVersion(report: StatusReport): Precondition | undefined {
+  const cli = report.cli
+  if (!cli) return undefined
+  const name = 'cliVersion'
+  const description = "SaaSFoundryAI CLI is not older than the project's harness"
+  if (!report.manifest) return { name, description, status: 'skip', details: 'No manifest' }
+
+  const where = cli.channel.channel === 'package' ? 'package' : `development checkout: ${cli.channel.path}${cli.channel.commit ? ` @ ${cli.channel.commit}` : ''}`
+  const problems: string[] = []
+  const comparison = compareCliVersions(cli.version, report.manifest.version)
+  if (comparison !== undefined && comparison < 0) problems.push(`CLI ${cli.version} is older than ${report.manifest.version}, the version that last updated this project`)
+  const projectHarness = report.manifest.modules?.harness?.version
+  if (cli.harnessCurrentVersion !== undefined && projectHarness !== undefined && projectHarness > cli.harnessCurrentVersion) {
+    problems.push(`the project's harness is v${projectHarness} and this CLI installs v${cli.harnessCurrentVersion}`)
+  }
+
+  if (problems.length === 0) {
+    const noted = comparison === undefined ? `; ${cli.version} and ${report.manifest.version} could not be compared` : ''
+    return { name, description, status: 'ok', details: `CLI ${cli.version}; project last updated by ${report.manifest.version}${noted}` }
+  }
+  return {
+    name,
+    description,
+    status: 'warn',
+    details: `${problems.join('; ')} (running ${cli.version}, ${where})`,
+    remediation:
+      cli.channel.channel === 'package'
+        ? `Run \`npm install -D saasfoundryai-cli@${report.manifest.version}\` in the project (or \`npm install -g saasfoundryai-cli@latest\`): the project's own node_modules/.bin/saasfoundryai is the first CLI the session-start hook runs.`
+        : `Update the checkout at ${cli.channel.path} (git pull) and run \`npm run build\` there.`
+  }
+}
+
+/**
+ * Whether `dist/` is as new as `src/` in the CLI's own repository (#1103). `bin/sf.js` runs `dist/index.js`, which
+ * nothing rebuilds after a pull, so the CLI the session-start hook resolves there can predate the sources it sits
+ * next to. Left out anywhere else. Compares modification times that `collectStatus` read: nothing here touches the disk.
+ */
+function checkCliBuild(report: StatusReport): Precondition | undefined {
+  const cli = report.cli
+  if (!cli?.sourceRepository || !cli.build) return undefined
+  const name = 'cliBuild'
+  const description = 'CLI build is newer than its sources'
+  const { distMtimeMs, newestSourceMtimeMs, newestSource } = cli.build
+  const remediation = 'Run `npm run build`.'
+  if (distMtimeMs === undefined) {
+    return { name, description, status: 'warn', details: 'dist/index.js is missing: bin/sf.js cannot run, and the session-start hook falls back to the saasfoundryai on the PATH', remediation }
+  }
+  if (newestSourceMtimeMs !== undefined && newestSourceMtimeMs > distMtimeMs) {
+    return {
+      name,
+      description,
+      status: 'warn',
+      details: `${newestSource ?? 'a file under src/'} changed ${new Date(newestSourceMtimeMs).toISOString()}, after dist/index.js was built ${new Date(distMtimeMs).toISOString()}: bin/sf.js runs the older build`,
+      remediation
+    }
+  }
+  return { name, description, status: 'ok', details: `dist/index.js built ${new Date(distMtimeMs).toISOString()}` }
+}
+
 export function evaluatePreconditions(report: StatusReport): Precondition[] {
   const ghRepository = checkGhRepository(report)
+  const cliVersion = checkCliVersion(report)
+  const cliBuild = checkCliBuild(report)
+  const personalSkills = checkPersonalSkills(report)
   return [
     checkManifest(report),
     checkWorkflow(report),
@@ -362,10 +515,16 @@ export function evaluatePreconditions(report: StatusReport): Precondition[] {
     checkGit(report),
     ...(ghRepository ? [ghRepository] : []),
     checkGh(report),
+    ...(cliVersion ? [cliVersion] : []),
+    ...(cliBuild ? [cliBuild] : []),
     checkInstructionShadowing(report),
     checkClaudeCodeVersion(report),
     checkCodexInstructionSize(report),
+    checkInstructionReferences(report),
     checkTierAgents(report),
+    ...(personalSkills ? [personalSkills] : []),
+    checkGuardHook(report),
+    checkCaptureErrors(report),
     checkDependencies(report),
     checkDatabase(report),
     checkOrmClient(report)
