@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Generated API: an account administrator can again create an `ENTITY` role granting sections that exist only on the entity (a project's vision, its tickets). An `ENTITY` role assigned nowhere is
+  checked against what its entity type allows, the grants of the `ENTITY` system roles, instead of the account; nothing beyond them is granted, and entity administrators still grant only what they
+  hold. Changes behaviour for creating an `ENTITY` role, and editing one assigned nowhere, as the account administrator; see the RBAC page
+  ([#1230](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1230)).
+
 ## [1.2.0] - 2026-11-12
 
 A reliability and security release. Generated applications enforce access more strictly: a deactivated user loses API access at once, and a role only grants rights where it is scoped. The workflow now

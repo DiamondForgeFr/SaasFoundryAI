@@ -103,6 +103,12 @@ Deux règles s'ajoutent pour tous ceux qui ne sont pas la plateforme :
 
 - **Personne n'accorde ce qu'il ne détient pas.** Chaque permission ou section qu'une requête ajoute à un rôle doit être détenue par l'appelant là où le rôle s'applique ; renvoyer ce que le rôle a
   déjà, ou lui retirer quelque chose, ne demande rien de plus. Un utilisateur qui détient un rôle personnalisé ne peut pas l'étendre pour dépasser celui qui l'a rédigé.
+- **Un rôle `ENTITY` attribué nulle part se façonne pour son type d'entité.** Les sections qui n'existent que sur une entité (la vision d'un projet, ses tickets) ne sont jamais détenues sur le compte
+  : l'administrateur du compte peut donc aussi accorder à un tel rôle ce que le type d'entité permet, c'est-à-dire ce qu'accordent les rôles système `ENTITY` actifs (`entity-admin`, `entity-user`, et
+  ceux qu'un projet ajoute pour ses propres types, comme un `project-owner`). Cet administrateur peut déjà attribuer ces rôles système dans toute entité du compte : personne ne dépasse celui qui l'a
+  rédigé. Rien au-delà n'est accordé, un administrateur d'entité n'accorde toujours que ce qu'il détient, et une fois le rôle attribué, chaque modification est de nouveau contrôlée dans chaque entité
+  où il sert. Les rôles du modèle ne portent pas de type d'entité, donc tous les rôles système `ENTITY` comptent ; un projet qui type ses rôles d'entité restreint `loadEntityTypeGrants` dans
+  `account.service.ts` aux rôles système du type du rôle.
 - **Aucun rôle de compte ou d'entité ne porte une section de plateforme.** Une section de `PLATFORM_ADMINISTRATION` est refusée sur un rôle `ACCOUNT` ou `ENTITY`, quel que soit le demandeur,
   plateforme comprise.
 
@@ -142,6 +148,23 @@ de « Qui peut modifier un rôle » ci-dessus. Le correctif touche `account.serv
 `service-mocks.ts`), fusionnés par `sf update` de la même façon ; aucune migration de module n'est nécessaire, car aucun fichier n'est renommé, découpé ni ajouté. Si vous appelez vous-même
 `getPermissionChecker` ou `ScopedPermissionChecker`, le nouveau troisième argument est facultatif. Un appelant hors plateforme qui touche un rôle système, ou un administrateur d'entité qui crée un
 rôle `ACCOUNT`, reçoit désormais `403` là où il recevait `401`.
+
+:::
+
+::: tip Mettre à jour un projet généré en 1.2.0
+
+En 1.2.0, la règle « personne n'accorde ce qu'il ne détient pas » contrôlait un rôle `ENTITY` attribué nulle part contre le compte. Un administrateur de compte ne pouvait plus créer, ni étendre, un
+rôle de type d'entité accordant des sections qui n'existent que sur l'entité : `403 You cannot grant what you do not hold where this role applies`. La 1.2.1 contrôle un tel rôle contre ce que le type
+d'entité permet (voir « Qui peut modifier un rôle » ci-dessus). Le correctif touche `account.service.ts`, fusionné par `sf update` comme celui de la 1.1.1 ; aucune migration de module n'est
+nécessaire.
+
+Les parcours de rédaction de rôle qui changent de comportement :
+
+- **Créer un rôle `ENTITY`** (`POST /accounts/:id/roles`) en tant qu'administrateur du compte : les sections et permissions accordées par les rôles système `ENTITY` sont acceptées (`403` avant).
+- **Modifier un rôle `ENTITY` attribué nulle part** (`PATCH /accounts/roles/:roleId`) en tant qu'administrateur du compte : les mêmes droits peuvent être ajoutés.
+
+Inchangés : les rôles `ACCOUNT`, les rôles `ENTITY` déjà attribués dans une entité, les administrateurs d'entité et la plateforme. Un droit qu'aucun rôle système `ENTITY` ne porte, et que l'auteur ne
+détient pas, reste refusé. Si votre projet type ses rôles d'entité, restreignez `loadEntityTypeGrants` aux rôles système du type du rôle lors de la fusion.
 
 :::
 
