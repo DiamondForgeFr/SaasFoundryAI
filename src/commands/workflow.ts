@@ -23,7 +23,7 @@ import { assertBoardUrl, boardRemediation, isMissingBoard } from '../utils/workf
 import { getRemoteUrl } from '../utils/git-info'
 import { AGENT_LOCAL_CI_CONTEXT, localCiGateSummary, moltenPublishesToGithub, moltenStatusContexts, resolveLocalCiGate } from '../local-ci-gate'
 import { MOLTEN_PROJECT_FILE } from '../molten-pipeline'
-import type { SaaSFoundryManifest, WorkflowTemplate } from '../types'
+import type { SaaSFoundryManifest, WorkflowStatus, WorkflowTemplate } from '../types'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
 const HISTORY_FILE = path.join(WORKFLOWS_DIR, '.history.json')
@@ -266,25 +266,11 @@ async function useTemplate(manifest: SaaSFoundryManifest, args: string[]) {
   }
 
   const projectUrl = await resolveUseBoard(manifest, template, options)
-
-  // Apply template to project
-  const workflow: NonNullable<SaaSFoundryManifest['workflow']> = {
-    template: template.name ?? templateName,
-    tool: template.tool,
-    projectUrl,
-    workingBranch: template.workingBranch,
-    prTargetBranch: template.prTargetBranch,
-    requireCodeReview: template.requireCodeReview,
-    statuses: template.statuses,
-    issueTypes: template.issueTypes,
-    branchNaming: template.branchNaming,
-    commitFormat: template.commitFormat,
-    validated: false
-  }
+  const appliedTemplate = template
 
   const appliedManifest = await mutateProjectManifestSafe(process.cwd(), (current) => {
-    current.workflow = workflow
-    current.aiRules = template.aiRules
+    current.workflow = workflowAfterUse(current.workflow, appliedTemplate, templateName, projectUrl)
+    if (appliedTemplate.aiRules !== undefined) current.aiRules = appliedTemplate.aiRules
   })
   await updateWorkflowHistory(templateName)
 
@@ -306,6 +292,46 @@ async function useTemplate(manifest: SaaSFoundryManifest, args: string[]) {
     console.log(chalk.yellow(`⚠️  No ${appliedManifest.workflow.tool} board attached: the workflow scripts refuse ticket commands until one is.`))
     console.log(chalk.gray(`   ${boardRemediation(appliedManifest.workflow)}\n`))
   }
+}
+
+type ManifestWorkflow = NonNullable<SaaSFoundryManifest['workflow']>
+
+/**
+ * The `workflow` block `sf workflow use` writes (#1233): the project's current block, with only what the template
+ * sets replaced. Every template sets its name, its status set and its issue types, and the switch resets
+ * `validated`; a saved template also sets the tool and the branch, review and commit conventions it recorded. Every
+ * other field the project declares (`releaseBranch`, `localCi`, and any field added later) survives by construction,
+ * which a list of copied fields could not promise.
+ */
+export function workflowAfterUse(current: ManifestWorkflow | undefined, template: WorkflowTemplate, templateName: string, projectUrl: string | undefined): ManifestWorkflow {
+  const conventions: Partial<ManifestWorkflow> = {}
+  for (const key of ['workingBranch', 'prTargetBranch', 'requireCodeReview', 'branchNaming', 'commitFormat'] as const) {
+    if (template[key] !== undefined) Object.assign(conventions, { [key]: template[key] })
+  }
+  return {
+    ...current,
+    ...conventions,
+    tool: template.tool,
+    projectUrl,
+    template: template.name ?? templateName,
+    statuses: template.statuses && keepStatusSpelling(template.statuses, current?.statuses),
+    issueTypes: template.issueTypes,
+    validated: false
+  }
+}
+
+/**
+ * A status the project already names, compared without case, keeps the project's spelling (`In progress` stays
+ * `In progress` when the preset says `In Progress`). The board keeps its own option too
+ * (`updateGitHubProjectStatuses` matches without case), and the workflow scripts lower-case every status they
+ * compare, so either spelling works; keeping the project's one leaves the manifest, the regenerated docs and the
+ * board naming a status the same way.
+ */
+function keepStatusSpelling(statuses: WorkflowStatus[], currentStatuses: WorkflowStatus[] | undefined): WorkflowStatus[] {
+  return statuses.map((status) => {
+    const existing = currentStatuses?.find((candidate) => candidate.name.toLowerCase() === status.name.toLowerCase())
+    return existing ? { ...status, name: existing.name } : status
+  })
 }
 
 /**

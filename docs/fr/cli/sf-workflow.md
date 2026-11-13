@@ -78,6 +78,22 @@ statuts, mais la v1 ne génère ni documents complets ni garde-fous arbitraires 
 
 `sf workflow validate` contrôle les champs locaux du manifeste en v1 ; il ne compare pas le board distant configuré.
 
+### Changer de modèle (`use`)
+
+`sf workflow use solo` et `sf workflow use saasfoundry` font passer un projet d'un preset intégré à l'autre, sur place. Le changement part du bloc `workflow` actuel du projet et ne remplace que :
+
+- `template`, `statuses` et `issueTypes`, repris du preset ;
+- `validated`, remis à `false` ;
+- `projectUrl`, quand `--project-url` ou `--create-board` rattache un autre board, ou quand l'outil change.
+
+Tous les autres champs que le projet déclare sont conservés, en particulier `workingBranch`, `prTargetBranch`, `releaseBranch`, `localCi.requiredStatuses`, `requireCodeReview`, `branchNaming` et
+`commitFormat`. Un modèle enregistré (`sf workflow save`) remplace aussi l'outil et les conventions de branche, de revue et de commit qu'il contient ; il ne retire jamais un champ qu'il ne porte pas.
+
+Un statut que le projet nomme déjà avec une autre casse garde l'orthographe du projet : un board dont les options s'écrivent `In progress`, `AI testing` et `In review` les garde, et le manifeste
+aussi, bien que les presets les écrivent `In Progress`, `AI Testing` et `In Review`. Les noms de statuts se comparent partout sans tenir compte de la casse : la mise à jour du board compare ses
+options ainsi, et `update-status` passe la cible en minuscules avant chaque garde-fou et trouve l'option du board sans tenir compte de la casse : les deux orthographes déplacent un ticket de la même
+façon.
+
 ### Garde-fou de CI locale (`set-local-ci`)
 
 Avec GitHub Projects, une pull request ouverte pour la revue (`create-pr` sans `--draft`), marquée prête (`ready-pr`) ou passée en Human testing exige que les statuts de CI locale du projet soient
