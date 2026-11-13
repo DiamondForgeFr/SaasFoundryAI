@@ -6,13 +6,6 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Non publié]
 
-### Corrigé
-
-- API générée : un administrateur de compte peut de nouveau créer un rôle `ENTITY` accordant des sections qui n'existent que sur l'entité (la vision d'un projet, ses tickets). Un rôle `ENTITY`
-  attribué nulle part est contrôlé contre ce que son type d'entité permet, les droits des rôles système `ENTITY`, et non plus contre le compte ; rien au-delà n'est accordé, et les administrateurs
-  d'entité n'accordent toujours que ce qu'ils détiennent. Change le comportement de la création d'un rôle `ENTITY`, et de la modification d'un rôle attribué nulle part, par l'administrateur du compte
-  ; voir la page RBAC ([#1230](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1230)).
-
 ## [1.2.0] - 2026-11-12
 
 Version de fiabilité et de sécurité. Les applications générées contrôlent l'accès plus strictement : un utilisateur désactivé perd aussitôt l'accès à l'API, et un rôle ne donne de droits que là où il
