@@ -1,9 +1,10 @@
 import { execFile } from 'child_process'
 import { constants } from 'fs'
 import { access, lstat, readFile } from 'fs/promises'
-import { delimiter, join } from 'path'
+import { join } from 'path'
 
 import type { HarnessAgent } from './agent-registry'
+import { hookCliLabel, hookNoteFunction, hookPathDirs, normalizeProbe, olderThan, readHookCliVersion, type HookCli, type HookCliProbeResult } from './hook-cli'
 import type { ClaudeHooksConfig } from '../utils/claude-settings'
 
 /**
@@ -22,7 +23,9 @@ import type { ClaudeHooksConfig } from '../utils/claude-settings'
  * 3. exits 0 whatever happens, and lets only the CLI's **stdout** reach the host (#1105): a stop of a delegate
  *    that left out its `SF-DELEGATION` line is answered with one JSON object (`{"decision":"block",...}`) that
  *    keeps the agent running. Anything else the capture has to say goes to the capture error log, which
- *    `sf status` reports, so stderr is discarded: a hook must never break the agent it observes.
+ *    `sf status` reports, so stderr is discarded: a hook must never break the agent it observes;
+ * 4. when the CLI it reached exits non-zero (an older release with no `agents outcome capture`; a current one
+ *    always exits 0), writes that to the capture error log itself, stage `cli`, instead of exiting silently (#1228).
  */
 export type CaptureHost = 'claude-code' | 'codex'
 
@@ -30,7 +33,8 @@ const CAPTURE_SCRIPT = [
   'p=$(cat)',
   'case "$p" in *sf-*) ;; *) exit 0;; esac',
   'd="${CLAUDE_PROJECT_DIR:-.}"',
-  'run() { printf %s "$p" | "$@" agents outcome capture --host @HOST@ 2>/dev/null; exit 0; }',
+  hookNoteFunction('agents outcome capture', 'capture'),
+  'run() { printf %s "$p" | "$@" agents outcome capture --host @HOST@ 2>/dev/null || note "$*" $?; exit 0; }',
   'for c in "$d/node_modules/.bin/saasfoundryai" "$d/node_modules/.bin/sf"; do [ -x "$c" ] && run "$c"; done',
   '[ -f "$d/bin/sf.js" ] && grep -q \'"name": "saasfoundryai-cli"\' "$d/package.json" 2>/dev/null && run node "$d/bin/sf.js"',
   'command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai',
@@ -38,7 +42,7 @@ const CAPTURE_SCRIPT = [
 ].join('; ')
 
 /** The command a host hook runs to capture a delegation. */
-export const captureCommand = (host: CaptureHost): string => CAPTURE_SCRIPT.replace('@HOST@', host)
+export const captureCommand = (host: CaptureHost): string => CAPTURE_SCRIPT.replace(/@HOST@/g, host)
 
 export const CLAUDE_CAPTURE_COMMAND = captureCommand('claude-code')
 export const CODEX_CAPTURE_COMMAND = captureCommand('codex')
@@ -59,10 +63,20 @@ export const V1_1_0_CAPTURE_COMMANDS: readonly string[] = [
 ]
 
 /**
- * A capture command an earlier release wrote and a refresh replaces: the first build's bare `sf`, and the v1.1.0
- * shell line (#1105). A hand-edited copy of either is the project's own and is left.
+ * The capture commands v1.2.0 shipped (#1228), literals for the same reason as v1.1.0's: they exited silently when
+ * the CLI they reached had no `agents outcome capture`. The golden spec pastes both from the v1.2.0 tag.
  */
-export const isLegacyCaptureCommand = (command: unknown): boolean => typeof command === 'string' && (LEGACY_CAPTURE_COMMAND.test(command) || V1_1_0_CAPTURE_COMMANDS.includes(command))
+export const V1_2_0_CAPTURE_COMMANDS: readonly string[] = [
+  'p=$(cat); case "$p" in *sf-*) ;; *) exit 0;; esac; d="${CLAUDE_PROJECT_DIR:-.}"; run() { printf %s "$p" | "$@" agents outcome capture --host claude-code 2>/dev/null; exit 0; }; for c in "$d/node_modules/.bin/saasfoundryai" "$d/node_modules/.bin/sf"; do [ -x "$c" ] && run "$c"; done; [ -f "$d/bin/sf.js" ] && grep -q \'"name": "saasfoundryai-cli"\' "$d/package.json" 2>/dev/null && run node "$d/bin/sf.js"; command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai; exit 0',
+  'p=$(cat); case "$p" in *sf-*) ;; *) exit 0;; esac; d="${CLAUDE_PROJECT_DIR:-.}"; run() { printf %s "$p" | "$@" agents outcome capture --host codex 2>/dev/null; exit 0; }; for c in "$d/node_modules/.bin/saasfoundryai" "$d/node_modules/.bin/sf"; do [ -x "$c" ] && run "$c"; done; [ -f "$d/bin/sf.js" ] && grep -q \'"name": "saasfoundryai-cli"\' "$d/package.json" 2>/dev/null && run node "$d/bin/sf.js"; command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai; exit 0'
+]
+
+/**
+ * A capture command an earlier release wrote and a refresh replaces: the first build's bare `sf`, the v1.1.0
+ * shell line (#1105) and the v1.2.0 one (#1228). A hand-edited copy of any is the project's own and is left.
+ */
+export const isLegacyCaptureCommand = (command: unknown): boolean =>
+  typeof command === 'string' && (LEGACY_CAPTURE_COMMAND.test(command) || V1_1_0_CAPTURE_COMMANDS.includes(command) || V1_2_0_CAPTURE_COMMANDS.includes(command))
 
 const HOOK_TIMEOUT_SECONDS = 30
 /** The routed tier agents are all named `sf-<tier>`: the host runs the hook only for them. */
@@ -133,10 +147,35 @@ export const CODEX_RETRUST_NOTICE = `${CODEX_HOOKS_PATH}: the delegation capture
 /**
  * `enforced`: the hook is declared and the project's CLI can run it. `declared`: Codex runs it only once its
  * `.codex/` layer is trusted, which nothing here can see. `declared-not-runnable`: the hook is there but no
- * CLI with `agents outcome capture` resolves, so every delegation passes unrecorded. `outdated`: the first
- * release's bare-`sf` hook. `missing`: no hook. `not-enforced`: the host has no capture hook at all.
+ * CLI with `agents outcome capture` resolves, so every delegation passes unrecorded. `declared-outdated-cli`: the CLI
+ * the hook reaches has the command but is older than the version that last updated the project (#1228).
+ * `outdated`: a hook an earlier release wrote (a refresh replaces it). `missing`: no hook. `not-enforced`: the host
+ * has no capture hook at all.
  */
-export type CaptureState = 'enforced' | 'declared' | 'declared-not-runnable' | 'outdated' | 'missing' | 'not-enforced'
+export type CaptureState = 'enforced' | 'declared' | 'declared-not-runnable' | 'declared-outdated-cli' | 'outdated' | 'missing' | 'not-enforced'
+
+/**
+ * A hook's state, with the CLI it reaches when one resolves (#1228): `sf status` and `sf update` name it, since the
+ * CLI a hook runs is not always the one that reports on it.
+ */
+export interface HookStanding<S extends string> {
+  state: S
+  /** The CLI the hook reaches: a path, or the `bin/sf.js` this repository runs with node. */
+  cli?: string
+  /** Its version, when it is the `saasfoundryai-cli` package. */
+  cliVersion?: string
+}
+
+/**
+ * What a hook that is in place amounts to, given what the probe found: a CLI without the command lets everything
+ * through, one older than `requiredVersion` runs an older guard or capture. `ok` is the state when neither applies.
+ */
+export function standingOf<S extends string>(ok: S, probed: HookCliProbeResult, requiredVersion?: string): HookStanding<S | 'declared-not-runnable' | 'declared-outdated-cli'> {
+  const cli = { ...(probed.cli ? { cli: probed.cli } : {}), ...(probed.version ? { cliVersion: probed.version } : {}) }
+  if (!probed.runnable) return { state: 'declared-not-runnable', ...cli }
+  if (probed.version && requiredVersion && olderThan(probed.version, requiredVersion)) return { state: 'declared-outdated-cli', ...cli }
+  return { state: ok, ...cli }
+}
 
 export async function readJson(path: string): Promise<unknown> {
   try {
@@ -157,12 +196,12 @@ export async function executable(path: string): Promise<boolean> {
   }
 }
 
-export interface CaptureCli {
-  command: string
-  args: string[]
-}
+export type CaptureCli = HookCli
 
-/** The CLI the capture hook would run for a project: the same order as the hook's own line. */
+/**
+ * The CLI the capture hook would run for a project: the same order as the hook's own line. The PATH entries a
+ * package runner added for this process (`npx`, `npm run`) are skipped: the hook's shell does not have them (#1228).
+ */
 export async function resolveCaptureCli(root: string, pathEnv: string | undefined = process.env.PATH): Promise<CaptureCli | undefined> {
   for (const name of ['saasfoundryai', 'sf']) {
     const candidate = join(root, 'node_modules', '.bin', name)
@@ -174,22 +213,24 @@ export async function resolveCaptureCli(root: string, pathEnv: string | undefine
   } catch {
     // Not this repository.
   }
-  for (const dir of (pathEnv ?? '').split(delimiter).filter(Boolean)) {
+  for (const dir of hookPathDirs(pathEnv)) {
     const candidate = join(dir, 'saasfoundryai')
     if (await executable(candidate)) return { command: candidate, args: [] }
   }
   return undefined
 }
 
-/** Whether the resolved CLI knows `agents outcome capture` (an older release does not). Injectable, so a spec needs no process. */
-export type CaptureProbe = (root: string) => Promise<boolean>
-
-export const defaultCaptureProbe: CaptureProbe = async (root) => {
-  const cli = await resolveCaptureCli(root)
-  if (!cli) return false
-  return new Promise<boolean>((resolve) => {
-    const child = execFile(cli.command, [...cli.args, 'agents', 'outcome', 'capture', '--help'], { cwd: root, timeout: 8000, encoding: 'utf8' }, (error, stdout) =>
-      resolve(!error && /--host/.test(stdout))
+/**
+ * Whether a resolved CLI answers `<command…> --help` with its `--host` option, the CLI it is and its version. An
+ * older release has no such command and fails.
+ */
+export async function probeHookCli(root: string, cli: HookCli | undefined, command: string[]): Promise<HookCliProbeResult> {
+  if (!cli) return { runnable: false }
+  const version = await readHookCliVersion(cli)
+  const known = { cli: hookCliLabel(cli), ...(version ? { version } : {}) }
+  return new Promise<HookCliProbeResult>((resolve) => {
+    const child = execFile(cli.command, [...cli.args, ...command, '--help'], { cwd: root, timeout: 8000, encoding: 'utf8' }, (error, stdout) =>
+      resolve({ runnable: !error && /--host/.test(stdout), ...known })
     )
     // A command that reads its input must not wait for ours.
     child.stdin?.end()
@@ -197,15 +238,32 @@ export const defaultCaptureProbe: CaptureProbe = async (root) => {
 }
 
 /**
- * Whether the hooks that capture a host's delegations are declared and could run. Declared is not the same
- * as running (a host may not trust the file yet): this reads the file and asks the project's CLI whether it has
- * the command, it does not run the host.
+ * Whether the resolved CLI knows `agents outcome capture` (an older release does not), which CLI it is and its
+ * version. Injectable, so a spec needs no process; a bare boolean answers only the first question.
  */
-export async function captureState(root: string, agent: HarnessAgent, probe: CaptureProbe = defaultCaptureProbe): Promise<CaptureState> {
-  if (agent !== 'claude-code' && agent !== 'codex') return 'not-enforced'
+export type CaptureProbe = (root: string) => Promise<boolean | HookCliProbeResult>
+
+export const defaultCaptureProbe = async (root: string): Promise<HookCliProbeResult> => probeHookCli(root, await resolveCaptureCli(root), ['agents', 'outcome', 'capture'])
+
+/**
+ * Whether the hooks that capture a host's delegations are declared and could run, and the CLI they reach. Declared
+ * is not the same as running (a host may not trust the file yet): this reads the file and asks the CLI the hook
+ * resolves whether it has the command, it does not run the host. `requiredVersion` (the version that last updated
+ * the project) turns an older CLI into `declared-outdated-cli`. An outdated hook still runs that CLI: a CLI that
+ * cannot is said first.
+ */
+export async function captureStanding(root: string, agent: HarnessAgent, probe: CaptureProbe = defaultCaptureProbe, requiredVersion?: string): Promise<HookStanding<CaptureState>> {
+  if (agent !== 'claude-code' && agent !== 'codex') return { state: 'not-enforced' }
   const config = agent === 'claude-code' ? await readJson(join(root, '.claude', 'settings.json')) : await readJson(join(root, CODEX_HOOKS_PATH))
   const own = agent === 'claude-code' ? CLAUDE_CAPTURE_COMMAND : CODEX_CAPTURE_COMMAND
-  if (!registers(config, 'SubagentStop', (command) => command === own)) return registers(config, 'SubagentStop', isLegacyCaptureCommand) ? 'outdated' : 'missing'
-  if (!(await probe(root))) return 'declared-not-runnable'
-  return agent === 'codex' ? 'declared' : 'enforced'
+  if (!registers(config, 'SubagentStop', (command) => command === own)) {
+    if (!registers(config, 'SubagentStop', isLegacyCaptureCommand)) return { state: 'missing' }
+    return standingOf<CaptureState>('outdated', normalizeProbe(await probe(root)), requiredVersion)
+  }
+  return standingOf<CaptureState>(agent === 'codex' ? 'declared' : 'enforced', normalizeProbe(await probe(root)), requiredVersion)
+}
+
+/** The state alone (`captureStanding`). */
+export async function captureState(root: string, agent: HarnessAgent, probe: CaptureProbe = defaultCaptureProbe, requiredVersion?: string): Promise<CaptureState> {
+  return (await captureStanding(root, agent, probe, requiredVersion)).state
 }

@@ -499,7 +499,8 @@ after the arguments were understood exits 0. Run it by hand only to test a hook.
 
 The hook is a shell line, not a bare `sf` (that name may be another CLI, or an older SaaSFoundry without the command). It leaves at once, before Node starts, unless the payload mentions an `sf-<tier>`
 agent, then runs the CLI the **project** resolves: `node_modules/.bin/saasfoundryai`, then its `sf`, then the build of this repository when the project is SaaSFoundry itself, then `saasfoundryai` on
-the PATH. It exits 0 whatever happens, so a missing or too old CLI never disturbs the agent. The CLI's **stdout** reaches the host (that is how the decision gets there) and its stderr is discarded.
+the PATH. It exits 0 whatever happens, so a missing or too old CLI never disturbs the agent. The CLI's **stdout** reaches the host (that is how the decision gets there) and its stderr is discarded. A
+CLI too old to know `agents outcome capture` exits non-zero: the hook then writes one line on stderr and an entry of stage `cli` in the capture error log below, instead of passing in silence.
 
 A failure is not lost with it. The capture appends one line to **`capture-errors.jsonl`**, next to the ledger in the Git directory of the clone (never tracked, shared by every worktree), for a payload
 that cannot be read, a ledger that cannot be written or a routing adjustment that was skipped, and for the abnormal ignores (a payload that is not an object, a tier the project never declared for the
@@ -708,7 +709,8 @@ does the same. Run either from the primary checkout.
 
 **The hook line.** It is a shell line, not a bare `sf`, for the reasons [the capture hook](#capture-and-signals) is. It reads the payload and leaves before Node starts unless the payload mentions
 `SF_WORKFLOW_BYPASS_`, `skip-local-ci`, `nature` (in any case), `addLabels`, `delegation`, `ready` or `merge`, so almost no Bash call pays for a process. Then it runs the CLI the project resolves:
-`node_modules/.bin/saasfoundryai`, then this repository's own `bin/sf.js` when `dist/` is built, then `saasfoundryai` on the PATH. With no CLI, or one that lacks `agents guard`, the call goes through.
+`node_modules/.bin/saasfoundryai`, then this repository's own `bin/sf.js` when `dist/` is built, then `saasfoundryai` on the PATH. With no CLI, or one that lacks `agents guard`, the call goes through;
+a CLI that lacks it exits non-zero, and the hook writes one line on stderr and an entry of stage `cli` in the capture error log, which `sf status` counts.
 
 **Limits, stated plainly.** The hook is a guardrail against the ordinary path the refusals used to teach, not a security boundary.
 
@@ -718,8 +720,9 @@ does the same. Run either from the primary checkout.
 - Claude Code reads its settings when a session starts: a session that is already running keeps its old hooks. A developer can switch hooks off (`disableAllHooks`).
 - Codex runs a project hook only once the `.codex/` layer and the hook's text are trusted. `sf update` says when it added the hook: review and trust it with `/hooks`. A Codex subagent carries no agent
   id, so the delegated-only rules apply there to a call in a recognised worktree path.
-- `sf status` reports the state on the `routing:` line for each declared agent (`guard enforced`, `guard declared`, `guard hook declared but no CLI can run it`, `guard hook missing`,
-  `guard not enforced`) and the `guardHook` precondition warns when it is missing or cannot run (see [`sf status`](./sf-status.md#the-guard-hook)).
+- `sf status` reports the state on the `routing:` line for each declared agent, naming the CLI the hook reaches when it cannot run it (`guard enforced`, `guard declared`,
+  `guard hook declared but the CLI it reaches (…) cannot run sf agents guard`, `guard hook missing`, `guard not enforced`), and the `guardHook` precondition **fails** when that CLI cannot run the
+  hook, and warns when it is older than the project or when the hook is missing or outdated (see [`sf status`](./sf-status.md#the-guard-hook)).
 
 ## Platform notes
 

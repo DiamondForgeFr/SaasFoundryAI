@@ -3,6 +3,7 @@ import path from 'path'
 
 import type { HarnessAgent } from '../harness/agent-registry'
 import { CAPTURE_ERROR_WINDOW_DAYS } from '../harness/capture-errors'
+import { hookCliText } from '../harness/hook-cli'
 import { BOOTSTRAP_COMMAND } from '../installers/harness-provisioning'
 import { boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { appPaths, type StatusReport } from './collect'
@@ -386,8 +387,8 @@ function checkTierAgents(report: StatusReport): Precondition {
 /**
  * Guard hook — whether the PreToolUse hook that refuses an agent's own bypass of a guard is in place (#1106). The
  * hook fails open by design, so its absence must not be silent: a project whose hook is missing, or declared but with
- * no CLI that can run it, lets an agent set an escape hatch or label its own ticket. A `warn`: the guards of the
- * workflow scripts still refuse, it is the agent's way round them that is no longer stopped. Codex runs a project
+ * no CLI that can run it, lets an agent set an escape hatch or label its own ticket. The last is a `fail` (#1228), the
+ * others a `warn`: the guards of the workflow scripts still refuse. Codex runs a project
  * hook only once it is trusted, which nothing here can see: `declared` is an `ok`, said as such on the `routing:` line.
  */
 function checkGuardHook(report: StatusReport): Precondition {
@@ -398,15 +399,44 @@ function checkGuardHook(report: StatusReport): Precondition {
   if ('error' in routing) return { name, description, status: 'skip', details: 'The routing could not be read' }
   const guard = routing.guard
   if (!guard?.length) return { name, description, status: 'skip', details: 'The guard hook was not read' }
-  const off = guard.filter((entry) => entry.state === 'missing' || entry.state === 'declared-not-runnable')
-  if (off.length === 0) return { name, description, status: 'ok', details: guard.map((entry) => `${entry.agent} ${entry.state}`).join('; ') }
+  // The CLI the hook reaches cannot run it (#1228): the guard is open while it looks declared, which is what a `fail`
+  // is for. A CLI that runs it but is older than the project runs an older guard: a `warn`, on purpose, so that a patch
+  // release does not put every project on an older global CLI into `fail`. A missing or outdated hook is a `warn` too.
+  const broken = guard.filter((entry) => entry.state === 'declared-not-runnable')
+  const older = guard.filter((entry) => entry.state === 'declared-outdated-cli')
+  const off = guard.filter((entry) => entry.state === 'missing' || entry.state === 'outdated')
+  if (broken.length === 0 && older.length === 0 && off.length === 0) return { name, description, status: 'ok', details: guard.map((entry) => `${entry.agent} ${entry.state}`).join('; ') }
+  const details = [
+    ...broken.map((entry) => `${entry.agent} guard hook reaches ${hookCliText(entry)}, which cannot run \`sf agents guard\``),
+    ...older.map((entry) => `${entry.agent} guard hook reaches ${hookCliText(entry)}, older than ${report.manifest?.version ?? 'the project'}, the version that last updated this project`),
+    ...off.map((entry) => `${entry.agent} guard hook ${entry.state}`)
+  ]
+  const upgrade = `Upgrade the CLI the hook reaches: \`npm install -D saasfoundryai-cli@${report.manifest?.version ?? 'latest'}\` in the project (the hook runs node_modules/.bin/saasfoundryai first), or \`npm install -g saasfoundryai-cli@latest\` for the saasfoundryai on the PATH.`
+  const remediation = [
+    ...(broken.length || older.length ? [upgrade] : []),
+    ...(broken.length ? ['Until then every call passes unchecked: an agent is told to ask the developer for an escape hatch, but nothing refuses it when it sets one.'] : []),
+    ...(off.length ? ['Run `sf agents refresh --scope shared` to write the current PreToolUse guard hook.'] : [])
+  ]
+  return { name, description, status: broken.length ? 'fail' : 'warn', details: details.join('; '), remediation: remediation.join(' ') }
+}
+
+/**
+ * Capture hook — whether the CLI the capture hooks reach can record a delegation (#1228). The hook is in place, but an
+ * older CLI with no `agents outcome capture`, or one older than the project, records nothing or less: the routing
+ * learns from fewer outcomes. A `warn`, like the capture errors: a delegation still runs.
+ */
+function captureCliProblems(report: StatusReport): { details: string[]; remediation?: string } {
+  const routing = report.routing
+  if (!routing || 'error' in routing) return { details: [] }
+  const broken = routing.capture.filter((entry) => entry.state === 'declared-not-runnable' || entry.state === 'declared-outdated-cli')
+  if (broken.length === 0) return { details: [] }
   return {
-    name,
-    description,
-    status: 'warn',
-    details: off.map((entry) => `${entry.agent} guard hook ${entry.state === 'missing' ? 'missing' : 'declared but no CLI can run it'}`).join('; '),
-    remediation:
-      'Run `sf agents refresh --scope shared` to add the PreToolUse guard hook, and make sure the project resolves a CLI that has `sf agents guard` (saasfoundryai-cli installed in the project, or saasfoundryai on the PATH). Until then an agent is told to ask the developer for an escape hatch, but nothing refuses it when it sets one.'
+    details: broken.map((entry) =>
+      entry.state === 'declared-not-runnable'
+        ? `${entry.agent} capture hook reaches ${hookCliText(entry)}, which cannot run \`sf agents outcome capture\`: delegations are not recorded`
+        : `${entry.agent} capture hook reaches ${hookCliText(entry)}, older than ${report.manifest?.version ?? 'the project'}, the version that last updated this project`
+    ),
+    remediation: `Upgrade the CLI the capture hook reaches: \`npm install -D saasfoundryai-cli@${report.manifest?.version ?? 'latest'}\` in the project, or \`npm install -g saasfoundryai-cli@latest\` for the saasfoundryai on the PATH.`
   }
 }
 
@@ -423,18 +453,20 @@ function checkCaptureErrors(report: StatusReport): Precondition {
   const routing = report.routing
   if (!routing) return { name, description, status: 'skip', details: 'No managed harness' }
   if ('error' in routing) return { name, description, status: 'skip', details: 'The routing could not be read' }
+  const cli = captureCliProblems(report)
   const errors = routing.captureErrors
-  if (!errors) return { name, description, status: 'skip', details: 'The capture error log was not read' }
-  if (errors.count === 0) return { name, description, status: 'ok', details: `No capture error in the last ${CAPTURE_ERROR_WINDOW_DAYS} days` }
-  const last = errors.last ? `; last ${errors.last.at} (${errors.last.stage}): ${errors.last.message}` : ''
-  return {
-    name,
-    description,
-    status: 'warn',
-    details: `${errors.count} capture error${errors.count === 1 ? '' : 's'} in the last ${CAPTURE_ERROR_WINDOW_DAYS} days${last}`,
-    remediation:
+  if (!errors && cli.details.length === 0) return { name, description, status: 'skip', details: 'The capture error log was not read' }
+  if ((errors?.count ?? 0) === 0 && cli.details.length === 0) return { name, description, status: 'ok', details: `No capture error in the last ${CAPTURE_ERROR_WINDOW_DAYS} days` }
+  const details: string[] = [...cli.details]
+  const remediation: string[] = cli.remediation ? [cli.remediation] : []
+  if (errors && errors.count > 0) {
+    const last = errors.last ? `; last ${errors.last.at} (${errors.last.stage}): ${errors.last.message}` : ''
+    details.push(`${errors.count} capture error${errors.count === 1 ? '' : 's'} in the last ${CAPTURE_ERROR_WINDOW_DAYS} days${last}`)
+    remediation.push(
       'The hooks that record delegations failed, so those delegations are missing from the ledger the routing learns from. The errors are in capture-errors.jsonl, in the Git directory of the clone (the saasfoundry folder next to delegations.jsonl). Fix the cause the last error names, then run `sf agents routing report` to see what was recorded; `sf agents refresh --scope shared` replaces an outdated hook.'
+    )
   }
+  return { name, description, status: 'warn', details: details.join('; '), remediation: remediation.join(' ') }
 }
 
 /**

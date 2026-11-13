@@ -1,5 +1,5 @@
 import { spawnSync } from 'child_process'
-import { mkdtemp, readFile, realpath, rm } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
@@ -101,6 +101,35 @@ describe('the PreToolUse guard hook of .claude/settings.json, run through sh -c'
 
     expect(result.status).toBe(0)
     expect(result.stdout).toBe('')
+  })
+
+  // #1228 — a generated project has no node_modules/.bin/saasfoundryai: the hook reached an older global CLI with no
+  // `agents guard`, let the call through and said nothing, while `sf status` reported the guard enforced.
+  it('says it when the CLI it reaches cannot run agents guard: one line on stderr and an entry in the capture error log', async () => {
+    const project = await realpath(await mkdtemp(join(tmpdir(), 'sf-guard-hook-old-cli-')))
+    try {
+      expect(spawnSync('git', ['init', '-q'], { cwd: project, env: cleanEnv }).status).toBe(0)
+      await mkdir(join(project, 'bin'))
+      await writeFile(join(project, 'bin', 'saasfoundryai'), '#!/bin/sh\necho "error: unknown command \'guard\'" >&2\nexit 1\n', { mode: 0o755 })
+
+      const result = hook(payload('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog', project), { CLAUDE_PROJECT_DIR: project, PATH: `${join(project, 'bin')}:/usr/bin:/bin` }, project)
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toBe(`saasfoundryai: saasfoundryai cannot run agents guard (exit 1): upgrade saasfoundryai-cli\n`)
+      const log = (await readFile(join(project, '.git', 'saasfoundry', 'capture-errors.jsonl'), 'utf8')).trim().split('\n')
+      expect(log).toHaveLength(1)
+      expect(JSON.parse(log[0])).toMatchObject({
+        v: 1,
+        at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.000Z$/),
+        host: 'claude-code',
+        event: 'PreToolUse',
+        stage: 'cli',
+        message: 'saasfoundryai cannot run agents guard (exit 1): upgrade saasfoundryai-cli in the project or on the PATH'
+      })
+    } finally {
+      await rm(project, { recursive: true, force: true })
+    }
   })
 
   it('lets a payload that is not JSON through, whatever it says', () => {

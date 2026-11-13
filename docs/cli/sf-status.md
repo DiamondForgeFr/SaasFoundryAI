@@ -108,28 +108,39 @@ knows the route it gets is not the shipped one, for example
 `routing: grid v1, 0 overrides; 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. It names a
 kind the adjustment looked at and cannot move (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) and counts the ones that only wait for evidence. It also says, for each declared coding
 agent, whether the hooks that record every delegation are in place **and can run**: `claude-code capture enforced` only when the hook is declared and the project's own CLI answers
-`agents outcome capture`; `capture hook declared but no CLI can run it` when it does not (install `saasfoundryai-cli` in the project, or put `saasfoundryai` on the PATH: until then delegations are not
-recorded); `codex capture declared` when the hook is there but Codex has to trust it first; `capture hook outdated` for the bare-`sf` hook of the first build or the hook v1.1.0 shipped;
-`capture hook missing` (`run sf agents refresh --scope shared`); or `not enforced` for a host without hooks, whose delegations are recorded by hand. A damaged local layer shows as `unreadable (…)` and
-never fails the status.
+`agents outcome capture`; `capture hook declared but the CLI it reaches (<cli> <version>) cannot run sf agents outcome capture` when it does not (install `saasfoundryai-cli` in the project, or upgrade
+the `saasfoundryai` on the PATH: until then delegations are not recorded); `capture hook declared but the CLI it reaches (<cli> <version>) is older than the project's harness` when that CLI predates
+the version that last updated the project; `codex capture declared` when the hook is there but Codex has to trust it first; `capture hook outdated` for the bare-`sf` hook of the first build or the
+hook v1.1.0 or v1.2.0 shipped; `capture hook missing` (`run sf agents refresh --scope shared`); or `not enforced` for a host without hooks, whose delegations are recorded by hand. A damaged local
+layer shows as `unreadable (…)` and never fails the status.
+
+**The CLI a hook reaches is not always the one that writes the report.** A hook runs `node_modules/.bin/saasfoundryai`, then this repository's `bin/sf.js`, then `saasfoundryai` on the PATH. A
+generated project does not depend on `saasfoundryai-cli`, so its hooks reach the global install, which may be older than the `npx saasfoundryai-cli@<version> status` you run. The probe resolves the
+CLI the way the hook does: it skips the PATH entries a package runner adds for its own process (`npx`'s cache, any `node_modules/.bin`), reads the version from that CLI's `package.json` and asks it
+for `--help` on the hook's command. `--json` carries the result on each entry of `routing.capture` and `routing.guard` as `cli` and `cliVersion` (additive).
 
 ### The guard hook
 
 The `PreToolUse` hook that refuses an agent's own escape hatch, nature label and (for a delegated agent) merge (see [the guard hook](./sf-agents.md#the-guard-hook)) fails open by design: with no CLI
 that has `agents guard`, a call goes through unchecked. So its state is never silent. The `routing:` line says it for each declared coding agent, after the capture state, and `--json` carries it as
-`routing.guard` (`[{ agent, state }]`, additive):
+`routing.guard` (`[{ agent, state, cli?, cliVersion? }]`, additive):
 
-| State                   | Line                                                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `enforced`              | `claude-code guard enforced`: the hook is declared and the project's own CLI answers `agents guard`                         |
-| `declared`              | `codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)`: Codex is never `enforced`           |
-| `declared-not-runnable` | `guard hook declared but no CLI can run it`: install `saasfoundryai-cli` in the project, or put `saasfoundryai` on the PATH |
-| `missing`               | `guard hook missing (run sf agents refresh --scope shared)`                                                                 |
-| `not-enforced`          | `guard not enforced`: a host without a guard hook; its agent is told to ask the developer, and nothing stops it             |
+| State                   | Line                                                                                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enforced`              | `claude-code guard enforced`: the hook is declared and the CLI it reaches answers `agents guard`                                                                 |
+| `declared`              | `codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)`: Codex is never `enforced`                                                |
+| `declared-not-runnable` | `guard hook declared but the CLI it reaches (<cli> <version>) cannot run sf agents guard`: install `saasfoundryai-cli` in the project, or upgrade the global one |
+| `declared-outdated-cli` | `guard hook declared but the CLI it reaches (<cli> <version>) is older than the project's harness: upgrade it`                                                   |
+| `outdated`              | `guard hook outdated (run sf agents refresh --scope shared)`: the hook v1.2.0 shipped, which exited silently on a CLI that could not run it                      |
+| `missing`               | `guard hook missing (run sf agents refresh --scope shared)`                                                                                                      |
+| `not-enforced`          | `guard not enforced`: a host without a guard hook; its agent is told to ask the developer, and nothing stops it                                                  |
 
-The `guardHook` precondition, "Guard hook stops an agent from bypassing a guard", is a `warn` when an agent's hook is `missing` or `declared-not-runnable`, with the remediation to run
-`sf agents refresh --scope shared` and to make a CLI with `agents guard` resolvable. It is `ok` otherwise, and skipped without a harness or when the routing cannot be read. The probe asks the CLI the
-hook would run for `agents guard --help` and starts nothing else.
+The `guardHook` precondition, "Guard hook stops an agent from bypassing a guard", is a **`fail`** when an agent's hook reaches a CLI that cannot run `agents guard` (`declared-not-runnable`): the guard
+looks declared and every call passes unchecked. It is a `warn` when that CLI runs the guard but is older than the version that last updated the project (`declared-outdated-cli`): it applies an older
+set of rules. That `warn` is deliberate, so that a patch release does not put every project that uses an older global CLI into `fail`. In both cases the details name the CLI and its version, and the
+remediation gives the command to upgrade it (`npm install -D saasfoundryai-cli@<version>` in the project, or `npm install -g saasfoundryai-cli@latest`). It is also a `warn` when the hook is `missing`
+or `outdated` (`sf agents refresh --scope shared`), `ok` otherwise, and skipped without a harness or when the routing cannot be read. The probe asks the CLI the hook would run for
+`agents guard --help` and starts nothing else.
 
 ### Capture errors
 
@@ -141,7 +152,10 @@ leave no trace, and the routing learned from fewer outcomes than it was given. T
   `last` is `{ at, host, event, stage, message }` (additive: a report built without the log omits the field);
 - the `captureErrors` precondition, "Delegation capture records every run", is a `warn` with the count, the last error and where the log is, `ok` when the window holds none, and skipped without a
   harness, when the routing cannot be read, or for a report that did not read the log. The remediation points to the log and to [`sf agents routing report`](./sf-agents.md#the-report), which prints
-  the same count.
+  the same count. It is also a `warn` when the capture hook reaches a CLI that cannot run `agents outcome capture` or that is older than the project, naming that CLI and the command to upgrade it.
+
+The hooks write to the same log themselves when the CLI they reach fails on their command (an older release with no `agents guard` or `agents outcome capture`; a current one always exits 0): an entry
+of stage `cli`, such as `saasfoundryai cannot run agents guard (exit 1): upgrade saasfoundryai-cli in the project or on the PATH`, and the same line on stderr, instead of exiting in silence.
 
 It only reads the log: nothing is written, and a log that is missing or unreadable counts as empty, so the status never fails on it. Outside a Git checkout there is no log.
 

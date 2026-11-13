@@ -185,6 +185,7 @@ déplacement vers `AGENTS.md` que chaque mise à jour faisait déjà. La migrati
 | Le hook est la commande `sf agents outcome capture` nue qu'écrivait une première version.                                                                                    | Elle est remplacée par la commande qui résout le CLI propre au projet.                                                                                                                                         |
 | Le hook est la commande de capture que la v1.1.0 a livrée (elle écartait la sortie du CLI).                                                                                  | Elle est remplacée, dans `.claude/settings.json` et dans `.codex/hooks.json`, par la commande qui laisse passer la décision du CLI, jamais laissée à côté. Une copie modifiée à la main est la vôtre et reste. |
 | Le hook `SessionStart` est la commande `sf status --claude-friendly --no-network` nue (ou avec `--agent-friendly`) qu'écrivait la 1.0.x.                                     | Elle est remplacée par la commande qui résout le CLI propre au projet ; vos autres hooks `SessionStart` restent. Un hook que vous avez écrit avec d'autres options est le vôtre et reste.                      |
+| Le hook de capture ou de garde est la commande livrée par la v1.2.0 (elle sortait en silence quand le CLI atteint ne savait pas l'exécuter).                                 | Elle est remplacée, dans les deux fichiers, par la commande qui note un tel CLI dans le journal des erreurs de capture, jamais laissée à côté. Une copie modifiée à la main est la vôtre et reste.             |
 
 **Le hook de capture de la v1.1.0 est remplacé, et Codex doit approuver le nouveau.** La commande de la v1.1.0 se terminait par `>/dev/null 2>&1`, si bien qu'un délégué qui oubliait sa ligne de fin ne
 pouvait pas la recevoir en réclamation ; la nouvelle laisse la stdout du CLI parvenir à l'hôte (voir [réclamer la ligne manquante](/fr/cli/sf-agents#reclamer-la-ligne-manquante)). La fusion des
@@ -196,8 +197,15 @@ l'avez pas fait, les délégations Codex ne sont pas enregistrées. L'avis n'est
 
 **Le hook de garde est nouveau, et Codex doit lui aussi l'approuver.** La même fusion ajoute le garde `PreToolUse` à `.claude/settings.json` (matcher `Bash|PowerShell`) et à `.codex/hooks.json`
 (matcher `Bash`), après les hooks `PreToolUse` que vous avez écrits, qui sont conservés. `sf update` et `sf agents refresh` affichent une fois
-`.codex/hooks.json: the PreToolUse guard hook was added. Codex skips a project hook until it is trusted: review and trust it with /hooks, or the guard does not run.` Tant que vous ne l'avez pas
-approuvé, Codex n'exécute pas le garde ; `sf status` dit `guard declared` pour Codex, jamais `enforced`. Un projet qui a modifié une commande `PreToolUse` à lui n'est pas touché.
+`.codex/hooks.json: the PreToolUse guard hook was added or replaced. Codex skips a project hook until it is trusted: review and trust it with /hooks, or the guard does not run.` Tant que vous ne
+l'avez pas approuvé, Codex n'exécute pas le garde ; `sf status` dit `guard declared` pour Codex, jamais `enforced`. Un projet qui a modifié une commande `PreToolUse` à lui n'est pas touché.
+
+**La mise à jour nomme le CLI qu'atteindront les hooks.** Les hooks de garde et de capture lancent `node_modules/.bin/saasfoundryai`, puis `saasfoundryai` dans le PATH, jamais le CLI qui a fait la
+mise à jour : un `npx saasfoundryai-cli@<version> update` a disparu une fois terminé. Un projet généré ne dépend pas de `saasfoundryai-cli` : ses hooks atteignent donc l'installation globale, qui peut
+être plus ancienne et ne pas connaître `agents guard`. Une fois les hooks en place, la mise à jour dit quel CLI ils atteignent, `The guard and capture hooks run /usr/local/bin/saasfoundryai 1.2.1.`,
+et, quand ce CLI ne sait pas les exécuter ou est antérieur à la version vers laquelle le projet vient d'être mis à jour, le dit pour chaque hook et donne la commande pour le mettre à jour
+(`npm install -D saasfoundryai-cli@<version>` dans le projet, ou `npm install -g saasfoundryai-cli@<version>`). `sf status` le signale jusque-là (voir
+[le hook de garde](/fr/cli/sf-status#le-hook-de-garde)). Rien n'est dit pour un projet sans ces hooks.
 
 Aucune version de module n'est incrémentée pour cela : le hook est livré par la fusion des réglages qui s'exécute à chaque mise à jour, et non par le jeu de fichiers d'un installeur, il n'y a donc
 aucune migration de module à prévisualiser ou à lancer. Un projet qui a écrit lui-même exactement `sf status --claude-friendly --no-network` perd cette ligne à la prochaine mise à jour, puisqu'on ne

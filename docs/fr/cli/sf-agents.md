@@ -531,7 +531,8 @@ JSON quand il réclame sa ligne manquante à un délégué ([ci-dessus](#reclame
 Le hook est une ligne de shell, pas un `sf` nu (ce nom peut être un autre CLI, ou un SaaSFoundry plus ancien sans la commande). Il s'arrête aussitôt, avant le démarrage de Node, sauf si la charge
 mentionne un agent `sf-<tier>`, puis lance le CLI que le **projet** résout : `node_modules/.bin/saasfoundryai`, puis son `sf`, puis le build de ce dépôt quand le projet est SaaSFoundry lui-même, puis
 `saasfoundryai` dans le PATH. Il sort avec 0, quoi qu'il arrive : un CLI absent ou trop ancien ne dérange jamais l'agent. La **stdout** du CLI parvient à l'hôte (c'est ainsi que la décision y arrive)
-et sa stderr est écartée.
+et sa stderr est écartée. Un CLI trop ancien pour connaître `agents outcome capture` sort avec un code non nul : le hook écrit alors une ligne sur stderr et une entrée d'étape `cli` dans le journal
+des erreurs de capture ci-dessous, au lieu de passer en silence.
 
 Un échec ne se perd pas pour autant. La capture ajoute une ligne à **`capture-errors.jsonl`**, à côté du registre dans le répertoire Git du clone (jamais suivi, partagé par tous les worktrees), pour
 une charge illisible, un registre impossible à écrire ou un ajustement de routage sauté, et pour les écarts anormaux (une charge qui n'est pas un objet, un palier que le projet n'a jamais déclaré pour
@@ -749,7 +750,8 @@ quel hôte, le terminal du développeur fait la même chose. Lancez l'un ou l'au
 **La ligne du hook.** C'est une ligne de shell, pas un `sf` nu, pour les raisons qui valent pour [le hook de capture](#capture-et-signaux). Elle lit la charge et sort avant que Node ne démarre, sauf
 si la charge mentionne `SF_WORKFLOW_BYPASS_`, `skip-local-ci`, `nature` (quelle que soit la casse), `addLabels`, `delegation`, `ready` ou `merge` : presque aucun appel Bash ne paie un processus. Puis
 elle lance le CLI que le projet résout : `node_modules/.bin/saasfoundryai`, puis le `bin/sf.js` de ce dépôt quand `dist/` est construit, puis `saasfoundryai` dans le PATH. Sans CLI, ou avec un CLI qui
-n'a pas `agents guard`, l'appel passe.
+n'a pas `agents guard`, l'appel passe ; un CLI qui ne l'a pas sort avec un code non nul, et le hook écrit une ligne sur stderr et une entrée d'étape `cli` dans le journal des erreurs de capture, que
+`sf status` compte.
 
 **Les limites, dites franchement.** Le hook est un garde-corps contre le chemin ordinaire que les refus enseignaient, pas une frontière de sécurité.
 
@@ -760,8 +762,9 @@ n'a pas `agents guard`, l'appel passe.
 - Claude Code lit ses réglages au démarrage d'une session : une session déjà en cours garde ses anciens hooks. Un développeur peut désactiver les hooks (`disableAllHooks`).
 - Codex n'exécute un hook de projet que lorsque la couche `.codex/` et le texte du hook sont approuvés. `sf update` dit quand il a ajouté le hook : relisez-le et approuvez-le avec `/hooks`. Un
   sous-agent Codex ne porte pas d'identifiant d'agent : les règles réservées aux agents délégués s'y appliquent à un appel dans un chemin de worktree reconnu.
-- `sf status` rapporte l'état sur la ligne `routing:` pour chaque agent déclaré (`guard enforced`, `guard declared`, `guard hook declared but no CLI can run it`, `guard hook missing`,
-  `guard not enforced`) et la précondition `guardHook` avertit quand il manque ou ne peut pas tourner (voir [`sf status`](./sf-status.md#le-hook-de-garde)).
+- `sf status` rapporte l'état sur la ligne `routing:` pour chaque agent déclaré, en nommant le CLI qu'atteint le hook quand celui-ci ne sait pas l'exécuter (`guard enforced`, `guard declared`,
+  `guard hook declared but the CLI it reaches (…) cannot run sf agents guard`, `guard hook missing`, `guard not enforced`), et la précondition `guardHook` **échoue** quand ce CLI ne sait pas exécuter
+  le hook, et avertit quand il est antérieur au projet ou quand le hook manque ou est périmé (voir [`sf status`](./sf-status.md#le-hook-de-garde)).
 
 ## Notes de plateforme
 
