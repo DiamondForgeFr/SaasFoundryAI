@@ -77,6 +77,21 @@ not generate complete status documents or arbitrary transition guards for new na
 
 `sf workflow validate` checks local manifest fields in v1; it does not compare the configured remote board.
 
+### Switching templates (`use`)
+
+`sf workflow use solo` and `sf workflow use saasfoundry` switch a project between the built-in presets in place. The switch starts from the project's current `workflow` block and replaces only:
+
+- `template`, `statuses` and `issueTypes`, taken from the preset;
+- `validated`, reset to `false`;
+- `projectUrl`, when `--project-url` or `--create-board` attaches another board, or when the tool changes.
+
+Every other field the project declares survives the switch, in particular `workingBranch`, `prTargetBranch`, `releaseBranch`, `localCi.requiredStatuses`, `requireCodeReview`, `branchNaming` and
+`commitFormat`. A saved template (`sf workflow save`) also replaces the tool and the branch, review and commit conventions it recorded; it never removes a field it does not carry.
+
+A status the project already names with another case keeps the project's spelling: a board whose options read `In progress`, `AI testing` and `In review` keeps them, and so does the manifest, although
+the presets spell them `In Progress`, `AI Testing` and `In Review`. Status names are compared without case everywhere: the board update matches options that way, and `update-status` lower-cases the
+target before every guard and finds the board option without case, so both spellings move a ticket the same way.
+
 ### Local CI gate (`set-local-ci`)
 
 With GitHub Projects, a pull request opened for review (`create-pr` without `--draft`), marked ready (`ready-pr`) or moved to Human testing needs the project's local CI statuses green on its exact

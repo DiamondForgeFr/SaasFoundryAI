@@ -18,7 +18,7 @@ jest.mock('child_process', () => ({
   })
 }))
 
-import { workflowCommand } from '../../../commands/workflow'
+import { workflowAfterUse, workflowCommand } from '../../../commands/workflow'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
 
@@ -105,6 +105,112 @@ describe('sf workflow use <built-in preset> (in-place upgrade)', () => {
     const statusFiles = await readdir(join(projectDir, '.claude', 'skills', 'sf-workflow', 'statuses'))
     expect(statusFiles).not.toContain('5-human-testing.md')
     expect(statusFiles.filter((f) => /^\d-/.test(f))).toHaveLength(5)
+  })
+
+  // #1233 — the switch rebuilt `workflow` from a field list without `releaseBranch` and `localCi`,
+  // so moving between presets silently dropped the release branch and the local CI gate.
+  describe('fields the switch keeps', () => {
+    const LOCAL_CI = { requiredStatuses: ['local-format', 'local-lint', 'local-build', 'local-unit'] }
+    // The spelling of this repository's own board and manifest: lower-case after the first word.
+    const TEAM_STATUSES = [
+      { name: 'Backlog', color: 'GRAY' },
+      { name: 'Ready', color: 'YELLOW' },
+      { name: 'In progress', color: 'BLUE' },
+      { name: 'AI testing', color: 'PURPLE' },
+      { name: 'Human testing', color: 'ORANGE' },
+      { name: 'In review', color: 'PINK' },
+      { name: 'Done', color: 'GREEN' }
+    ]
+    const TEAM_WORKFLOW = {
+      ...SOLO_MANIFEST.workflow,
+      template: 'SaaSFoundry AI',
+      workingBranch: 'develop',
+      prTargetBranch: 'develop',
+      releaseBranch: 'master',
+      localCi: LOCAL_CI,
+      requireCodeReview: true,
+      branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' },
+      commitFormat: { pattern: '<type>(#<ticket>): <description>', requireTicket: true },
+      statuses: TEAM_STATUSES
+    }
+    const writeWorkflow = async (workflow: Record<string, unknown>) => writeFile('.saasfoundry.json', JSON.stringify({ ...SOLO_MANIFEST, workflow }, null, 2))
+    const manifestWorkflow = async () => JSON.parse(await readFile('.saasfoundry.json', 'utf8')).workflow
+    const statusNames = (workflow: { statuses: { name: string }[] }) => workflow.statuses.map((s) => s.name)
+
+    const expectDeclaredFieldsKept = (workflow: Record<string, unknown>) => {
+      expect(workflow.releaseBranch).toBe('master')
+      expect(workflow.localCi).toEqual(LOCAL_CI)
+      expect(workflow.workingBranch).toBe('develop')
+      expect(workflow.prTargetBranch).toBe('develop')
+      expect(workflow.requireCodeReview).toBe(true)
+      expect(workflow.branchNaming).toEqual(TEAM_WORKFLOW.branchNaming)
+      expect(workflow.commitFormat).toEqual(TEAM_WORKFLOW.commitFormat)
+      expect(workflow.projectUrl).toBe(SOLO_MANIFEST.workflow.projectUrl)
+      expect(workflow.tool).toBe('github-projects')
+    }
+
+    it('team → solo keeps releaseBranch, localCi and every other declared field', async () => {
+      await writeWorkflow(TEAM_WORKFLOW)
+
+      await workflowCommand('use', 'solo')
+
+      const workflow = await manifestWorkflow()
+      expect(workflow.template).toBe('SaaSFoundry Solo')
+      expect(workflow.statuses).toHaveLength(5)
+      expect(workflow.validated).toBe(false)
+      expectDeclaredFieldsKept(workflow)
+    })
+
+    it('solo → team keeps releaseBranch, localCi and every other declared field', async () => {
+      await writeWorkflow({ ...TEAM_WORKFLOW, template: 'SaaSFoundry Solo', statuses: SOLO_MANIFEST.workflow.statuses })
+
+      await workflowCommand('use', 'saasfoundry')
+
+      const workflow = await manifestWorkflow()
+      expect(workflow.template).toBe('SaaSFoundry AI Workflow')
+      expect(workflow.statuses).toHaveLength(7)
+      expectDeclaredFieldsKept(workflow)
+    })
+
+    it('a round trip team → solo → team leaves releaseBranch and localCi as they were', async () => {
+      await writeWorkflow(TEAM_WORKFLOW)
+
+      await workflowCommand('use', 'solo')
+      await workflowCommand('use', 'saasfoundry')
+
+      expectDeclaredFieldsKept(await manifestWorkflow())
+    })
+
+    // Status matching is case-insensitive end to end: `updateGitHubProjectStatuses` compares lower-cased names and
+    // keeps the board's option, and `workflow-cli.sh` / `github-projects-cli.sh` lower-case the target before every
+    // guard and resolve the option id with `ascii_downcase`. The switch keeps the project's spelling too, so the
+    // manifest, the regenerated docs and the board keep naming a status the same way.
+    it("keeps the project's spelling of a status the target preset names with another case", async () => {
+      await writeWorkflow(TEAM_WORKFLOW)
+
+      await workflowCommand('use', 'solo')
+      expect(statusNames(await manifestWorkflow())).toEqual(['Backlog', 'In progress', 'AI testing', 'In review', 'Done'])
+
+      await workflowCommand('use', 'saasfoundry')
+      expect(statusNames(await manifestWorkflow())).toEqual(['Backlog', 'Ready', 'In progress', 'AI testing', 'Human Testing', 'In review', 'Done'])
+    })
+
+    it('a saved template replaces only the conventions it recorded', () => {
+      const workflow = workflowAfterUse(
+        TEAM_WORKFLOW as Parameters<typeof workflowAfterUse>[0],
+        { name: 'Mine', tool: 'github-projects', workingBranch: 'main', statuses: [{ name: 'Backlog' }, { name: 'Done' }], issueTypes: [] },
+        'mine',
+        SOLO_MANIFEST.workflow.projectUrl
+      ) as unknown as Record<string, unknown>
+
+      expect(workflow.template).toBe('Mine')
+      expect(workflow.workingBranch).toBe('main')
+      expect(workflow.prTargetBranch).toBe('develop')
+      expect(workflow.releaseBranch).toBe('master')
+      expect(workflow.localCi).toEqual(LOCAL_CI)
+      expect(workflow.branchNaming).toEqual(TEAM_WORKFLOW.branchNaming)
+      expect(workflow.issueTypes).toEqual([])
+    })
   })
 
   // #821 — `use` took the board URL from a prompt only, so a scripted setup could not attach one
