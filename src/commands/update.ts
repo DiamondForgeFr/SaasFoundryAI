@@ -56,6 +56,7 @@ import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
 import { previewCodexInstructionLimits } from '../harness/codex-instruction-limit-preview'
 import { logHarnessSettings, syncHarnessSettingsForProject } from '../harness/harness-settings'
+import { hookCliNotice } from '../harness/hook-cli-notice'
 import { TIER_AGENT_PATH } from '../harness/tier-agents'
 import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
@@ -1549,6 +1550,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       const settingsResults = await syncHarnessSettingsForProject('.', manifest, { dryRun })
       if (dryRunReport && settingsResults.some((result) => result.status !== 'unchanged')) dryRunReport.harnessSettings = settingsResults.filter((result) => result.status !== 'unchanged')
       logHarnessSettings(settingsResults, { dryRun })
+    }
+    // The guard and capture hooks run the CLI the project resolves, not this one: say which, and when it cannot run them (#1228).
+    if (!dryRun && manifest.modules?.harness) {
+      const lines = await hookCliNotice('.', manifest.modules.harness.agents ?? ['claude-code'], { requiredVersion: cliVersion })
+      for (const line of lines) console.log((line.needsAttention ? chalk.yellow : chalk.gray)(`  ${line.text}`))
     }
 
     // The agent-instruction refresh above raises Codex's `project_doc_max_bytes` when the AGENTS.md chain a

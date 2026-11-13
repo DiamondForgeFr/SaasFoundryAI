@@ -4,7 +4,7 @@ import { join } from 'path'
 
 import { isReferenceOnlyAdoption } from './agent-instructions'
 import { CLAUDE_CAPTURE_HOOKS, isLegacyCaptureCommand } from './delegation-hooks'
-import { CLAUDE_GUARD_HOOKS } from './guard-hook'
+import { CLAUDE_GUARD_HOOKS, isLegacyGuardCommand } from './guard-hook'
 import { isLegacySessionStartCommand, SESSION_START_HOOKS } from './session-start-hook'
 import type { ModuleMigrationPreview } from '../migrations/module/types'
 import type { SaaSFoundryManifest } from '../types'
@@ -79,9 +79,10 @@ export const HARNESS_ASK_COMMANDS: readonly string[] = ['--record', '--retry-of'
  * not leave the old one next to the new.
  *
  * - the bare-`sf` capture command the first build wrote (#1035);
- * - the bare `sf status` SessionStart command, which runs whatever `sf` comes first on the PATH (#1103).
+ * - the bare `sf status` SessionStart command, which runs whatever `sf` comes first on the PATH (#1103);
+ * - the v1.2.0 capture and guard commands, which exited silently when the CLI they reached could not run them (#1228).
  */
-export const HARNESS_SUPERSEDED_COMMANDS: readonly ((command: unknown) => boolean)[] = [isLegacyCaptureCommand, isLegacySessionStartCommand]
+export const HARNESS_SUPERSEDED_COMMANDS: readonly ((command: unknown) => boolean)[] = [isLegacyCaptureCommand, isLegacySessionStartCommand, isLegacyGuardCommand]
 
 export const HARNESS_SUPERSEDED_HOOKS = { supersedes: (command: string): boolean => HARNESS_SUPERSEDED_COMMANDS.some((supersedes) => supersedes(command)) }
 
