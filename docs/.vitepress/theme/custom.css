@@ -36,6 +36,7 @@
 .VPMenu,
 .VPMenu .VPLink,
 .VPSwitch,
+.VPSwitch .check,
 .VPSkipLink,
 .pager-link,
 .vp-doc :not(pre) > code,
