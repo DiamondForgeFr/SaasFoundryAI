@@ -103,6 +103,11 @@ Two more rules hold for everyone below the platform:
 
 - **Nobody grants what they do not hold.** Each permission or section a request adds to a role must be held by the caller where the role applies; sending back what the role already has, or removing
   from it, needs nothing more. A user who holds a custom role cannot extend it to climb above its editor.
+- **An `ENTITY` role assigned nowhere is shaped for its entity type.** Sections that exist only on an entity (a project's vision, its tickets) are never held on the account, so the account
+  administrator may also grant such a role what the entity type allows: what the active `ENTITY` system roles grant (`entity-admin`, `entity-user`, and the ones a project adds for its own types, such
+  as a `project-owner`). That administrator may already allocate those system roles in any entity of the account, so nobody climbs above their editor. Nothing beyond them is granted, an entity
+  administrator still grants only what it holds, and once the role is assigned, each change is checked in every entity it is used in again. The template's roles carry no entity type, so every `ENTITY`
+  system role counts; a project that types its entity roles narrows `loadEntityTypeGrants` in `account.service.ts` to the system roles of the role's type.
 - **No account or entity role carries a platform section.** A `PLATFORM_ADMINISTRATION` section is refused on an `ACCOUNT` or `ENTITY` role, whoever asks, the platform included.
 
 System roles stay renamable by nobody and deletable by nobody; a platform administrator maintains their grants.
@@ -139,6 +144,22 @@ on an account or entity role, and edit the `ENTITY` roles of a sibling entity or
 `account.service.ts`, `account-access.service.ts`, `permission-checker.ts` and the web page `account-roles.tsx` (plus the test mock `service-mocks.ts`), merged by `sf update` in the same way; no
 module migration is needed, because no file is renamed, split or added. If you call `getPermissionChecker` or `ScopedPermissionChecker` yourself, the new third argument is optional. A non-platform
 caller that touches a system role, or an entity administrator that creates an `ACCOUNT` role, now gets `403` where it used to get `401`.
+
+:::
+
+::: tip Updating a project generated with 1.2.0
+
+In 1.2.0 the rule "nobody grants what they do not hold" checked an `ENTITY` role assigned nowhere against the account. An account administrator could no longer create, or extend, an entity-type role
+granting sections that exist only on the entity: `403 You cannot grant what you do not hold where this role applies`. 1.2.1 checks such a role against what the entity type allows (see "Who may change
+a role" above). The fix lives in `account.service.ts`, merged by `sf update` like the 1.1.1 fix; no module migration is needed.
+
+Role-authoring flows that change behaviour:
+
+- **Creating an `ENTITY` role** (`POST /accounts/:id/roles`) as the account administrator: the sections and permissions granted by the `ENTITY` system roles are accepted (`403` before).
+- **Editing an `ENTITY` role assigned nowhere** (`PATCH /accounts/roles/:roleId`) as the account administrator: the same grants may be added.
+
+Unchanged: `ACCOUNT` roles, `ENTITY` roles already assigned in an entity, entity administrators, and the platform. A grant that no `ENTITY` system role carries, and that the author does not hold, is
+still refused. If your project types its entity roles, narrow `loadEntityTypeGrants` to the system roles of the role's type when you merge.
 
 :::
 

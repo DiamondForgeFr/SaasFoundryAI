@@ -1198,6 +1198,15 @@ class AccountServiceScopeTest extends AccountServiceTest {
       const ALLOCATION = { id: 1, name: 'USER_ROLE_ALLOCATION', applicableScopes: ['PLATFORM', 'ACCOUNT', 'ENTITY'] }
       const ENTITY_CREATION = { id: 2, name: 'ENTITY_CREATION', applicableScopes: ['PLATFORM', 'ACCOUNT', 'ENTITY'] }
       const ACCOUNT_UPDATE = { id: 3, name: 'ACCOUNT_UPDATE', applicableScopes: ['PLATFORM', 'ACCOUNT'] }
+      // Sections and a permission that exist only on an entity (a project): an entity system role grants them, no account role does (#1230).
+      const PROJECT_VISION = { id: 20, name: 'PROJECT_VISION', module: { name: 'PROJECT' } }
+      const PROJECT_SECRET = { id: 21, name: 'PROJECT_SECRET', module: { name: 'PROJECT' } }
+      const PROJECT_TICKET_EDIT = { id: 4, name: 'PROJECT_TICKET_EDIT', applicableScopes: ['ENTITY'] }
+      /** The ENTITY system roles: what the entity type allows (a `project-owner` grants the project sections, not PROJECT_SECRET). */
+      const entityTypeSystemRoles = [
+        { permissionsLinked: [{ permission: { name: 'USER_ROLE_ALLOCATION' } }], subModulesLinked: [{ subModuleId: USERS.id }] },
+        { permissionsLinked: [{ permission: { name: 'PROJECT_TICKET_EDIT' } }], subModulesLinked: [{ subModuleId: PROJECT_VISION.id }] }
+      ]
 
       /** One role assignment of the actor: its scope, where it is held, and what its role grants. */
       interface Holding {
@@ -1242,8 +1251,9 @@ class AccountServiceScopeTest extends AccountServiceTest {
       /* eslint-disable @typescript-eslint/no-explicit-any */
       const given = ({ actor, role = { id: 5, scope: 'ENTITY', accountId: A }, assignedIn = [] }: Given) => {
         const prisma = this.prismaService as any
-        const permissionCatalog = [ALLOCATION, ENTITY_CREATION, ACCOUNT_UPDATE]
-        const sectionCatalog = [USERS, ENTITIES, PLATFORM_ACCOUNTS]
+        const permissionCatalog = [ALLOCATION, ENTITY_CREATION, ACCOUNT_UPDATE, PROJECT_TICKET_EDIT]
+        const sectionCatalog = [USERS, ENTITIES, PLATFORM_ACCOUNTS, PROJECT_VISION, PROJECT_SECRET]
+        prisma.role.findMany = jest.fn().mockResolvedValue(entityTypeSystemRoles)
         prisma.role.findUnique = jest.fn().mockResolvedValue({
           name: 'custom',
           description: null,
@@ -1459,6 +1469,56 @@ class AccountServiceScopeTest extends AccountServiceTest {
           given({ actor: accountAdminOfA })
 
           await assertForbidden(() => this.service.createCustomRole(actorId, null, { name: 'template', scope: 'ENTITY', permissionIds: [] }))
+        })
+      })
+
+      describe('an ENTITY role assigned nowhere yet is shaped for its entity type (#1230)', () => {
+        const projectRole = { name: 'project-reviewer', scope: 'ENTITY' as const, subModuleIds: [PROJECT_VISION.id], permissionIds: [PROJECT_TICKET_EDIT.id] }
+
+        it('the account admin creates it with the sections the entity type allows, which it does not hold on the account', async () => {
+          const { prisma, tx } = given({ actor: accountAdminOfA })
+
+          await this.service.createCustomRole(actorId, A, projectRole)
+
+          expect(tx.role.create).toHaveBeenCalled()
+          expect(prisma.role.findMany).toHaveBeenCalledTimes(1)
+          expect(prisma.role.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { scope: 'ENTITY', isSystem: true, isActive: true, accountId: null } }))
+        })
+
+        it('the account admin adds them to an ENTITY role assigned nowhere yet', async () => {
+          const { tx } = given({ actor: accountAdminOfA, assignedIn: [] })
+
+          await update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [PROJECT_TICKET_EDIT.id] })
+
+          expect(tx.rolePermissionLink.createMany).toHaveBeenCalledWith({ data: [{ roleId: 5, permissionId: PROJECT_TICKET_EDIT.id }] })
+        })
+
+        it('nobody grants beyond what the entity type allows (403, nothing written)', async () => {
+          const { tx } = given({ actor: accountAdminOfA })
+
+          await assertForbidden(() => this.service.createCustomRole(actorId, A, { ...projectRole, subModuleIds: [PROJECT_VISION.id, PROJECT_SECRET.id] }), 'PROJECT_SECRET')
+          expect(tx.role.create).not.toHaveBeenCalled()
+        })
+
+        it('an entity admin still grants only what it holds: the entity type allows it nothing more', async () => {
+          const { prisma, tx } = given({ actor: entityAdminOfE1 })
+
+          await assertForbidden(() => this.service.createCustomRole(actorId, A, projectRole), 'PROJECT_VISION')
+          expect(tx.role.create).not.toHaveBeenCalled()
+          expect(prisma.role.findMany).not.toHaveBeenCalled()
+        })
+
+        it('an ACCOUNT role is still checked against the account only', async () => {
+          given({ actor: accountAdminOfA })
+
+          await assertForbidden(() => this.service.createCustomRole(actorId, A, { ...projectRole, scope: 'ACCOUNT', permissionIds: [] }), 'PROJECT_VISION')
+        })
+
+        it('once assigned, the role is checked in each entity it is used in, without the entity type', async () => {
+          const { prisma } = given({ actor: accountAdminOfA, assignedIn: [E1] })
+
+          await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }), 'PROJECT_VISION')
+          expect(prisma.role.findMany).not.toHaveBeenCalled()
         })
       })
 

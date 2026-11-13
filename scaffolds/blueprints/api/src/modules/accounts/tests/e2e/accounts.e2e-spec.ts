@@ -1045,4 +1045,97 @@ describe('Accounts Module (e2e)', () => {
       })
     })
   })
+
+  /**
+   * Entity-type roles (#1230): a project adds an entity type whose sections exist only on its entities (a project's
+   * vision, its tickets), granted by a system role of that type (a `project-owner`). Nobody holds them on the account,
+   * so the account administrator shapes an ENTITY role assigned nowhere yet against what the entity type allows,
+   * never beyond it.
+   */
+  describe('entity-type roles are shaped against what the entity type allows', () => {
+    const createdRoleIds: number[] = []
+    let projectModuleId: number
+    let projectOwnerRoleId: number
+    let visionSectionId: number
+    let secretSectionId: number
+    let ticketEditPermissionId: number
+
+    const grantsOf = async (roleId: number) => {
+      const role = await prismaService.role.findUniqueOrThrow({ where: { id: roleId }, include: { permissionsLinked: true, subModulesLinked: true } })
+      return { permissionIds: role.permissionsLinked.map((link) => link.permissionId), subModuleIds: role.subModulesLinked.map((link) => link.subModuleId).sort((a, b) => a - b) }
+    }
+
+    beforeAll(async () => {
+      const moduleType = await prismaService.moduleType.findFirstOrThrow({ where: { name: 'ACCOUNT_MANAGEMENT' } })
+      const projectModule = await prismaService.module.create({
+        data: { name: 'E2E_PROJECT', version: '1.0.0', description: 'Entity-only project module (e2e #1230)', typeId: moduleType.id, isActive: true }
+      })
+      projectModuleId = projectModule.id
+      const vision = await prismaService.subModule.create({ data: { moduleId: projectModule.id, name: 'E2E_PROJECT_VISION', description: 'Project vision section' } })
+      const secret = await prismaService.subModule.create({ data: { moduleId: projectModule.id, name: 'E2E_PROJECT_SECRET', description: 'A section no system role grants' } })
+      visionSectionId = vision.id
+      secretSectionId = secret.id
+      const ticketEdit = await prismaService.modulePermission.create({
+        data: { moduleId: projectModule.id, subModuleId: vision.id, name: 'E2E_PROJECT_TICKET_EDIT', description: 'Edit the tickets of a project', applicableScopes: ['ENTITY'] }
+      })
+      ticketEditPermissionId = ticketEdit.id
+
+      // The entity type's system role: module → section → permission, in the order the integrity trigger requires.
+      const projectOwner = await prismaService.role.create({ data: { name: 'e2e-project-owner', scope: 'ENTITY', isSystem: true, isActive: true, accountId: null } })
+      projectOwnerRoleId = projectOwner.id
+      await prismaService.roleModuleLink.create({ data: { roleId: projectOwner.id, moduleId: projectModule.id } })
+      await prismaService.roleSubModuleLink.create({ data: { roleId: projectOwner.id, subModuleId: vision.id } })
+      await prismaService.rolePermissionLink.create({ data: { roleId: projectOwner.id, permissionId: ticketEdit.id } })
+    })
+
+    afterAll(async () => {
+      await prismaService.role.deleteMany({ where: { id: { in: [...createdRoleIds, projectOwnerRoleId].filter((id) => id !== undefined) } } })
+      if (projectModuleId) await prismaService.module.delete({ where: { id: projectModuleId } }).catch(() => {})
+    })
+
+    it('the account admin creates an ENTITY role granting the sections that exist only on the entity', async () => {
+      const res = await agent
+        .post(`/api/accounts/${accountId}/roles`)
+        .send({ name: 'e2e-project-reviewer', scope: 'ENTITY', subModuleIds: [visionSectionId], permissionIds: [ticketEditPermissionId] })
+        .expect(201)
+      createdRoleIds.push(res.body.id)
+
+      expect(await grantsOf(res.body.id)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
+    })
+
+    it('the account admin adds them to an ENTITY role assigned nowhere yet', async () => {
+      const res = await agent.post(`/api/accounts/${accountId}/roles`).send({ name: 'e2e-project-empty', scope: 'ENTITY', permissionIds: [] }).expect(201)
+      createdRoleIds.push(res.body.id)
+
+      await agent
+        .patch(`/api/accounts/roles/${res.body.id}`)
+        .send({ subModuleIds: [visionSectionId], permissionIds: [ticketEditPermissionId] })
+        .expect(200)
+      expect(await grantsOf(res.body.id)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
+    })
+
+    it('nobody grants beyond what the entity type allows (403, nothing written)', async () => {
+      await agent
+        .post(`/api/accounts/${accountId}/roles`)
+        .send({ name: 'e2e-project-secret', scope: 'ENTITY', subModuleIds: [visionSectionId, secretSectionId], permissionIds: [] })
+        .expect(403)
+      expect(await prismaService.role.count({ where: { name: 'e2e-project-secret' } })).toBe(0)
+    })
+
+    it('an ACCOUNT role does not borrow what the entity type allows (403)', async () => {
+      await agent
+        .post(`/api/accounts/${accountId}/roles`)
+        .send({ name: 'e2e-project-account', scope: 'ACCOUNT', subModuleIds: [visionSectionId], permissionIds: [] })
+        .expect(403)
+      expect(await prismaService.role.count({ where: { name: 'e2e-project-account' } })).toBe(0)
+    })
+
+    it('an entity admin still grants only what it holds (403)', async () => {
+      await entityAdminAgent
+        .post(`/api/accounts/${accountId}/roles`)
+        .send({ name: 'e2e-project-entity-admin', scope: 'ENTITY', subModuleIds: [visionSectionId], permissionIds: [] })
+        .expect(403)
+      expect(await prismaService.role.count({ where: { name: 'e2e-project-entity-admin' } })).toBe(0)
+    })
+  })
 })
