@@ -2,6 +2,7 @@ import chalk from 'chalk'
 
 import { describeCliVersion } from '../cli-channel'
 import { CAPTURE_ERROR_WINDOW_DAYS } from '../harness/capture-errors'
+import { hookCliText } from '../harness/hook-cli'
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
 import { localCiGateSummary } from '../local-ci-gate'
 import type { StatusCli, StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
@@ -49,7 +50,7 @@ export function routingSummary(routing: StatusRouting): string {
         .map((entry) => `${entry.kind} → ${entry.tier} for ${entry.provider}, ${entry.action} on ${entry.at.slice(0, 10)}`)
         .join('; ')}; sf agents routing report, promote or reset)`
     : 'shipped grid and shared overrides, no local adjustment'
-  const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry.agent)}`).join('; ')
+  const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry)}`).join('; ')
   return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${guardSummary(routing.guard)}${captureErrorsSummary(routing.captureErrors)}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
 }
 
@@ -60,14 +61,22 @@ export function routingSummary(routing: StatusRouting): string {
  */
 export function guardSummary(guard: StatusRoutingState['guard']): string {
   if (!guard?.length) return ''
-  return `; ${guard.map((entry) => `${entry.agent} ${GUARD_TEXT[entry.state](entry.agent)}`).join('; ')}`
+  return `; ${guard.map((entry) => `${entry.agent} ${GUARD_TEXT[entry.state](entry)}`).join('; ')}`
 }
 
-const GUARD_TEXT: Record<NonNullable<StatusRoutingState['guard']>[number]['state'], (agent: string) => string> = {
+interface HookEntry {
+  agent: string
+  cli?: string
+  cliVersion?: string
+}
+
+const GUARD_TEXT: Record<NonNullable<StatusRoutingState['guard']>[number]['state'], (entry: HookEntry) => string> = {
   enforced: () => 'guard enforced',
-  declared: (agent) => `guard declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
-  'declared-not-runnable': () =>
-    'guard hook declared but no CLI can run it (install saasfoundryai-cli in the project, or put saasfoundryai on the PATH): an agent is not stopped from setting an escape hatch',
+  declared: ({ agent }) => `guard declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
+  'declared-not-runnable': (entry) =>
+    `guard hook declared but the CLI it reaches (${hookCliText(entry)}) cannot run sf agents guard (install saasfoundryai-cli in the project, or upgrade the saasfoundryai on the PATH): an agent is not stopped from setting an escape hatch`,
+  'declared-outdated-cli': (entry) => `guard hook declared but the CLI it reaches (${hookCliText(entry)}) is older than the project's harness: upgrade it`,
+  outdated: () => 'guard hook outdated (run sf agents refresh --scope shared)',
   missing: () => 'guard hook missing (run sf agents refresh --scope shared)',
   'not-enforced': () => 'guard not enforced (the guard hook is for Claude Code and Codex; an agent here is told to ask the developer, nothing stops it)'
 }
@@ -82,10 +91,12 @@ export function captureErrorsSummary(errors: StatusRoutingState['captureErrors']
   return `; ${errors.count} capture error${errors.count === 1 ? '' : 's'} in ${CAPTURE_ERROR_WINDOW_DAYS} days${last}`
 }
 
-const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (agent: string) => string> = {
+const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (entry: HookEntry) => string> = {
   enforced: () => 'capture enforced',
-  declared: (agent) => `capture declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
-  'declared-not-runnable': () => 'capture hook declared but no CLI can run it (install saasfoundryai-cli in the project, or put saasfoundryai on the PATH): delegations are not recorded',
+  declared: ({ agent }) => `capture declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
+  'declared-not-runnable': (entry) =>
+    `capture hook declared but the CLI it reaches (${hookCliText(entry)}) cannot run sf agents outcome capture (install saasfoundryai-cli in the project, or upgrade the saasfoundryai on the PATH): delegations are not recorded`,
+  'declared-outdated-cli': (entry) => `capture hook declared but the CLI it reaches (${hookCliText(entry)}) is older than the project's harness: upgrade it`,
   outdated: () => 'capture hook outdated (run sf agents refresh --scope shared)',
   missing: () => 'capture hook missing (run sf agents refresh --scope shared)',
   'not-enforced': () => 'capture not enforced (record its delegations with sf agents outcome record)'

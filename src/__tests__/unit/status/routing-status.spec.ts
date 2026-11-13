@@ -107,7 +107,7 @@ describe('the automatic routing in sf status (#1035)', () => {
           ]
         })
       )
-      expect(summary).toContain('claude-code capture hook declared but no CLI can run it')
+      expect(summary).toContain('claude-code capture hook declared but the CLI it reaches (no CLI) cannot run sf agents outcome capture')
       expect(summary).toContain('delegations are not recorded')
       expect(summary).toContain('codex capture declared (Codex runs it once the .codex/ layer and the hook are trusted)')
       expect(summary).not.toContain('enforced')
@@ -126,11 +126,23 @@ describe('the automatic routing in sf status (#1035)', () => {
           ]
         })
       )
-      expect(summary).toContain('claude-code guard hook declared but no CLI can run it')
+      expect(summary).toContain('claude-code guard hook declared but the CLI it reaches (no CLI) cannot run sf agents guard')
       expect(summary).toContain('an agent is not stopped from setting an escape hatch')
       expect(summary).toContain('codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)')
       expect(summary).toContain('cursor guard not enforced')
       expect(summary).toContain('other guard hook missing (run sf agents refresh --scope shared)')
+    })
+
+    // #1228 — the CLI a hook reaches is named: it is not always the one that writes the report
+    it('names the CLI a hook reaches when it cannot run the hook or is older than the project', () => {
+      const summary = routingSummary(
+        routingState({
+          capture: [{ agent: 'claude-code', state: 'declared-outdated-cli', cli: '/usr/local/bin/saasfoundryai', cliVersion: '1.2.0' }],
+          guard: [{ agent: 'claude-code', state: 'declared-not-runnable', cli: '/usr/local/bin/saasfoundryai', cliVersion: '1.0.1' }]
+        })
+      )
+      expect(summary).toContain("claude-code capture hook declared but the CLI it reaches (/usr/local/bin/saasfoundryai 1.2.0) is older than the project's harness")
+      expect(summary).toContain('claude-code guard hook declared but the CLI it reaches (/usr/local/bin/saasfoundryai 1.0.1) cannot run sf agents guard')
     })
 
     it('says nothing of the guard when the report does not carry it', () => {
@@ -239,7 +251,51 @@ describe('the automatic routing in sf status (#1035)', () => {
       await mkdir(join(root, '.claude'), { recursive: true })
       await writeFile(join(root, '.claude', 'settings.json'), JSON.stringify({ hooks: CLAUDE_CAPTURE_HOOKS }))
       expect(((await report(notRunnable)).routing as { capture: unknown }).capture).toEqual([{ agent: 'claude-code', state: 'declared-not-runnable' }])
-      expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code capture hook declared but no CLI can run it')
+      expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code capture hook declared but the CLI it reaches (no CLI) cannot run sf agents outcome capture')
+    })
+
+    // #1228 — DiamondForge: an older global CLI the hooks reach, while status, run by a newer one, said both were in place
+    describe('the CLI the hooks reach', () => {
+      const ancient = async () => ({ runnable: false, cli: '/usr/local/bin/saasfoundryai', version: '1.0.1' })
+      const older = async () => ({ runnable: true, cli: '/usr/local/bin/saasfoundryai', version: '1.1.0' })
+      const check = async (probe: CaptureProbe, name: string) => evaluatePreconditions(await report(probe)).find((entry) => entry.name === name)!
+
+      beforeEach(async () => {
+        await manifest({ version: 5, agents: ['claude-code'] }, { version: '1.2.0' })
+        await mkdir(join(root, '.claude'), { recursive: true })
+        await writeFile(join(root, '.claude', 'settings.json'), JSON.stringify({ hooks: { ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS } }))
+      })
+
+      it('fails the guard and warns on the capture when that CLI has no such command, naming it', async () => {
+        const guard = await check(ancient, 'guardHook')
+        expect(guard).toMatchObject({ status: 'fail', details: 'claude-code guard hook reaches /usr/local/bin/saasfoundryai 1.0.1, which cannot run `sf agents guard`' })
+        expect(guard.remediation).toContain('npm install -D saasfoundryai-cli@1.2.0')
+        const capture = await check(ancient, 'captureErrors')
+        expect(capture).toMatchObject({
+          status: 'warn',
+          details: 'claude-code capture hook reaches /usr/local/bin/saasfoundryai 1.0.1, which cannot run `sf agents outcome capture`: delegations are not recorded'
+        })
+        expect(capture.remediation).toContain('npm install -g saasfoundryai-cli@latest')
+      })
+
+      // A CLI that runs the guard but predates the project is a `warn`, on purpose: a patch release must not put every
+      // project that uses an older global CLI into `fail`.
+      it('warns on the guard and the capture when that CLI runs them but is older than the version that last updated the project', async () => {
+        expect((await report(older)).routing).toMatchObject({ guard: [{ agent: 'claude-code', state: 'declared-outdated-cli', cli: '/usr/local/bin/saasfoundryai', cliVersion: '1.1.0' }] })
+        const guard = await check(older, 'guardHook')
+        expect(guard).toMatchObject({
+          status: 'warn',
+          details: 'claude-code guard hook reaches /usr/local/bin/saasfoundryai 1.1.0, older than 1.2.0, the version that last updated this project'
+        })
+        expect(guard.remediation).toContain('npm install -D saasfoundryai-cli@1.2.0')
+        expect(await check(older, 'captureErrors')).toMatchObject({ status: 'warn' })
+      })
+
+      it('is ok when that CLI is as new as the project', async () => {
+        const current = async () => ({ runnable: true, cli: '/usr/local/bin/saasfoundryai', version: '1.2.0' })
+        expect(await check(current, 'guardHook')).toMatchObject({ status: 'ok' })
+        expect(await check(current, 'captureErrors')).toMatchObject({ status: 'ok' })
+      })
     })
 
     // #1106 — the PreToolUse guard hook: said on the routing line for each declared agent, and a warning when it cannot work
@@ -268,13 +324,14 @@ describe('the automatic routing in sf status (#1035)', () => {
         expect(await checkOf()).toMatchObject({ status: 'ok' })
       })
 
-      it('warns when the hook is declared and no CLI can run it: the call would go through unchecked', async () => {
+      // #1228: a `fail`, no longer a `warn`: the guard looks declared and every call passes unchecked
+      it('fails when the hook is declared and no CLI can run it: the call would go through unchecked', async () => {
         await manifest({ version: 5, agents: ['claude-code'] })
         await settings({ ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS })
         expect(await guardOf(notRunnable)).toEqual([{ agent: 'claude-code', state: 'declared-not-runnable' }])
-        expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code guard hook declared but no CLI can run it')
-        expect(await checkOf(notRunnable)).toMatchObject({ status: 'warn', details: 'claude-code guard hook declared but no CLI can run it' })
-        expect((await checkOf(notRunnable)).remediation).toContain('sf agents refresh --scope shared')
+        expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code guard hook declared but the CLI it reaches (no CLI) cannot run sf agents guard')
+        expect(await checkOf(notRunnable)).toMatchObject({ status: 'fail', details: 'claude-code guard hook reaches no CLI, which cannot run `sf agents guard`' })
+        expect((await checkOf(notRunnable)).remediation).toContain('npm install -D saasfoundryai-cli@')
       })
 
       it('warns when the hook is missing, for the agents that lack it only', async () => {

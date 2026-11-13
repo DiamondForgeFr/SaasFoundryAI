@@ -155,10 +155,19 @@ describe('newCommand (--profile integration)', () => {
     expect(settings.hooks.SessionStart[0].hooks[0].command).toBe(SESSION_START_COMMAND)
     expect(await readdir(tempDir)).not.toContain('apps')
 
-    // TC-1: sf status preconditions all pass on the harness install
-    const report = await collectStatus(tempDir, { checkNetwork: false })
+    // TC-1: sf status preconditions all pass on the harness install. The CLI the hooks reach is the machine's, not
+    // the project's: a probe stands for a current one, since a machine without any fails the guard on purpose (#1228).
+    const current = async () => ({ runnable: true })
+    const report = await collectStatus(tempDir, { checkNetwork: false, captureProbe: current, guardProbe: current })
     const failing = evaluatePreconditions(report).filter((p) => p.status === 'fail')
     expect(failing).toEqual([])
+    // Without one, the guard says so instead of passing for enforced
+    const bare = await collectStatus(tempDir, { checkNetwork: false, captureProbe: async () => false, guardProbe: async () => false })
+    expect(
+      evaluatePreconditions(bare)
+        .filter((p) => p.status === 'fail')
+        .map((p) => p.name)
+    ).toEqual(['guardHook'])
 
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('Claude Code (claude-code) — AGENTS.md')

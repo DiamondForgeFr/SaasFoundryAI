@@ -17,7 +17,11 @@ import { withLock } from './delegation-ledger'
  * Everything here is best effort. Logging a failure must never become a failure of the hook.
  */
 export const CAPTURE_ERRORS_FILE = 'capture-errors.jsonl'
-export const CAPTURE_ERROR_STAGES = ['payload', 'ledger', 'adjustment', 'ignored'] as const
+/**
+ * `cli` is written by the hook's own shell line, not by the CLI (#1228): the CLI the hook reached could not run the
+ * hook's command (an older release), so nothing was captured or checked.
+ */
+export const CAPTURE_ERROR_STAGES = ['payload', 'ledger', 'adjustment', 'ignored', 'cli'] as const
 export type CaptureErrorStage = (typeof CAPTURE_ERROR_STAGES)[number]
 
 /** `sf status` counts the errors of this many days: an old failure must not warn for ever. */

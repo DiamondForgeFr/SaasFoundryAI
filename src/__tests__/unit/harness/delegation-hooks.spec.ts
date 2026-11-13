@@ -6,6 +6,7 @@ import { dirname, join } from 'path'
 import { GENERATED_REGION_END, GENERATED_REGION_START, installAgentInstructions, planAgentInstructions } from '../../../harness/agent-instructions'
 import {
   captureCommand,
+  captureStanding,
   captureState,
   CLAUDE_CAPTURE_COMMAND,
   CLAUDE_CAPTURE_HOOKS,
@@ -16,8 +17,10 @@ import {
   isLegacyCaptureCommand,
   renderCodexHooks,
   resolveCaptureCli,
-  V1_1_0_CAPTURE_COMMANDS
+  V1_1_0_CAPTURE_COMMANDS,
+  V1_2_0_CAPTURE_COMMANDS
 } from '../../../harness/delegation-hooks'
+import { readCaptureErrors } from '../../../harness/capture-errors'
 import { CODEX_GUARD_COMMAND, CODEX_GUARD_TRUST_NOTICE, guardState } from '../../../harness/guard-hook'
 import { mergeClaudeSettingsHooks, mergeClaudeSettingsPermissions } from '../../../utils/claude-settings'
 import { hermeticPath, nodeBinDir } from '../../helpers/hermetic-path'
@@ -138,17 +141,37 @@ describe('the hooks that capture delegations (#1035)', () => {
     })
 
     // #1105: the CLI's stdout is the host's: it carries the decision that keeps a delegate running. Its stderr is not.
-    it('exits 0 and keeps the CLI error out of the host when the CLI fails or is too old to know the command', async () => {
+    // #1228: a CLI that fails on the command (too old to know it) is said in one line of the hook's own, not in silence.
+    const NOTICE = (code: number) => `saasfoundryai: ./node_modules/.bin/saasfoundryai cannot run agents outcome capture (exit ${code}): upgrade saasfoundryai-cli\n`
+    it('exits 0, keeps the CLI error out of the host, and says in one line that the CLI is too old to know the command', async () => {
       await program('node_modules/.bin/saasfoundryai', 1, 'echo "error: unknown command outcome" >&2')
-      expect(await runHook(CLAUDE_CAPTURE_COMMAND, SUBAGENT)).toEqual({ code: 0, stdout: '', stderr: '' })
+      expect(await runHook(CLAUDE_CAPTURE_COMMAND, SUBAGENT)).toEqual({ code: 0, stdout: '', stderr: NOTICE(1) })
     })
 
     it('lets what the CLI prints on stdout reach the host and nothing of its stderr, and still exits 0 when the CLI fails', async () => {
       const decision = '{"decision":"block","reason":"add the line"}'
       await program('node_modules/.bin/saasfoundryai', 3, `echo '${decision}'; echo "a warning" >&2`)
-      expect(await runHook(CLAUDE_CAPTURE_COMMAND, SUBAGENT)).toEqual({ code: 0, stdout: `${decision}\n`, stderr: '' })
+      expect(await runHook(CLAUDE_CAPTURE_COMMAND, SUBAGENT)).toEqual({ code: 0, stdout: `${decision}\n`, stderr: NOTICE(3) })
       await rm(join(root, 'calls.log'))
-      expect(await runHook(CODEX_CAPTURE_COMMAND, SUBAGENT)).toEqual({ code: 0, stdout: `${decision}\n`, stderr: '' })
+      expect(await runHook(CODEX_CAPTURE_COMMAND, SUBAGENT)).toEqual({ code: 0, stdout: `${decision}\n`, stderr: NOTICE(3) })
+    })
+
+    it('writes a CLI that cannot run the command to the capture error log of the clone, where sf status counts it', async () => {
+      await new Promise<void>((resolve, reject) => spawn('git', ['init', '-q'], { cwd: root }).on('close', (code) => (code === 0 ? resolve() : reject(new Error(`git init ${code}`)))))
+      await program('node_modules/.bin/saasfoundryai', 1, 'echo "error: unknown command outcome" >&2')
+      expect((await runHook(CODEX_CAPTURE_COMMAND, SUBAGENT)).code).toBe(0)
+      const summary = await readCaptureErrors(join(root, '.git', 'saasfoundry'), { since: new Date(Date.now() - 60_000) })
+      expect(summary.count).toBe(1)
+      expect(summary.last).toMatchObject({
+        host: 'codex',
+        event: 'capture',
+        stage: 'cli',
+        message: './node_modules/.bin/saasfoundryai cannot run agents outcome capture (exit 1): upgrade saasfoundryai-cli in the project or on the PATH'
+      })
+      // A CLI that runs the command leaves nothing
+      await program('node_modules/.bin/saasfoundryai', 0)
+      await runHook(CODEX_CAPTURE_COMMAND, SUBAGENT)
+      expect((await readCaptureErrors(join(root, '.git', 'saasfoundry'), { since: new Date(Date.now() - 60_000) })).count).toBe(1)
     })
 
     it('prints the decision once, whichever CLI answers first: the first one that resolves is the only one that runs', async () => {
@@ -187,9 +210,9 @@ describe('the hooks that capture delegations (#1035)', () => {
       expect(V1_1_0_CAPTURE_COMMANDS[1]).toContain('--host codex >/dev/null 2>&1; exit 0; }')
       expect(V1_1_0_CAPTURE_COMMANDS).not.toContain(CLAUDE_CAPTURE_COMMAND)
       expect(V1_1_0_CAPTURE_COMMANDS).not.toContain(CODEX_CAPTURE_COMMAND)
-      // The only difference with today is the redirection that discarded the CLI stdout
-      expect(CLAUDE_CAPTURE_COMMAND).toBe(V1_1_0_CAPTURE_COMMANDS[0].replace('>/dev/null 2>&1', '2>/dev/null'))
-      expect(CODEX_CAPTURE_COMMAND).toBe(V1_1_0_CAPTURE_COMMANDS[1].replace('>/dev/null 2>&1', '2>/dev/null'))
+      // v1.2.0 only changed the redirection that discarded the CLI stdout
+      expect(V1_2_0_CAPTURE_COMMANDS[0]).toBe(V1_1_0_CAPTURE_COMMANDS[0].replace('>/dev/null 2>&1', '2>/dev/null'))
+      expect(V1_2_0_CAPTURE_COMMANDS[1]).toBe(V1_1_0_CAPTURE_COMMANDS[1].replace('>/dev/null 2>&1', '2>/dev/null'))
     })
 
     it('are legacy commands, and a hand-edited copy or today command is not', () => {
@@ -239,6 +262,42 @@ describe('the hooks that capture delegations (#1035)', () => {
     })
   })
 
+  // The commands v1.2.0 shipped exited silently on a CLI that could not run them. They are replaced, never duplicated (#1228).
+  describe('the commands v1.2.0 shipped', () => {
+    const fixtureText = (name: string) => readFile(join(__dirname, '../../fixtures/harness/v1.2.0', name), 'utf8')
+    const commands = (config: { hooks: Record<string, { hooks: { command: string }[] }[]> }, event: string) => config.hooks[event].flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    it('are the golden bytes of the tag, legacy commands, and not today command', async () => {
+      const claude = JSON.parse(await fixtureText('claude-settings.json'))
+      const codex = JSON.parse(await fixtureText('codex-hooks.json'))
+      expect(commands(claude, 'SubagentStop')).toEqual([V1_2_0_CAPTURE_COMMANDS[0]])
+      expect(commands(claude, 'PostToolUse')).toEqual([V1_2_0_CAPTURE_COMMANDS[0]])
+      expect(commands(codex, 'SubagentStop')).toEqual([V1_2_0_CAPTURE_COMMANDS[1]])
+      for (const command of V1_2_0_CAPTURE_COMMANDS) {
+        expect(isLegacyCaptureCommand(command)).toBe(true)
+        expect(isLegacyCaptureCommand(`${command} # mine`)).toBe(false)
+      }
+      expect(V1_2_0_CAPTURE_COMMANDS).not.toContain(CLAUDE_CAPTURE_COMMAND)
+      // The only difference with today is the note on a CLI that fails
+      expect(CLAUDE_CAPTURE_COMMAND).toContain('2>/dev/null || note "$*" $?; exit 0; }')
+      expect(CLAUDE_CAPTURE_COMMAND).toContain('"host":"claude-code","event":"capture","stage":"cli"')
+    })
+
+    it('are replaced in a Claude Code settings file and a Codex hooks file, and are an outdated hook until then', async () => {
+      await put('.claude/settings.json', await fixtureText('claude-settings.json'))
+      expect(await captureState(root, 'claude-code', async () => true)).toBe('outdated')
+      // An outdated hook still runs the CLI it reaches: one that cannot run the command is said first
+      expect(await captureState(root, 'claude-code', async () => false)).toBe('declared-not-runnable')
+      expect(await mergeClaudeSettingsHooks(root, CLAUDE_CAPTURE_HOOKS, { supersedes: isLegacyCaptureCommand })).toBe(true)
+      const merged = JSON.parse(await get('.claude/settings.json'))
+      expect(commands(merged, 'SubagentStop')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(commands(merged, 'PostToolUse')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      const codex = renderCodexHooks(await fixtureText('codex-hooks.json')) as { content: string; replaced?: true }
+      expect(codex.replaced).toBe(true)
+      expect(commands(JSON.parse(codex.content), 'SubagentStop')).toEqual([CODEX_CAPTURE_COMMAND])
+    })
+  })
+
   describe('the CLI the project resolves', () => {
     it('finds it in the order the hook does, and nothing when there is none', async () => {
       expect(await resolveCaptureCli(root, SYSTEM_PATH)).toBeUndefined()
@@ -251,19 +310,38 @@ describe('the hooks that capture delegations (#1035)', () => {
     })
 
     it('asks it whether it knows the command: a release before outcome capture does not', async () => {
+      const cli = `${root}/node_modules/.bin/saasfoundryai`
       await program('node_modules/.bin/saasfoundryai', 0, 'echo "Usage: sf agents outcome capture --host <agent>"')
-      expect(await defaultCaptureProbe(root)).toBe(true)
+      expect(await defaultCaptureProbe(root)).toEqual({ runnable: true, cli })
       await program('node_modules/.bin/saasfoundryai', 1, 'echo "error: unknown command capture" >&2')
-      expect(await defaultCaptureProbe(root)).toBe(false)
+      expect(await defaultCaptureProbe(root)).toEqual({ runnable: false, cli })
       await rm(join(root, 'node_modules'), { recursive: true })
       // The probe falls back to the PATH: keep a CLI installed on the machine out of the assertion.
       const hostPath = process.env.PATH
       process.env.PATH = SYSTEM_PATH
       try {
-        expect(await defaultCaptureProbe(root)).toBe(false)
+        expect(await defaultCaptureProbe(root)).toEqual({ runnable: false })
       } finally {
         process.env.PATH = hostPath
       }
+    })
+
+    // #1228 — the version of the CLI the hook reaches, read from its package without a process.
+    it('reads the version of the saasfoundryai-cli package the CLI belongs to, through the bin link', async () => {
+      await put('node_modules/saasfoundryai-cli/package.json', JSON.stringify({ name: 'saasfoundryai-cli', version: '1.0.1' }))
+      await put('node_modules/saasfoundryai-cli/bin/sf.js', '#!/bin/sh\necho "error: unknown command agents" >&2\nexit 1\n')
+      await chmod(join(root, 'node_modules/saasfoundryai-cli/bin/sf.js'), 0o755)
+      await mkdir(join(root, 'node_modules/.bin'), { recursive: true })
+      await symlink('../saasfoundryai-cli/bin/sf.js', join(root, 'node_modules/.bin/saasfoundryai'))
+      expect(await defaultCaptureProbe(root)).toEqual({ runnable: false, cli: `${root}/node_modules/.bin/saasfoundryai`, version: '1.0.1' })
+      expect(await captureStanding(root, 'claude-code', async () => ({ runnable: true, cli: 'x', version: '1.0.1' }), '1.2.1')).toEqual({ state: 'missing' })
+      await put('.claude/settings.json', JSON.stringify({ hooks: CLAUDE_CAPTURE_HOOKS }))
+      expect(await captureStanding(root, 'claude-code', async () => ({ runnable: true, cli: 'x', version: '1.0.1' }), '1.2.1')).toEqual({
+        state: 'declared-outdated-cli',
+        cli: 'x',
+        cliVersion: '1.0.1'
+      })
+      expect(await captureState(root, 'claude-code', async () => ({ runnable: true, cli: 'x', version: '1.2.1' }), '1.2.1')).toBe('enforced')
     })
   })
 

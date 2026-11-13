@@ -178,6 +178,7 @@ Nothing else is deposited by the migration, and it never writes the consent to d
 | The hook is the bare `sf agents outcome capture` command a first build wrote.                                                               | It is replaced by the command that resolves the project's own CLI.                                                                                                                              |
 | The hook is the capture command v1.1.0 shipped (it discarded the CLI's output).                                                             | It is replaced, in `.claude/settings.json` and in `.codex/hooks.json`, by the command that lets the CLI's decision through; never left beside it. A copy you edited by hand is yours and stays. |
 | The `SessionStart` hook is the bare `sf status --claude-friendly --no-network` (or `--agent-friendly`) command that 1.0.x wrote.            | It is replaced by the command that resolves the project's own CLI; your other `SessionStart` hooks stay. A hook you wrote with other flags is yours and stays.                                  |
+| The capture or guard hook is the command v1.2.0 shipped (it exited silently when the CLI it reached could not run it).                      | It is replaced, in both files, by the command that notes such a CLI in the capture error log; never left beside it. A copy you edited by hand is yours and stays.                               |
 
 **The v1.1.0 capture hook is replaced, and Codex has to trust the new one.** The v1.1.0 command ended in `>/dev/null 2>&1`, so a delegate that forgot its closing line could not be asked for it; the
 new one lets the CLI's stdout reach the host (see [asking for the missing line](/cli/sf-agents#asking-for-the-missing-line)). The settings merge only adds a command whose exact string is missing, so
@@ -188,8 +189,14 @@ Codex delegations are not recorded. The notice is given once: the next update fi
 
 **The guard hook is new, and Codex has to trust it too.** The same merge adds the `PreToolUse` guard to `.claude/settings.json` (matcher `Bash|PowerShell`) and to `.codex/hooks.json` (matcher `Bash`),
 after the `PreToolUse` hooks you wrote, which are kept. `sf update` and `sf agents refresh` print
-`.codex/hooks.json: the PreToolUse guard hook was added. Codex skips a project hook until it is trusted: review and trust it with /hooks, or the guard does not run.` once. Until you trust it, Codex
-does not run the guard; `sf status` says `guard declared` for Codex and never `enforced`. A project that changed a `PreToolUse` command of its own is not touched.
+`.codex/hooks.json: the PreToolUse guard hook was added or replaced. Codex skips a project hook until it is trusted: review and trust it with /hooks, or the guard does not run.` once. Until you trust
+it, Codex does not run the guard; `sf status` says `guard declared` for Codex and never `enforced`. A project that changed a `PreToolUse` command of its own is not touched.
+
+**The update names the CLI the hooks will reach.** The guard and capture hooks run `node_modules/.bin/saasfoundryai`, then `saasfoundryai` on the PATH, never the CLI that ran the update: an
+`npx saasfoundryai-cli@<version> update` is gone once it returns. A generated project does not depend on `saasfoundryai-cli`, so its hooks reach the global install, which can be older and lack
+`agents guard`. Once the hooks are in place the update says which CLI they reach, `The guard and capture hooks run /usr/local/bin/saasfoundryai 1.2.1.`, and, when that CLI cannot run them or is older
+than the version the project was just updated to, says so for each hook and gives the command to upgrade it (`npm install -D saasfoundryai-cli@<version>` in the project, or
+`npm install -g saasfoundryai-cli@<version>`). `sf status` reports the same until it is done (see [the guard hook](/cli/sf-status#the-guard-hook)). Nothing is said for a project without these hooks.
 
 No module version is bumped for this: the hook is delivered by the settings merge that runs on every update, not by an installer's file set, so there is no module migration to preview or run. A
 project that wrote exactly `sf status --claude-friendly --no-network` itself loses that line on the next update, since it cannot be told from the one the harness wrote; the resolved command takes its
