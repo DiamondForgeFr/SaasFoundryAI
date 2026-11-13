@@ -1,5 +1,6 @@
 # Check if we're on a release candidate branch (rc-*)
-current_branch=$(git symbolic-ref --short HEAD)
+# A detached HEAD (every rebase step) is no rc-* branch: exit 0 rather than fail the commit.
+current_branch=$(git symbolic-ref --short -q HEAD) || exit 0
 if [[ ! "$current_branch" =~ ^rc- ]]; then
   exit 0
 fi

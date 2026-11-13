@@ -203,6 +203,9 @@ checks and the heavier pre-push gate.
 └── pre-push
 ```
 
+`prepare-commit-msg` and `pre-push` only act on release candidate branches (`rc-*`). On a detached HEAD, such as every step of a rebase, they exit without checking anything, so a rebase that stops on
+a conflict continues with `git rebase --continue`.
+
 Docker starts the development database, and dedicated test Compose configuration isolates API database tests. Generated GitHub Actions are topology-aware and can limit jobs to the surfaces changed by
 a pull request.
 

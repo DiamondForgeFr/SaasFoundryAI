@@ -1,5 +1,6 @@
 # Get the current branch name
-current_branch=$(git symbolic-ref --short HEAD)
+# A detached HEAD (a push from a rebase or `git push origin HEAD:<branch>`) is no rc-* branch: nothing to check.
+current_branch=$(git symbolic-ref --short -q HEAD) || exit 0
 echo "Preparing to push branch: $current_branch"
 
 # Get remote and URL information
