@@ -107,12 +107,13 @@ Deux règles s'ajoutent pour tous ceux qui ne sont pas la plateforme :
 
 - **Personne n'accorde ce qu'il ne détient pas.** Chaque permission ou section qu'une requête ajoute à un rôle doit être détenue par l'appelant là où le rôle s'applique ; renvoyer ce que le rôle a
   déjà, ou lui retirer quelque chose, ne demande rien de plus. Un utilisateur qui détient un rôle personnalisé ne peut pas l'étendre pour dépasser celui qui l'a rédigé.
-- **Un rôle `ENTITY` qui ne sert nulle part se façonne pour son type d'entité.** Les sections qui n'existent que sur une entité (la vision d'un projet, ses tickets) ne sont jamais détenues sur le
-  compte : l'administrateur du compte peut donc aussi accorder à un tel rôle ce que le type d'entité permet, c'est-à-dire ce qu'accordent les rôles système `ENTITY` actifs (`entity-admin`,
-  `entity-user`, et ceux qu'un projet ajoute pour ses propres types, comme un `project-owner`). Cet administrateur peut déjà attribuer ces rôles système dans toute entité du compte : personne ne
-  dépasse celui qui l'a rédigé. Rien au-delà n'est accordé, un administrateur d'entité n'accorde toujours que ce qu'il détient, et une fois le rôle attribué, ou promis par une invitation en attente,
-  chaque modification est de nouveau contrôlée dans chaque entité où il sert. Les rôles du modèle ne portent pas de type d'entité, donc tous les rôles système `ENTITY` comptent ; un projet qui type
-  ses rôles d'entité restreint `loadEntityTypeGrants` dans `account.service.ts` aux rôles système du type du rôle.
+- **Un rôle `ENTITY` se façonne pour son type d'entité.** Les sections qui n'existent que sur une entité (la vision d'un projet, ses tickets) ne sont jamais détenues sur le compte : l'administrateur
+  du compte (détenteur de `ROLE_CUSTOM_MANAGEMENT` via un rôle `ACCOUNT` du compte du rôle) peut donc aussi accorder à un tel rôle ce que le type d'entité permet, c'est-à-dire ce qu'accordent les
+  rôles système `ENTITY` actifs (`entity-admin`, `entity-user`, et ceux qu'un projet ajoute pour ses propres types, comme un `project-owner`). Cela vaut que le rôle ne soit encore attribué nulle part,
+  qu'il soit attribué dans des entités du compte ou promis par une invitation en attente. Cet administrateur n'agit que dans son compte et peut déjà attribuer ces rôles système dans toute entité de
+  celui-ci : personne ne dépasse celui qui l'a rédigé. Rien au-delà n'est accordé, et un administrateur d'entité n'accorde toujours que ce qu'il détient, dans chaque entité où le rôle sert. Les rôles
+  du modèle ne portent pas de type d'entité, donc tous les rôles système `ENTITY` comptent ; un projet qui type ses rôles d'entité restreint `loadEntityTypeGrants` dans `account.service.ts` aux rôles
+  système du type du rôle.
 - **Aucun rôle de compte ou d'entité ne porte une section de plateforme.** Une section de `PLATFORM_ADMINISTRATION` est refusée sur un rôle `ACCOUNT` ou `ENTITY`, quel que soit le demandeur,
   plateforme comprise.
 
@@ -158,17 +159,19 @@ rôle `ACCOUNT`, reçoit désormais `403` là où il recevait `401`.
 ::: tip Mettre à jour un projet généré en 1.2.0
 
 En 1.2.0, la règle « personne n'accorde ce qu'il ne détient pas » contrôlait un rôle `ENTITY` attribué nulle part contre le compte. Un administrateur de compte ne pouvait plus créer, ni étendre, un
-rôle de type d'entité accordant des sections qui n'existent que sur l'entité : `403 You cannot grant what you do not hold where this role applies`. La 1.2.1 contrôle un tel rôle contre ce que le type
-d'entité permet (voir « Qui peut modifier un rôle » ci-dessus). Le correctif touche `account.service.ts`, fusionné par `sf update` comme celui de la 1.1.1 ; aucune migration de module n'est
-nécessaire.
+rôle de type d'entité accordant des sections qui n'existent que sur l'entité : `403 You cannot grant what you do not hold where this role applies`. Un rôle `ENTITY` déjà attribué, ou porté par une
+invitation en attente, était contrôlé dans chaque entité où il sert, avec le même `403` pour l'administrateur du compte. La 1.2.1 laisse l'administrateur du compte accorder ce que le type d'entité
+permet sur tout rôle `ENTITY` de son compte, qu'il serve ou non (voir « Qui peut modifier un rôle » ci-dessus). Le correctif touche `account.service.ts`, fusionné par `sf update` comme celui de la
+1.1.1 ; aucune migration de module n'est nécessaire.
 
 Les parcours de rédaction de rôle qui changent de comportement :
 
 - **Créer un rôle `ENTITY`** (`POST /accounts/:id/roles`) en tant qu'administrateur du compte : les sections et permissions accordées par les rôles système `ENTITY` sont acceptées (`403` avant).
-- **Modifier un rôle `ENTITY` attribué nulle part** (`PATCH /accounts/roles/:roleId`) en tant qu'administrateur du compte : les mêmes droits peuvent être ajoutés.
+- **Modifier un rôle `ENTITY`** (`PATCH /accounts/roles/:roleId`) en tant qu'administrateur du compte, qu'il soit attribué nulle part, **déjà attribué** dans une entité du compte ou porté par une
+  invitation en attente : les mêmes droits peuvent être ajoutés (`403` avant).
 
-Inchangés : les rôles `ACCOUNT`, les rôles `ENTITY` déjà attribués dans une entité, les administrateurs d'entité et la plateforme. Un droit qu'aucun rôle système `ENTITY` ne porte, et que l'auteur ne
-détient pas, reste refusé. Si votre projet type ses rôles d'entité, restreignez `loadEntityTypeGrants` aux rôles système du type du rôle lors de la fusion.
+Inchangés : les rôles `ACCOUNT`, les administrateurs d'entité et la plateforme. Un droit qu'aucun rôle système `ENTITY` ne porte, et que l'auteur ne détient pas, reste refusé. Si votre projet type ses
+rôles d'entité, restreignez `loadEntityTypeGrants` aux rôles système du type du rôle lors de la fusion.
 
 En 1.2.0, une invitation en attente portant un rôle `ENTITY` ne comptait pas comme un endroit où le rôle sert : un administrateur d'entité pouvait modifier, activer, désactiver ou supprimer un rôle
 encore seulement promis à des personnes invitées dans une entité sœur, et la modification les atteignait à l'acceptation. La 1.2.1 compte les entités de chaque invitation en attente (`SENT`) comme des
@@ -177,8 +180,8 @@ comportement :
 
 - **Modifier, activer, désactiver ou supprimer un rôle `ENTITY`** (`PATCH /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`, `DELETE /accounts/roles/:roleId`) en tant qu'administrateur
   d'entité, quand une invitation en attente qui le porte vise une entité hors de votre sous-arbre : `403 This role is used in an entity you do not administer` (`200` avant).
-- **Ajouter des droits à un tel rôle** en tant qu'administrateur du compte : il sert, il n'est pas attribué nulle part, donc chaque droit est contrôlé dans les entités invitées, sans la marge du type
-  d'entité décrite plus haut.
+- **Ajouter des droits à un tel rôle** en tant qu'administrateur du compte : il sert, donc chaque droit est contrôlé dans les entités invitées ; la marge du type d'entité décrite plus haut vaut
+  toujours pour l'administrateur du compte.
 
 :::
 

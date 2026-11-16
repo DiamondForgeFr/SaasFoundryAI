@@ -1208,5 +1208,89 @@ describe('Accounts Module (e2e)', () => {
         .expect(403)
       expect(await prismaService.role.count({ where: { name: 'e2e-project-entity-admin' } })).toBe(0)
     })
+
+    /**
+     * #1245: the account administrator keeps the entity type allowance once the role is used, whether it is
+     * assigned in a project of the account or only promised by a pending invitation into one. An entity
+     * administrator still grants only what it holds, in every entity where the role is used.
+     */
+    describe('once the role is used in a project of the account (#1245)', () => {
+      let projectEntityId: string
+      const invitationIds: string[] = []
+
+      const createEmptyRole = async (name: string) => {
+        const res = await agent.post(`/api/accounts/${accountId}/roles`).send({ name, scope: 'ENTITY', permissionIds: [] }).expect(201)
+        createdRoleIds.push(res.body.id)
+        return res.body.id as number
+      }
+      /** Assigns the role to a member of the account in the project, as an allocation would. */
+      const assignInProject = (roleId: number) => prismaService.userRoleAssignment.create({ data: { userId: testUser2.id, roleId, entityId: projectEntityId } })
+      /** A pending (SENT) invitation into the project carrying the role: on acceptance it assigns the role there. */
+      const inviteIntoProject = async (roleId: number, email: string) => {
+        const invitation = await prismaService.invitation.create({
+          data: { inviterUserId: testUser.id, inviteeUserEmail: email, status: 'SENT', entitiesLinked: { create: { entityId: projectEntityId } }, rolesLinked: { create: { roleId } } }
+        })
+        invitationIds.push(invitation.id)
+      }
+      const addVision = { subModuleIds: [visionSectionId], permissionIds: [ticketEditPermissionId] }
+
+      beforeAll(async () => {
+        // A project of the account that the seeded entity admin does not administer.
+        projectEntityId = (await prismaService.entity.create({ data: { accountId, isActive: true } })).id
+      })
+
+      afterAll(async () => {
+        await prismaService.invitation.deleteMany({ where: { id: { in: invitationIds } } })
+        await prismaService.userRoleAssignment.deleteMany({ where: { roleId: { in: createdRoleIds } } })
+        await prismaService.entity.deleteMany({ where: { id: projectEntityId } })
+      })
+
+      it('the account admin adds the sections the entity type allows to a role already assigned in a project (200)', async () => {
+        const roleId = await createEmptyRole('e2e-project-assigned')
+        await assignInProject(roleId)
+
+        await agent.patch(`/api/accounts/roles/${roleId}`).send(addVision).expect(200)
+        expect(await grantsOf(roleId)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
+      })
+
+      it('the account admin does the same on a role carried only by a pending invitation into a project (200)', async () => {
+        const roleId = await createEmptyRole('e2e-project-invited')
+        await inviteIntoProject(roleId, 'e2e-project-invitee@saasfoundryai.test')
+
+        await agent.patch(`/api/accounts/roles/${roleId}`).send(addVision).expect(200)
+        expect(await grantsOf(roleId)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
+      })
+
+      it('nobody grants beyond what the entity type allows on a used role (403, nothing written)', async () => {
+        const roleId = await createEmptyRole('e2e-project-assigned-secret')
+        await assignInProject(roleId)
+
+        await agent
+          .patch(`/api/accounts/roles/${roleId}`)
+          .send({ subModuleIds: [visionSectionId, secretSectionId], permissionIds: [] })
+          .expect(403)
+        expect(await grantsOf(roleId)).toEqual({ permissionIds: [], subModuleIds: [] })
+      })
+
+      it('an entity admin of another entity still gets 403 on a role assigned or promised in the project (nothing written)', async () => {
+        const assignedRoleId = await createEmptyRole('e2e-project-assigned-entity-admin')
+        await assignInProject(assignedRoleId)
+        const invitedRoleId = await createEmptyRole('e2e-project-invited-entity-admin')
+        await inviteIntoProject(invitedRoleId, 'e2e-project-invitee-2@saasfoundryai.test')
+
+        await entityAdminAgent.patch(`/api/accounts/roles/${assignedRoleId}`).send(addVision).expect(403)
+        await entityAdminAgent.patch(`/api/accounts/roles/${invitedRoleId}`).send(addVision).expect(403)
+        expect(await grantsOf(assignedRoleId)).toEqual({ permissionIds: [], subModuleIds: [] })
+        expect(await grantsOf(invitedRoleId)).toEqual({ permissionIds: [], subModuleIds: [] })
+      })
+
+      it('an entity admin of the entity where the role is used still grants only what it holds (403)', async () => {
+        const roleId = await createEmptyRole('e2e-project-own-entity')
+        await prismaService.userRoleAssignment.create({ data: { userId: testUser2.id, roleId, entityId } })
+
+        await entityAdminAgent.patch(`/api/accounts/roles/${roleId}`).send(addVision).expect(403)
+        expect(await grantsOf(roleId)).toEqual({ permissionIds: [], subModuleIds: [] })
+      })
+    })
   })
 })

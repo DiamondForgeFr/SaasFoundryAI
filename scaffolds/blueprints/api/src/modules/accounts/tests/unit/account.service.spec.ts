@@ -1555,18 +1555,50 @@ class AccountServiceScopeTest extends AccountServiceTest {
           await assertForbidden(() => this.service.createCustomRole(actorId, A, { ...projectRole, scope: 'ACCOUNT', permissionIds: [] }), 'PROJECT_VISION')
         })
 
-        it('once assigned, the role is checked in each entity it is used in, without the entity type', async () => {
-          const { prisma } = given({ actor: accountAdminOfA, assignedIn: [E1] })
+        describe('the account admin keeps the entity type allowance once the role is used (#1245)', () => {
+          it.each([
+            ['assigned in an entity of the account', { assignedIn: [E1] }],
+            ['assigned in several entities', { assignedIn: [E1, E2] }],
+            ['promised by a pending invitation (#1222)', { invitedIn: [E2] }]
+          ] as const)('adds what the entity type allows to a role %s', async (_where, usage) => {
+            const { prisma, tx } = given({ actor: accountAdminOfA, ...usage })
 
-          await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }), 'PROJECT_VISION')
-          expect(prisma.role.findMany).not.toHaveBeenCalled()
-        })
+            await update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [PROJECT_TICKET_EDIT.id] })
 
-        it('a role promised by a pending invitation is used, not assigned nowhere: checked in the invited entity, without the entity type (#1222)', async () => {
-          const { prisma } = given({ actor: accountAdminOfA, invitedIn: [E1] })
+            expect(tx.rolePermissionLink.createMany).toHaveBeenCalledWith({ data: [{ roleId: 5, permissionId: PROJECT_TICKET_EDIT.id }] })
+            expect(prisma.role.findMany).toHaveBeenCalledTimes(1)
+          })
 
-          await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }), 'PROJECT_VISION')
-          expect(prisma.role.findMany).not.toHaveBeenCalled()
+          it('never beyond what the entity type allows (403, nothing written)', async () => {
+            const { prisma } = given({ actor: accountAdminOfA, assignedIn: [E1], invitedIn: [E2] })
+
+            await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id, PROJECT_SECRET.id], permissionIds: [] }), 'PROJECT_SECRET')
+            expect(prisma.$transaction).not.toHaveBeenCalled()
+          })
+
+          it('an entity admin of the entity where it is used still grants only what it holds (403)', async () => {
+            const { prisma } = given({ actor: entityAdminOfE1, assignedIn: [E1] })
+
+            await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }), 'PROJECT_VISION')
+            expect(prisma.role.findMany).not.toHaveBeenCalled()
+          })
+
+          it.each([
+            ['assigned', { assignedIn: [E2] }],
+            ['promised by a pending invitation', { invitedIn: [E2] }]
+          ] as const)('an entity admin of another entity cannot touch a role %s in a sibling (403)', async (_how, usage) => {
+            const { prisma } = given({ actor: entityAdminOfE1, ...usage })
+
+            await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }), 'used in an entity you do not administer')
+            expect(prisma.$transaction).not.toHaveBeenCalled()
+          })
+
+          it('an admin of another account gets no allowance on this account (403)', async () => {
+            const { prisma } = given({ actor: accountAdminOfB, assignedIn: [E1] })
+
+            await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }))
+            expect(prisma.role.findMany).not.toHaveBeenCalled()
+          })
         })
       })
 

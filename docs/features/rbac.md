@@ -107,11 +107,12 @@ Two more rules hold for everyone below the platform:
 
 - **Nobody grants what they do not hold.** Each permission or section a request adds to a role must be held by the caller where the role applies; sending back what the role already has, or removing
   from it, needs nothing more. A user who holds a custom role cannot extend it to climb above its editor.
-- **An `ENTITY` role used nowhere is shaped for its entity type.** Sections that exist only on an entity (a project's vision, its tickets) are never held on the account, so the account administrator
-  may also grant such a role what the entity type allows: what the active `ENTITY` system roles grant (`entity-admin`, `entity-user`, and the ones a project adds for its own types, such as a
-  `project-owner`). That administrator may already allocate those system roles in any entity of the account, so nobody climbs above their editor. Nothing beyond them is granted, an entity
-  administrator still grants only what it holds, and once the role is assigned, or promised by a pending invitation, each change is checked in every entity it is used in again. The template's roles
-  carry no entity type, so every `ENTITY` system role counts; a project that types its entity roles narrows `loadEntityTypeGrants` in `account.service.ts` to the system roles of the role's type.
+- **An `ENTITY` role is shaped for its entity type.** Sections that exist only on an entity (a project's vision, its tickets) are never held on the account, so the account administrator (holder of
+  `ROLE_CUSTOM_MANAGEMENT` through an `ACCOUNT` role of the role's account) may also grant such a role what the entity type allows: what the active `ENTITY` system roles grant (`entity-admin`,
+  `entity-user`, and the ones a project adds for its own types, such as a `project-owner`). This holds whether the role is assigned nowhere yet, assigned in entities of the account, or promised by a
+  pending invitation. That administrator acts only within its account and may already allocate those system roles in any entity of it, so nobody climbs above their editor. Nothing beyond them is
+  granted, and an entity administrator still grants only what it holds, in every entity the role is used in. The template's roles carry no entity type, so every `ENTITY` system role counts; a project
+  that types its entity roles narrows `loadEntityTypeGrants` in `account.service.ts` to the system roles of the role's type.
 - **No account or entity role carries a platform section.** A `PLATFORM_ADMINISTRATION` section is refused on an `ACCOUNT` or `ENTITY` role, whoever asks, the platform included.
 
 System roles stay renamable by nobody and deletable by nobody; a platform administrator maintains their grants.
@@ -154,16 +155,18 @@ caller that touches a system role, or an entity administrator that creates an `A
 ::: tip Updating a project generated with 1.2.0
 
 In 1.2.0 the rule "nobody grants what they do not hold" checked an `ENTITY` role assigned nowhere against the account. An account administrator could no longer create, or extend, an entity-type role
-granting sections that exist only on the entity: `403 You cannot grant what you do not hold where this role applies`. 1.2.1 checks such a role against what the entity type allows (see "Who may change
-a role" above). The fix lives in `account.service.ts`, merged by `sf update` like the 1.1.1 fix; no module migration is needed.
+granting sections that exist only on the entity: `403 You cannot grant what you do not hold where this role applies`. An `ENTITY` role already assigned, or carried by a pending invitation, was checked
+in each entity it is used in, with the same `403` for the account administrator. 1.2.1 lets the account administrator grant what the entity type allows on any `ENTITY` role of its account, used or not
+(see "Who may change a role" above). The fix lives in `account.service.ts`, merged by `sf update` like the 1.1.1 fix; no module migration is needed.
 
 Role-authoring flows that change behaviour:
 
 - **Creating an `ENTITY` role** (`POST /accounts/:id/roles`) as the account administrator: the sections and permissions granted by the `ENTITY` system roles are accepted (`403` before).
-- **Editing an `ENTITY` role assigned nowhere** (`PATCH /accounts/roles/:roleId`) as the account administrator: the same grants may be added.
+- **Editing an `ENTITY` role** (`PATCH /accounts/roles/:roleId`) as the account administrator, whether it is assigned nowhere, **already assigned** in an entity of the account, or carried by a pending
+  invitation: the same grants may be added (`403` before).
 
-Unchanged: `ACCOUNT` roles, `ENTITY` roles already assigned in an entity, entity administrators, and the platform. A grant that no `ENTITY` system role carries, and that the author does not hold, is
-still refused. If your project types its entity roles, narrow `loadEntityTypeGrants` to the system roles of the role's type when you merge.
+Unchanged: `ACCOUNT` roles, entity administrators, and the platform. A grant that no `ENTITY` system role carries, and that the author does not hold, is still refused. If your project types its entity
+roles, narrow `loadEntityTypeGrants` to the system roles of the role's type when you merge.
 
 In 1.2.0 a pending invitation carrying an `ENTITY` role did not count as a place where the role is used: an entity administrator could edit, toggle or delete a role so far only promised to people
 invited into a sibling entity, and the change reached them on acceptance. 1.2.1 counts the entities of each pending (`SENT`) invitation like assignments (see "Who may change a role" above), in the
@@ -171,7 +174,8 @@ same `account.service.ts`; the test mock `service-mocks.ts` gains `invitationEnt
 
 - **Editing, toggling or deleting an `ENTITY` role** (`PATCH /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`, `DELETE /accounts/roles/:roleId`) as an entity administrator, when a
   pending invitation carrying it targets an entity outside your subtree: `403 This role is used in an entity you do not administer` (`200` before).
-- **Adding grants to such a role** as the account administrator: it is used, not assigned nowhere, so each grant is checked in the invited entities, without the entity-type allowance above.
+- **Adding grants to such a role** as the account administrator: it is used, so each grant is checked in the invited entities; the entity-type allowance above still applies to the account
+  administrator.
 
 :::
 
