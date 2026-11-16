@@ -52,6 +52,7 @@ import {
   validateUpdateOutputOptions
 } from './update.options'
 import { handleProfileTransition } from './update.profile-transition'
+import { groupByLockfileRoot, isPackageManifestPath, logPendingSidecarPins, offerLockfileResolution, pinChanges, readPackageManifests, type LockfileRoot, type PinChange } from './update.lockfile'
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
 import { previewCodexInstructionLimits } from '../harness/codex-instruction-limit-preview'
@@ -1388,6 +1389,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         // Conflicts left for the user to merge (sidecar or kept edit). They no longer hold the
         // project on its old version: their baseline becomes the offered template (#856).
         let unresolvedConflicts = false
+        // Lockfiles that still hold the pins this refresh replaced, and sidecars that propose new pins (#1229).
+        let lockfileRoots: LockfileRoot[] = []
+        let pendingSidecarRoots: LockfileRoot[] = []
 
         try {
           // Regenerate project in temp dir with current CLI
@@ -1449,9 +1453,27 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               // In dry-run we report but never mutate.
             } else {
               spinner.start('Applying updates...')
+              const packageManifestsBefore = await readPackageManifests(
+                '.',
+                updates.map((update) => update.path)
+              )
               const { applied, conflicts, added, removed } = await applyFileUpdates(updates, tempProjectDir, spinner, conflictStrategy, assertStackModuleWritePathSafe)
               templateRefreshComplete = true
               unresolvedConflicts = conflictStrategy !== 'replace' && conflicts.length > 0
+              // Pins the refresh changed on disk, and pins a package.json sidecar proposes (#1229).
+              const pinsAfter = await readPackageManifests('.', [...packageManifestsBefore.keys()])
+              lockfileRoots = await groupByLockfileRoot(
+                '.',
+                [...packageManifestsBefore].flatMap(([path, before]) => pinChanges(path, before, pinsAfter.get(path)))
+              )
+              if (conflictStrategy === 'save-new') {
+                const sidecarPins: PinChange[] = []
+                for (const conflict of conflicts.filter((entry) => isPackageManifestPath(entry.path))) {
+                  const proposed = await readFile(`${conflict.path}.saasfoundry.new`, 'utf8').catch(() => undefined)
+                  if (proposed !== undefined) sidecarPins.push(...pinChanges(conflict.path, pinsAfter.get(conflict.path), proposed))
+                }
+                pendingSidecarRoots = await groupByLockfileRoot('.', sidecarPins)
+              }
 
               spinner.succeed(chalk.green('Template update complete.'))
 
@@ -1507,6 +1529,20 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           if (tempDir) {
             await rm(tempDir, { recursive: true, force: true }).catch(() => {})
           }
+        }
+
+        // After the manifest records the refresh: a failed install must not cost the new baselines.
+        if (!dryRun && templateRefreshComplete) {
+          const resolutions = await offerLockfileResolution(
+            lockfileRoots,
+            { interactive: !nonInteractive },
+            {
+              refresh: refreshDependencyLockAndInstall,
+              confirm: async (message) => (await promptWithPrefill<{ confirm: boolean }>([{ type: 'confirm', name: 'confirm', message, default: true }])).confirm
+            }
+          )
+          if (resolutions.some((resolution) => resolution.outcome === 'failed')) process.exitCode = 1
+          logPendingSidecarPins(pendingSidecarRoots)
         }
 
         console.log()
