@@ -11,7 +11,7 @@ There are seven of them.
 | --------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | [`sf-git-commit`](#sf-git-commit)                   | "commit", "save changes"                                          | Generates a conventional commit message and pushes                      |
 | [`sf-git-create-pr`](#sf-git-create-pr)             | "open a PR", "create a pull request"                              | Opens a PR targeting your release branch with an auto-written body      |
-| [`sf-git-fix-pr-comments`](#sf-git-fix-pr-comments) | "implement the review comments", "address the PR feedback"        | Fetches PR comments, applies each change, commits                       |
+| [`sf-git-fix-pr-comments`](#sf-git-fix-pr-comments) | "implement the review comments", "address the PR feedback"        | Applies the open review threads, pushes, replies and resolves           |
 | [`sf-git-merge`](#sf-git-merge)                     | "update my branch", "resolve conflicts"                           | Rebase on the PR target branch, deterministic conflicts only            |
 | [`sf-utils-fix-errors`](#sf-utils-fix-errors)       | "fix errors", "fix typescript", "fix eslint"                      | Fans out across the codebase to resolve ESLint + TS errors              |
 | [`sf-utils-fix-grammar`](#sf-utils-fix-grammar)     | "fix grammar", "spellcheck the docs"                              | Grammar / spelling pass on markdown and comments (preserves formatting) |
@@ -65,12 +65,22 @@ the ticket enters code review. In the Solo preset, PR review is the human gate.
 
 ## `sf-git-fix-pr-comments`
 
-When reviewers leave comments on your PR, this skill fetches them, groups them by file, and works through each one — making the code change, committing, and pushing. One commit per comment cluster.
+When reviewers leave comments on your PR, this skill fetches the ones still open, groups them by file and works through each one, then commits and pushes the changes. After the push it answers the
+reviewer on every thread it addressed.
 
 **Typical invocation**: `"implement the review comments"` — or explicitly `/sf-git-fix-pr-comments`.
 
-Under the hood it calls `gh api repos/:owner/:repo/pulls/:number/comments` and walks each thread. It ignores threads marked as resolved; it posts a brief reply on each thread it addresses ("Fixed in
-abc1234").
+Under the hood:
+
+- it finds the PR of the current branch with `gh pr view --json number,headRefName,url`;
+- it lists the review threads with their state through GitHub's GraphQL API (`reviewThreads`, with `isResolved`, `isOutdated`, `path`, `line` and the comments), and skips the resolved ones. The
+  review-level comments come from `gh pr view <N> --json reviews,comments`;
+- after the push, it replies in each thread with `addPullRequestReviewThreadReply`: what changed and the commit SHA, or why the comment was not applied, in the ticket language of the project
+  (`language.tickets` in `.saasfoundry.json`). It resolves a thread with `resolveReviewThread` only when the fix is complete; a comment it did not apply stays open for you. Review-level comments get
+  one answer with `gh pr comment`.
+
+Each GraphQL document is written to a file and passed with `gh api graphql -F query=@<file>`, so every call is one plain command. Replying and resolving are part of In Review: the skill never merges,
+never approves, never takes a PR out of draft and never moves a ticket.
 
 ## `sf-git-merge`
 
