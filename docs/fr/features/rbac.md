@@ -119,6 +119,21 @@ Deux règles s'ajoutent pour tous ceux qui ne sont pas la plateforme :
 
 Les rôles système ne sont ni renommables ni supprimables par personne ; un administrateur de la plateforme fait évoluer leurs droits.
 
+### Supprimer un rôle encore utilisé
+
+Un rôle personnalisé n'est supprimé que si personne ne le détient. Tant que le rôle est attribué à un utilisateur, ou porté par une invitation en attente (`SENT`) dont l'acceptation l'attribuerait,
+`DELETE /accounts/roles/:roleId` répond `409` et ne change rien : aucune attribution n'est retirée, aucune invitation ne perd le rôle. Le message commence par `ROLE_IN_USE:` et nomme les détenteurs,
+chaque utilisateur par son e-mail (avec l'entité, pour une attribution `ENTITY`) et chaque invitation par son invité (avec les entités où il est invité) ; une longue liste nomme les cinq premiers et
+compte les autres :
+
+```text
+ROLE_IN_USE: the role "support" is still assigned to alice@acme.test (Acme Lyon) and carried by the pending invitation to bob@acme.test (Acme Paris). To delete it, first unassign it and cancel the invitations.
+```
+
+Retirez le rôle aux utilisateurs (depuis la fenêtre de modification d'un utilisateur) et annulez ces invitations, puis supprimez-le à nouveau. Une invitation expirée, annulée ou acceptée ne détient
+rien, et les droits du rôle partent avec lui. Le contrôle d'autorité passe en premier : un appelant qui ne peut pas gérer le rôle reçoit le `403` ci-dessus, jamais la liste des détenteurs. Le panneau
+des rôles de l'application web garde la fiche du rôle ouverte et affiche le refus avec les détenteurs que l'API nomme.
+
 ::: warning Endpoints sans portée
 
 Un endpoint sans portée utilise l'union des affectations de l'utilisateur, ce qui permet à un rôle détenu dans un compte d'agir sur un autre. Toute route qui prend un identifiant de compte ou d'entité
@@ -182,6 +197,12 @@ comportement :
   d'entité, quand une invitation en attente qui le porte vise une entité hors de votre sous-arbre : `403 This role is used in an entity you do not administer` (`200` avant).
 - **Ajouter des droits à un tel rôle** en tant qu'administrateur du compte : il sert, donc chaque droit est contrôlé dans les entités invitées ; la marge du type d'entité décrite plus haut vaut
   toujours pour l'administrateur du compte.
+
+En 1.2.0, supprimer un rôle personnalisé encore attribué répondait `400 Failed to delete custom role` : la clé étrangère de l'attribution refusait la suppression, et la confirmation du panneau des
+rôles annonçait à tort que les attributions seraient retirées. Un rôle porté seulement par une invitation en attente était supprimé, et l'invitation le perdait sans bruit. La 1.2.1 refuse les deux
+avec `409 ROLE_IN_USE` (voir « Supprimer un rôle encore utilisé » ci-dessus). Le correctif touche `account.service.ts`, la page web `account-roles.tsx`, le nouveau `role-delete-refusal.tsx` à côté
+d'elle et les traductions `account`, fusionnés par `sf update` comme les correctifs ci-dessus ; aucune migration de module n'est nécessaire. Un client qui lisait le `400` d'un rôle utilisé reçoit
+désormais `409`.
 
 :::
 

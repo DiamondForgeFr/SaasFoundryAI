@@ -305,7 +305,9 @@ roles:
   tk_no-account-selected_: Sélectionnez un compte dans l'en-tête pour parcourir ses rôles.
   tk_system_: Système
   tk_delete_: Supprimer le rôle
-  tk_delete-confirm_: Supprimer ce rôle personnalisé ? Les attributions existantes seront retirées.
+  tk_delete-confirm_: Supprimer ce rôle personnalisé ? Un rôle encore attribué, ou porté par une invitation en attente, n'est pas supprimé.
+  tk_delete-in-use_: Ce rôle est encore utilisé, il n'a pas été supprimé.
+  tk_delete-failed_: Le rôle n'a pas pu être supprimé.
   tk_edit_: Modifier le rôle
   tk_modules_: Modules
   tk_modules-empty_: Aucun module attaché.

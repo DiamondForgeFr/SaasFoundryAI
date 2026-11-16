@@ -242,6 +242,10 @@ shaped for its entity type: an administrator of the account itself (through an A
 of it. An entity administrator grants only what it holds, in every entity the role is used in. A new place where a role takes effect later (a scheduled assignment, a template applied on creation)
 counts the same way: add it to `loadEntitiesUsingRole`.
 
+A role still held is never deleted, and its assignments are never removed on the way: `deleteCustomRole` reads who holds it (`loadRoleHolders`: its assignments, any scope, and the pending `SENT`
+invitations that carry it) after the authority check, and answers `409 ROLE_IN_USE: …` naming those users and invitees, changing nothing. The web role panel shows that message in the role sheet. A new
+place where a role takes effect later belongs in `loadRoleHolders` as well, so the delete keeps refusing while anyone would still receive the role.
+
 Entities form a tree (`Entity.parentEntityId`, `prisma/schema/organizations.prisma`): an entity administrator sees the subtree under their entity, never its siblings. Pass the ids these methods return
 into the Prisma `where` (`{ id: { in: visibleIds } }`) — see `AccountService` for the pattern.
 

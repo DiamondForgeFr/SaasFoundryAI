@@ -3,7 +3,7 @@
  * This demonstrates how to use the base classes and utilities for cleaner, more maintainable tests
  */
 
-import { BadRequestException, ForbiddenException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
 
 /**
  * Dependencies
@@ -1248,10 +1248,16 @@ class AccountServiceScopeTest extends AccountServiceTest {
         assignedIn?: string[]
         /** Entities a pending invitation carrying the role targets (#1222). */
         invitedIn?: string[]
+        /**
+         * Who the delete finds still holding the role (#1221): its assignments and the pending invitations carrying it.
+         * Kept apart from `assignedIn` / `invitedIn`, which drive the authority check only: unset, the role is held by nobody.
+         */
+        heldBy?: { email: string; entityName?: string | null }[]
+        pendingInvitations?: { email: string; entityNames?: string[] }[]
       }
 
       /* eslint-disable @typescript-eslint/no-explicit-any */
-      const given = ({ actor, role = { id: 5, scope: 'ENTITY', accountId: A }, assignedIn = [], invitedIn = [] }: Given) => {
+      const given = ({ actor, role = { id: 5, scope: 'ENTITY', accountId: A }, assignedIn = [], invitedIn = [], heldBy = [], pendingInvitations = [] }: Given) => {
         const prisma = this.prismaService as any
         const permissionCatalog = [ALLOCATION, ENTITY_CREATION, ACCOUNT_UPDATE, PROJECT_TICKET_EDIT]
         const sectionCatalog = [USERS, ENTITIES, PLATFORM_ACCOUNTS, PROJECT_VISION, PROJECT_SECRET]
@@ -1267,10 +1273,17 @@ class AccountServiceScopeTest extends AccountServiceTest {
         })
         prisma.role.update = jest.fn().mockResolvedValue({ id: role.id, name: 'custom', isActive: false })
         prisma.role.delete = jest.fn().mockResolvedValue({})
+        const entityNamed = (name: string | null | undefined, index: number) => (name === undefined ? null : { id: `ent-${index}`, organization: name === null ? null : { name } })
         prisma.userRoleAssignment.findMany.mockReset()
-        prisma.userRoleAssignment.findMany.mockResolvedValue(assignedIn.map((entityId) => ({ entityId })))
+        prisma.userRoleAssignment.findMany.mockImplementation(async ({ select }: any) =>
+          select?.user ? heldBy.map((holder, index) => ({ user: { email: holder.email }, entity: entityNamed(holder.entityName, index) })) : assignedIn.map((entityId) => ({ entityId }))
+        )
         prisma.invitationEntityLink.findMany.mockReset()
         prisma.invitationEntityLink.findMany.mockResolvedValue(invitedIn.map((entityId) => ({ entityId })))
+        prisma.invitation.findMany.mockReset()
+        prisma.invitation.findMany.mockResolvedValue(
+          pendingInvitations.map((invitation) => ({ inviteeUserEmail: invitation.email, entitiesLinked: (invitation.entityNames ?? []).map((name, index) => ({ entity: entityNamed(name, index) })) }))
+        )
         const findPermissions = jest.fn(async ({ where }: any) => permissionCatalog.filter((permission) => where.id.in.includes(permission.id)))
         const findSections = jest.fn(async ({ where }: any) => sectionCatalog.filter((section) => where.id.in.includes(section.id)))
         prisma.modulePermission = { findMany: findPermissions }
@@ -1451,6 +1464,78 @@ class AccountServiceScopeTest extends AccountServiceTest {
 
           await TestAssertions.assertThrows(() => this.service.deleteCustomRole(actorId, 5), UnauthorizedException)
           expect(this.accountAccessService.getPermissionChecker).not.toHaveBeenCalled()
+        })
+      })
+
+      describe('a role still in use is never deleted (#1221)', () => {
+        const remove = () => this.service.deleteCustomRole(actorId, 5)
+
+        it('answers 409 ROLE_IN_USE naming the users who hold it, and deletes nothing', async () => {
+          const { prisma } = given({
+            actor: accountAdminOfA,
+            assignedIn: [E1],
+            heldBy: [{ email: 'alice@acme.test', entityName: 'Acme Lyon' }, { email: 'bob@acme.test', entityName: null }]
+          })
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toBe('ROLE_IN_USE: the role "custom" is still assigned to alice@acme.test (Acme Lyon), bob@acme.test (entity ent-1). To delete it, first unassign it.')
+          expect(prisma.role.delete).not.toHaveBeenCalled()
+          expect(prisma.userRoleAssignment.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { roleId: 5 } }))
+        })
+
+        it('names an ACCOUNT assignment by its user alone', async () => {
+          given({ actor: accountAdminOfA, role: { id: 5, scope: 'ACCOUNT', accountId: A }, heldBy: [{ email: 'carol@acme.test' }] })
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toContain('assigned to carol@acme.test.')
+        })
+
+        it('answers 409 when only a pending invitation carries the role, naming the invitee and where it is invited', async () => {
+          const { prisma } = given({ actor: accountAdminOfA, invitedIn: [E2], pendingInvitations: [{ email: 'dave@acme.test', entityNames: ['Acme Paris'] }] })
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toBe('ROLE_IN_USE: the role "custom" is still carried by the pending invitation to dave@acme.test (Acme Paris). To delete it, first cancel the invitations.')
+          expect(prisma.invitation.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'SENT', rolesLinked: { some: { roleId: 5 } } } }))
+          expect(prisma.role.delete).not.toHaveBeenCalled()
+        })
+
+        it('names holders and invitations together, and counts the holders past the first five', async () => {
+          const heldBy = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((name) => ({ email: `${name}@acme.test` }))
+          given({ actor: accountAdminOfA, role: { id: 5, scope: 'ACCOUNT', accountId: A }, heldBy, pendingInvitations: [{ email: 'x@acme.test' }, { email: 'y@acme.test' }] })
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toContain('assigned to a@acme.test, b@acme.test, c@acme.test, d@acme.test, e@acme.test and 2 more')
+          expect(error.message).toContain('carried by the pending invitations to x@acme.test, y@acme.test')
+          expect(error.message).toContain('first unassign it and cancel the invitations.')
+        })
+
+        it('checks the authority first: a caller without it gets the 403, never the list of holders', async () => {
+          const { prisma } = given({ actor: entityAdminOfE1, assignedIn: [E2], heldBy: [{ email: 'alice@acme.test', entityName: 'Acme Lyon' }] })
+
+          await assertForbidden(remove, 'This role is used in an entity you do not administer')
+
+          expect(prisma.invitation.findMany).not.toHaveBeenCalled()
+        })
+
+        it('deletes a role nobody holds', async () => {
+          const { prisma } = given({ actor: accountAdminOfA })
+
+          await expect(remove()).resolves.toEqual({ id: 5 })
+
+          expect(prisma.role.delete).toHaveBeenCalledWith({ where: { id: 5 } })
+        })
+
+        it('answers 409 when the role is assigned between the check and the delete (the foreign key refuses it)', async () => {
+          const { prisma } = given({ actor: accountAdminOfA })
+          prisma.role.delete = jest.fn().mockRejectedValue(Object.assign(new Error('Foreign key constraint violated'), { code: 'P2003' }))
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toContain('ROLE_IN_USE')
         })
       })
 
