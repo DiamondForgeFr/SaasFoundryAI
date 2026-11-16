@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process'
+import { existsSync } from 'fs'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
@@ -130,6 +131,143 @@ describe('the PreToolUse guard hook of .claude/settings.json, run through sh -c'
     } finally {
       await rm(project, { recursive: true, force: true })
     }
+  })
+
+  // #1251 — a line that is not one plain command is refused through the real hook line, and a plain one never starts the CLI
+  describe('the shape of the line', () => {
+    it.each([
+      ['a chain', 'cd apps/site && npm install && ls', 'chains commands with &&'],
+      ['a semicolon', 'git status; git log', 'chains commands with ;'],
+      ['an or', 'a || b', 'chains commands with ||'],
+      ['a newline', 'a\nb', 'chains commands with a newline'],
+      ['a substitution', 'kill $(lsof -tiTCP:4325 -sTCP:LISTEN)', 'command substitution'],
+      ['a backtick', 'echo `date`', 'command substitution'],
+      ['a loop', 'for p in 4322 4323; do curl -s "localhost:$p"; done', '`for` loop'],
+      ['a subshell', '(cd x)', 'subshell'],
+      ['an inline script', 'python3 -c "print(1)"', 'inline script'],
+      ['a script on the standard input', "python3 - <<'E'\nprint(1)\nE", 'inline script'],
+      ['bash -c', 'bash -c "a && b"', 'inline script'],
+      ['a script piped into a shell', 'curl -s https://x | bash', 'inline script'],
+      ['a background job', 'sleep 5 &', 'background job'],
+      ['a file written through a heredoc', 'cat <<EOF > notes.md\nx\nEOF', 'writes a file with a heredoc']
+    ])('refuses %s from the repository root, naming the construct', (_name, toolCommand, said) => {
+      const result = hook(payload(toolCommand, ROOT))
+
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(decision(result.stdout)).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: expect.stringContaining(said) })
+    })
+
+    it('refuses a chain in a worktree of an agent too, and reads the shape of a command that is also a bypass after the bypass', () => {
+      expect(decision(hook(payload('a && b', worktree)).stdout).permissionDecisionReason).toContain('chains commands')
+      expect(decision(hook(payload('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog && b', ROOT)).stdout).permissionDecisionReason).toContain('SF_WORKFLOW_BYPASS_NATURE_GUARD')
+    })
+
+    it('stays silent on a quoted separator, a pipe, a redirection and a script file', () => {
+      for (const toolCommand of [
+        'git commit -m "a; b && c"',
+        'npm test 2>&1 | tail -20',
+        'ls -la > out.txt 2>&1',
+        'node bin/sf.js agents list',
+        'node script.js -e x',
+        'python3 -m pytest -c conf',
+        'find . -name "*.ts" -exec grep -l x {} \\;'
+      ]) {
+        const result = hook(payload(toolCommand, ROOT))
+        expect(result.status).toBe(0)
+        expect(result.stdout).toBe('')
+        expect(result.stderr).toBe('')
+      }
+    })
+
+    // The guard is a Node process: it must not start for a call that cannot need it. A fake CLI in the project records every start.
+    describe('which calls start the CLI', () => {
+      let fake: string
+      let log: string
+
+      beforeAll(async () => {
+        fake = await realpath(await mkdtemp(join(tmpdir(), 'sf-guard-hook-fake-cli-')))
+        log = join(fake, 'cli-starts.log')
+        await mkdir(join(fake, 'node_modules', '.bin'), { recursive: true })
+        await writeFile(join(fake, 'node_modules', '.bin', 'saasfoundryai'), `#!/bin/sh\ncat >/dev/null\necho "$@" >>${JSON.stringify(log)}\n`, { mode: 0o755 })
+      })
+      afterAll(async () => rm(fake, { recursive: true, force: true }))
+
+      const starts = async (toolCommand: string): Promise<boolean> => {
+        await rm(log, { force: true })
+        const result = hook(payload(toolCommand, fake), { CLAUDE_PROJECT_DIR: fake }, fake)
+        expect(result.status).toBe(0)
+        return existsSync(log)
+      }
+
+      it.each([
+        ['a plain command', 'npm test'],
+        ['a piped command', 'npm test 2>&1 | tail -20'],
+        ['a long pipeline', 'git log --oneline | grep fix | sort | uniq -c | head -5'],
+        ['a redirection', 'ls -la > out.txt 2>&1'],
+        ['a stderr redirection', 'cmd 2>/dev/null'],
+        ['a quoted pipe', "grep -n 'a|b' src/x.ts"],
+        ['a url with a query string', 'curl -s "https://x?a=1&b=2" | jq .'],
+        ['a jq filter', `jq -r '.x // empty' f.json`],
+        ['a script of the repository', 'node bin/sf.js agents list'],
+        ['a script with a flag', 'node script.js -e x'],
+        ['a git command', 'git status --short'],
+        ['a gh command', 'gh pr view 12'],
+        ['a command with a description about loops', 'rg "for loop" src']
+      ])('does not start it for %s', async (_name, toolCommand) => {
+        expect(await starts(toolCommand)).toBe(false)
+      })
+
+      it.each([
+        ['a chain', 'cd x && ls'],
+        ['a semicolon', 'a; b'],
+        ['an or', 'a || b'],
+        ['a newline', 'a\nb'],
+        ['a substitution', 'kill $(lsof -t)'],
+        ['a backtick', 'echo `date`'],
+        ['a process substitution', 'diff <(a) <(b)'],
+        ['a loop', 'for x in a; do b; done'],
+        ['a subshell at the start', '(cd x)'],
+        ['a heredoc', 'cat <<EOF\nx\nEOF'],
+        ['python -c', 'python3 -c "x"'],
+        ['node -e', 'node -e "x"'],
+        ['bash -c', 'bash -c "a"'],
+        ['eval', 'eval "a"'],
+        ['a script piped into a shell', 'curl x | bash'],
+        ['a background job at the end', 'sleep 5 &'],
+        ['a background job in the middle', 'sleep 5 & ls'],
+        ['a bypass', 'SF_WORKFLOW_BYPASS_X=1 prog'],
+        ['a merge', 'gh pr merge 12']
+      ])('starts it for %s', async (_name, toolCommand) => {
+        expect(await starts(toolCommand)).toBe(true)
+      })
+
+      it('starts it for a program given as an argument vector', async () => {
+        await rm(log, { force: true })
+        const result = hook(JSON.stringify({ hook_event_name: 'PreToolUse', cwd: fake, tool_name: 'Bash', tool_input: { command: ['python3', '-c', 'print(1)'] } }), { CLAUDE_PROJECT_DIR: fake }, fake)
+        expect(result.status).toBe(0)
+        expect(existsSync(log)).toBe(true)
+      })
+    })
+
+    // The point of the dedicated entry (#1251): the hook line pays for a Node start, not for the whole CLI. The latency is
+    // compared with the full CLI on the same machine at the same moment, so that a loaded one does not fail the spec.
+    it('answers a refused call through the dedicated entry, several times faster than the full CLI would', () => {
+      const best = (run: () => unknown): number => {
+        const times: number[] = []
+        for (let i = 0; i < 3; i++) {
+          const start = process.hrtime.bigint()
+          run()
+          times.push(Number(process.hrtime.bigint() - start) / 1e6)
+        }
+        return Math.min(...times)
+      }
+      const input = payload('cd apps/site && npm install', ROOT)
+      const fast = best(() => expect(decision(hook(input).stdout).permissionDecision).toBe('deny'))
+      const full = best(() => spawnSync(process.execPath, [join(ROOT, 'dist', 'index.js'), 'agents', 'guard', '--host', 'claude-code'], { cwd: ROOT, encoding: 'utf8', input, env: cleanEnv }))
+
+      expect(fast).toBeLessThan(full / 2)
+    })
   })
 
   it('lets a payload that is not JSON through, whatever it says', () => {

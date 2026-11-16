@@ -33,7 +33,7 @@ jest.mock('ora', () => () => {
 import { updateCommand } from '../../../commands/update'
 import { GENERATED_REGION_START } from '../../../harness/agent-instructions'
 import { CLAUDE_CAPTURE_COMMAND, CODEX_CAPTURE_COMMAND, CODEX_HOOKS_PATH, CODEX_RETRUST_NOTICE, V1_1_0_CAPTURE_COMMANDS } from '../../../harness/delegation-hooks'
-import { CLAUDE_GUARD_COMMAND, CLAUDE_GUARD_HOOKS, CODEX_GUARD_COMMAND, CODEX_GUARD_TRUST_NOTICE } from '../../../harness/guard-hook'
+import { CLAUDE_GUARD_COMMAND, CLAUDE_GUARD_HOOKS, CODEX_GUARD_COMMAND, CODEX_GUARD_TRUST_NOTICE, V1_2_0_GUARD_COMMANDS } from '../../../harness/guard-hook'
 import { SESSION_START_COMMAND } from '../../../harness/session-start-hook'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../../../installers/harness.installer'
 
@@ -402,6 +402,52 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       expect([await read(SETTINGS), await read(CODEX_HOOKS_PATH)]).toEqual(before)
       const report = JSON.parse(output().split('<sf-update-dry-run-report>')[1].split('</sf-update-dry-run-report>')[0])
       expect(report.harnessSettings).toEqual([{ path: SETTINGS, status: 'merged' }])
+    })
+  })
+
+  // #1251 — v1.2.0, the release before this one, wrote a guard line that lets through only the escape-hatch words. The line
+  // that replaces it also lets through what a line that is not one plain command needs, so the old text has to go: an update
+  // that left it beside the new one would run two guard hooks, and the old one would answer for every plain call.
+  describe('a harness installed by v1.2.0 (#1251)', () => {
+    let warnSpy: jest.SpyInstance
+    const v120 = (name: string): Promise<string> => readFile(join(FIXTURES, 'harness', 'v1.2.0', name), 'utf8')
+    const commands = (config: Settings, event: string): string[] => (config.hooks?.[event] ?? []).flatMap((group) => group.hooks.map((hook) => hook.command))
+
+    beforeEach(async () => {
+      warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const hashes = await installHarnessWith(await v120('claude-settings.json'))
+      await put(CODEX_HOOKS_PATH, await v120('codex-hooks.json'))
+      await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true, agents: ['claude-code', 'codex'] } }, workflow: { tool: 'none' }, fileHashes: hashes })
+    })
+    afterEach(() => warnSpy.mockRestore())
+
+    it('replaces the guard hook of both hosts exactly once, and keeps every other hook', async () => {
+      const before = JSON.parse(await read(SETTINGS)) as Settings
+      expect(commands(before, 'PreToolUse')).toEqual([V1_2_0_GUARD_COMMANDS[0]])
+
+      await updateCommand({ nonInteractive: true })
+
+      const settings = JSON.parse(await read(SETTINGS)) as Settings
+      expect(commands(settings, 'PreToolUse')).toEqual([CLAUDE_GUARD_COMMAND])
+      const codex = JSON.parse(await read(CODEX_HOOKS_PATH)) as Settings
+      expect(commands(codex, 'PreToolUse')).toEqual([CODEX_GUARD_COMMAND])
+      for (const old of V1_2_0_GUARD_COMMANDS) {
+        expect(await read(SETTINGS)).not.toContain(JSON.stringify(old).slice(1, -1))
+        expect(await read(CODEX_HOOKS_PATH)).not.toContain(JSON.stringify(old).slice(1, -1))
+      }
+      expect(commands(settings, 'SubagentStop')).toEqual([CLAUDE_CAPTURE_COMMAND])
+      expect(commands(codex, 'SubagentStop')).toEqual([CODEX_CAPTURE_COMMAND])
+    })
+
+    it('tells the developer that Codex has to trust the replaced hook, once, and is byte-idempotent', async () => {
+      await updateCommand({ nonInteractive: true })
+      expect(warnSpy.mock.calls.flat()).toContain(CODEX_GUARD_TRUST_NOTICE)
+      const once = [await read(SETTINGS), await read(CODEX_HOOKS_PATH)]
+
+      warnSpy.mockClear()
+      await updateCommand({ nonInteractive: true })
+      expect(warnSpy.mock.calls.flat()).not.toContain(CODEX_GUARD_TRUST_NOTICE)
+      expect([await read(SETTINGS), await read(CODEX_HOOKS_PATH)]).toEqual(once)
     })
   })
 

@@ -18,19 +18,74 @@ import type { ClaudeHooksConfig } from '../utils/claude-settings'
  * hook that errors on every call is worse than none). It
  *
  * 1. reads the payload once and leaves at once, before Node starts, unless it mentions one of the words a refused
- *    call needs: almost no Bash call does, so almost none pays for a process. The filter is deliberately loose
- *    (`*merge*`, not `gh pr merge`) so that an extra space or a flag in between cannot slip past it;
+ *    call needs, or one of the characters a line that is not one plain command needs (#1251): a plain command, a pipe
+ *    and a redirection pay for no process. The filter is a deliberately loose superset, on the raw JSON of the payload
+ *    (`*merge*`, not `gh pr merge`; a JSON newline is the two characters `\n`), so that an extra space or a flag in
+ *    between cannot slip past it. A payload that passes it only costs one fast Node start, and the guard decides;
  * 2. runs the CLI the **project** resolves: `node_modules/.bin/saasfoundryai`, then this repository's own `bin/sf.js`
- *    when the project is SaaSFoundryAI itself and `dist/` is built, then `saasfoundryai` on the PATH;
+ *    when the project is SaaSFoundryAI itself and `dist/` is built, then `saasfoundryai` on the PATH. `bin/sf.js`
+ *    runs `agents guard --host <host>` through a dedicated entry that loads only the guard, not the whole CLI;
  * 3. exits 0 whatever happens and lets only the CLI's **stdout** reach the host, where a decision is one JSON object.
  *    With no CLI, or one that has no `agents guard`, the call goes through: the hook fails open, and `sf status`
  *    says so (`guardState`, a `fail` since #1228);
  * 4. when the CLI it reached exits non-zero (an older release with no `agents guard`; a current one always exits 0),
  *    writes a line on stderr and an entry in the capture error log, stage `cli`, instead of exiting silently (#1228).
  */
+
+/** What an escape-hatch rule needs the payload to mention (#1106); the nature label is matched whatever its case. */
+const ESCAPE_HATCH_PATTERNS = ['*SF_WORKFLOW_BYPASS_*', '*skip-local-ci*', '*[Nn][Aa][Tt][Uu][Rr][Ee]*', '*addLabels*', '*delegation*', '*ready*', '*merge*']
+
+/**
+ * What the shell shape rule needs it to mention (#1251), each as the text between two `*`; a pair is two pieces in
+ * that order. They are single-quoted in the line so that the shell reads them as text: a chain (`;`, `&&`, `||`, a
+ * newline, which the JSON writes as `\n`), a substitution (`$(`, a backtick, `<(`, `>(`), a heredoc (`<<`), a
+ * background `&` (before a blank or the closing quote), a subshell or group at the start of a line, an inline
+ * interpreter flag (`node -e`, `python3 -c`, `sh -c`, `eval`, `deno eval`…), a script piped into one (`| bash`),
+ * and the flag of a program given as an argument vector (`","-c`). A loop or a conditional needs a `;` or a
+ * newline to be valid on one line, so it is already there: no keyword is matched, which matters because the
+ * `description` of a call is prose.
+ */
+const SHELL_SHAPE_PATTERNS: readonly (readonly string[])[] = [
+  [';'],
+  ['&&'],
+  ['||'],
+  ['$('],
+  ['`'],
+  ['<<'],
+  ['<('],
+  ['>('],
+  ['\\n'],
+  ['& '],
+  ['&"'],
+  ['":"('],
+  ['","-'],
+  ['node -'],
+  ['bun -'],
+  ['python', ' -'],
+  ['ruby -'],
+  ['perl -'],
+  ['php -'],
+  ['lua -'],
+  ['osascript'],
+  ['Rscript'],
+  ['deno eval'],
+  ['sh -'],
+  ['eval '],
+  ['| sh'],
+  ['| bash'],
+  ['| zsh'],
+  ['| python'],
+  ['| node'],
+  ['| ruby'],
+  ['| perl'],
+  ['| php']
+]
+
+const GUARD_PATTERNS = [...ESCAPE_HATCH_PATTERNS, ...SHELL_SHAPE_PATTERNS.map((pieces) => `*${pieces.map((piece) => `'${piece}'`).join('*')}*`)].join('|')
+
 const GUARD_SCRIPT = [
   'p=$(cat)',
-  'case "$p" in *SF_WORKFLOW_BYPASS_*|*skip-local-ci*|*[Nn][Aa][Tt][Uu][Rr][Ee]*|*addLabels*|*delegation*|*ready*|*merge*) ;; *) exit 0;; esac',
+  `case "$p" in ${GUARD_PATTERNS}) ;; *) exit 0;; esac`,
   'd="${CLAUDE_PROJECT_DIR:-.}"',
   hookNoteFunction('agents guard', 'PreToolUse'),
   'run() { printf %s "$p" | "$@" agents guard --host @HOST@ 2>/dev/null || note "$*" $?; exit 0; }',

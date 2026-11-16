@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'child_process'
-import { mkdtemp, readFile, realpath, rm } from 'fs/promises'
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
@@ -169,6 +169,68 @@ describe('compiled sf agents guard', () => {
       expect(result.status).toBe(0)
       expect(result.stdout).toBe('')
       await expect(readFile(errorLog(), 'utf8')).resolves.toContain('not valid JSON')
+    })
+  })
+
+  // #1251 — the hook runs this on every call whose payload might need a check: it has its own entry, which loads only the guard
+  describe('the dedicated entry', () => {
+    /** The files Node loaded while `bin/sf.js` ran with these arguments, recorded by a preloaded script when the process exits. */
+    const loaded = async (args: string[], input: string): Promise<{ files: string[]; stdout: string; status: number | null }> => {
+      const out = join(project, 'loaded.json')
+      const recorder = join(project, 'record-loaded.js')
+      await writeFile(recorder, `process.on('exit', () => require('fs').writeFileSync(${JSON.stringify(out)}, JSON.stringify(Object.keys(require.cache))))\n`)
+      const result = spawnSync(process.execPath, ['-r', recorder, join(ROOT, 'bin/sf.js'), ...args], { cwd: project, encoding: 'utf8', env: cleanEnv, input })
+      return { files: JSON.parse(await readFile(out, 'utf8')) as string[], stdout: result.stdout, status: result.status }
+    }
+    const matches = (files: string[], pattern: RegExp): string[] => files.filter((file) => pattern.test(file.replace(/\\/g, '/')))
+
+    it('answers `agents guard --host <host>` without loading commander, any other command or the ledger', async () => {
+      const { files, stdout, status } = await loaded(['agents', 'guard', '--host', 'claude-code'], event('cd apps/site && npm install'))
+
+      expect(status).toBe(0)
+      expect(JSON.parse(stdout).hookSpecificOutput.permissionDecision).toBe('deny')
+      expect(matches(files, /\/dist\/commands\/agents\.guard-main\.js$/)).toHaveLength(1)
+      expect(matches(files, /\/node_modules\/commander\//)).toEqual([])
+      expect(matches(files, /\/dist\/(index|commands\/(update|new|status|workflow|agents|srs|docs))\.js$/)).toEqual([])
+      expect(matches(files, /\/dist\/harness\/(delegation-ledger|capture-errors|agent-support|agent-instructions)\.js$/)).toEqual([])
+    })
+
+    it('does the same for Codex, and for a call it has nothing to say about', async () => {
+      const codex = await loaded(['agents', 'guard', '--host', 'codex'], event('npm test'))
+      expect(codex.status).toBe(0)
+      expect(codex.stdout).toBe('')
+      expect(matches(codex.files, /\/node_modules\/commander\//)).toEqual([])
+    })
+
+    it('loads the ledger only when a call goes wrong, to write the capture error log', async () => {
+      const { files, status } = await loaded(['agents', 'guard', '--host', 'claude-code'], 'not json')
+      expect(status).toBe(0)
+      expect(matches(files, /\/dist\/harness\/capture-errors\.js$/)).toHaveLength(1)
+      expect(matches(files, /\/node_modules\/commander\//)).toEqual([])
+    })
+
+    it('is the full CLI for every other form: the help, a host it does not know, a missing host', async () => {
+      for (const args of [
+        ['agents', 'guard', '--help'],
+        ['agents', 'guard', '--host', 'nobody'],
+        ['agents', 'guard']
+      ]) {
+        const { files } = await loaded(args, '')
+        expect(matches(files, /\/node_modules\/commander\//).length).toBeGreaterThan(0)
+      }
+    })
+
+    it('is several times faster than the full CLI answering the same call', () => {
+      const best = (script: string): number => {
+        const times: number[] = []
+        for (let i = 0; i < 3; i++) {
+          const start = process.hrtime.bigint()
+          spawnSync(process.execPath, [script, 'agents', 'guard', '--host', 'claude-code'], { cwd: project, encoding: 'utf8', env: cleanEnv, input: event('cd apps/site && npm install') })
+          times.push(Number(process.hrtime.bigint() - start) / 1e6)
+        }
+        return Math.min(...times)
+      }
+      expect(best(join(ROOT, 'bin/sf.js'))).toBeLessThan(best(join(ROOT, 'dist/index.js')) / 2)
     })
   })
 
