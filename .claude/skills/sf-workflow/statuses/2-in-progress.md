@@ -1,15 +1,14 @@
 ---
 status: In Progress
 banner_ai: Branch from workingBranch, deliver child tickets, validate (build/lint/tests), push
-banner_human: Nothing yet — next involvement at Human Testing (or PR review for nature:internal)
+banner_human: Nothing yet — next involvement at In Review (PR review is the human gate)
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
-  - Assignment or confirmation received in Ready
+  - Plan validated and pickup confirmed in Backlog
   - Ready to start development
 mandatory_actions:
   - Create feature branch from `workingBranch` (manifest)
   - Move ticket to `In Progress`
-  - Create subtasks as real GitHub issues (NOT checkboxes)
   - Deliver each child ticket in its declared mode; close it immediately when its PR is merged or its bundled commit is validated
   - Final validation — build, lint, and the tests the change affects green (the full suites run once, at AI Testing)
   - Push branch
@@ -34,7 +33,7 @@ Active development — subtask creation, iterative commits, final validation.
 
 ## SRS drafting tickets (`srs:drafting | srs:update | srs:new`)
 
-These stay in the `In progress` board column but flow through a **separate lifecycle** — see `statuses/3a-ai-drafting.md`. Drive with
+These stay in the `In progress` board column but flow through a **separate lifecycle** — see `statuses/2a-ai-drafting.md`. Drive with
 `workflow-cli.sh transition-drafting <ticket> <ai-draft|human-review|spawning|done>`. Never use `update-status` — the SRS guard blocks code-path transitions.
 
 ## Action checklist — Story / Task / Issue
@@ -59,16 +58,12 @@ These stay in the `In progress` board column but flow through a **separate lifec
   - **Empty repository** (no commit yet): there is no `workingBranch` to branch from. Run `workflow-cli.sh bootstrap <ticket>` instead: it commits the setup on the main branch, creates `workingBranch`
     and closes this first ticket
 - [ ] **Move ticket to "In Progress"** via `workflow-cli.sh update-status <ticket> "In progress"`
-- [ ] **Create child tickets** — `workflow-cli.sh create-subtask <parent> "<title>" ["<body>"]` (auto-links as a native sub-issue); mark bundled children with `nature:bundled-pr`
 - [ ] **Delegated implementation** — name the task kind (`scoped-edit`, `multi-file-feature`, `bug-fix`, `tests`, `prose`) and state the file set, expected result and check in the child body; a child
       that cannot state them is split or kept in the session (SKILL.md → Delegation routing)
-- [ ] **Per normal child:** branch → code → PR → verify merge → `update-status <child> Done`; per bundled child: one atomic commit on the parent's branch → validate → `update-status <child> Done`
-- [ ] **Test strategy** — while you work, run the tests the change affects: the related tests of the touched files (the runner's related-tests option, or the project's own selection when it declares
-      one), not the full suites, and not after every iteration. The full suites run once, at the end of AI Testing. After a rebase, rerun the affected tests, not everything, unless the rebase brought
-      changes to shared files (build, configuration, test helpers). The ready pull request's CI stays the final check.
-- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build && npm run lint` → the tests the change affects → commit and push. Child tickets may continue
-      through their own lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have,
-      and names the command to run (a bundled child is checked on its delivery parent's branch)
+- [ ] **Per normal child:** branch → code → PR → verify merge → close the child; per bundled child: one atomic commit on the parent's branch → validate → close the child
+- [ ] **Parent implementation done:** `npm run build && npm run lint` → the tests the change affects (the full suites run once, at AI Testing) → commit and push. Child tickets may continue through
+      their own lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have, and
+      names the command to run (a bundled child is checked on its delivery parent's branch).
 
 ## Errors to avoid
 
@@ -76,7 +71,6 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - Mixing multiple tickets in the same branch
 - Moving to AI Testing with lint/build errors
 - Forgetting to commit or push before AI Testing (the pushed-commits guard refuses the move)
-- Leaving delivered child tickets open, or marking the parent Done before every child is Done
 - Switching mid-delivery to another ticket: one agent per ticket. With delegation `allowed`, another ticket gets its own agent and worktree while this one stays with its agent; otherwise finish this
   one first (unless the developer explicitly asks to pause)
 - The session building a ticket itself while delegation is `allowed`, a trivial change excepted

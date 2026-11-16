@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { execFileSync } from 'child_process'
 import { existsSync } from 'fs'
-import { readFile, stat } from 'fs/promises'
+import { readdir, readFile, stat } from 'fs/promises'
 import { resolve } from 'path'
 
 import { planAgentInstructions } from '../../../harness/agent-instructions'
@@ -55,6 +55,24 @@ describe('SaaSFoundryAI shared harness dogfood declaration', () => {
     expect(settings.permissions.allow).toEqual(expect.arrayContaining([...HARNESS_ALLOWED_COMMANDS]))
     // The forms of an allowed command that write a route record ask first (Examine R6)
     expect(settings.permissions.ask).toEqual(expect.arrayContaining([...HARNESS_ASK_COMMANDS]))
+  })
+
+  // The developer works alone: this repository runs the Solo preset (#1242), which `sf workflow use solo` installs
+  // without touching the release branch or the local CI statuses the project declares (#1233).
+  it('declares the Solo workflow and keeps the release branch and the local CI statuses it had', async () => {
+    const manifest = JSON.parse(await readFile(resolve(ROOT, '.saasfoundry.json'), 'utf8'))
+    expect(manifest.workflow.template).toBe('SaaSFoundry Solo')
+    expect(manifest.workflow.statuses.map((status: { name: string }) => status.name)).toEqual(['Backlog', 'In progress', 'AI testing', 'In review', 'Done'])
+    expect(manifest.workflow.releaseBranch).toBe('master')
+    expect(manifest.workflow.localCi.requiredStatuses).toHaveLength(11)
+    // The workflow skill and its portable projection hold the Solo status documents, and none of the Team ones
+    for (const dir of ['.claude/skills/sf-workflow/statuses', '.agents/skills/sf-workflow/statuses']) {
+      const documents = (await readdir(resolve(ROOT, dir))).sort()
+      expect({ dir, documents }).toEqual({
+        dir,
+        documents: ['1-backlog.md', '2-in-progress.md', '2a-ai-drafting.md', '2b-human-review.md', '2c-spawning.md', '3-ai-testing.md', '4-in-review.md', '5-done.md']
+      })
+    }
   })
 
   it('keeps the portable guarded CLIs byte-identical and executable', async () => {

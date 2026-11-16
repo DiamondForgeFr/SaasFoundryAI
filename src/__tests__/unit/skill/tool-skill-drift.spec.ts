@@ -27,56 +27,15 @@ const PAIRS = [
   // placeholders that `workflow-skill.installer.ts` substitutes at project creation —
   // byte-identity would break those substitutions. Status files (`statuses/*.md`) have
   // no placeholders so they stay byte-identical.
-  {
-    name: 'sf-workflow statuses/1-backlog.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/1-backlog.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/1-backlog.md')
-  },
-  {
-    name: 'sf-workflow statuses/2-ready.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/2-ready.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/2-ready.md')
-  },
-  {
-    name: 'sf-workflow statuses/3-in-progress.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3-in-progress.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/3-in-progress.md')
-  },
-  {
-    name: 'sf-workflow statuses/3a-ai-drafting.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3a-ai-drafting.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/3a-ai-drafting.md')
-  },
-  {
-    name: 'sf-workflow statuses/3b-human-review.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3b-human-review.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/3b-human-review.md')
-  },
-  {
-    name: 'sf-workflow statuses/3c-spawning.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/3c-spawning.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/3c-spawning.md')
-  },
-  {
-    name: 'sf-workflow statuses/4-ai-testing.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/4-ai-testing.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/4-ai-testing.md')
-  },
-  {
-    name: 'sf-workflow statuses/5-human-testing.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/5-human-testing.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/5-human-testing.md')
-  },
-  {
-    name: 'sf-workflow statuses/6-in-review.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/6-in-review.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/6-in-review.md')
-  },
-  {
-    name: 'sf-workflow statuses/7-done.md',
-    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/statuses/7-done.md'),
-    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/statuses/7-done.md')
-  },
+  //
+  // This repository runs the Solo preset (#1242), so its `statuses/` folder holds the five-status
+  // documents that `sf workflow use solo` installs, which the template keeps under `statuses-solo/`.
+  // The Team set (`statuses/` in the template) has no dogfood copy any more; the installer specs cover it.
+  ...['1-backlog.md', '2-in-progress.md', '2a-ai-drafting.md', '2b-human-review.md', '2c-spawning.md', '3-ai-testing.md', '4-in-review.md', '5-done.md'].map((file) => ({
+    name: `sf-workflow statuses/${file} (Solo)`,
+    inRepo: path.resolve(__dirname, `../../../../.claude/skills/sf-workflow/statuses/${file}`),
+    scaffolded: path.resolve(__dirname, `../../../../scaffolds/skills-templates/workflow/statuses-solo/${file}`)
+  })),
   {
     name: 'sf-integration-rules SKILL.md',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-integration-rules/SKILL.md'),
