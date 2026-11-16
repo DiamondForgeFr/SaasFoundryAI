@@ -11,7 +11,7 @@ Elles sont au nombre de sept.
 | --------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | [`sf-git-commit`](#sf-git-commit)                   | « commit », « save changes »                                              | Génère un message conventionnel, commit et pousse                    |
 | [`sf-git-create-pr`](#sf-git-create-pr)             | « open a PR », « create a pull request »                                  | Ouvre une PR vers la branche cible configurée avec un corps généré   |
-| [`sf-git-fix-pr-comments`](#sf-git-fix-pr-comments) | « implement the review comments », « address the PR feedback »            | Récupère les commentaires, applique chaque modification et commit    |
+| [`sf-git-fix-pr-comments`](#sf-git-fix-pr-comments) | « implement the review comments », « address the PR feedback »            | Applique les discussions ouvertes, pousse, répond et les résout      |
 | [`sf-git-merge`](#sf-git-merge)                     | « update my branch », « resolve conflicts »                               | Rebase sur la branche cible, conflits déterministes uniquement       |
 | [`sf-utils-fix-errors`](#sf-utils-fix-errors)       | « fix errors », « fix typescript », « fix eslint »                        | Répartit la correction des erreurs ESLint et TypeScript dans le code |
 | [`sf-utils-fix-grammar`](#sf-utils-fix-grammar)     | « fix grammar », « spellcheck the docs »                                  | Corrige grammaire et orthographe sans modifier la mise en forme      |
@@ -64,13 +64,22 @@ Si une précondition manque, la skill l'explique et s'arrête. Elle ne contourne
 
 ## `sf-git-fix-pr-comments`
 
-Lorsque des relecteurs commentent la PR, cette skill récupère les discussions, les groupe par fichier et les traite une à une : modification du code, commit et push. Elle produit un commit par groupe
-cohérent de commentaires.
+Lorsque des relecteurs commentent la PR, cette skill récupère les discussions encore ouvertes, les groupe par fichier et les traite une à une, puis commit et pousse les modifications. Après le push,
+elle répond au relecteur dans chaque discussion traitée.
 
 **Invocation typique** : `"implement the review comments"`, ou explicitement `/sf-git-fix-pr-comments`.
 
-Elle appelle en interne `gh api repos/:owner/:repo/pulls/:number/comments` et parcourt les discussions. Elle ignore celles déjà résolues et répond brièvement sur chaque discussion traitée, par exemple
-« Fixed in abc1234 ».
+En interne :
+
+- elle trouve la PR de la branche courante avec `gh pr view --json number,headRefName,url` ;
+- elle liste les discussions de revue avec leur état par l'API GraphQL de GitHub (`reviewThreads`, avec `isResolved`, `isOutdated`, `path`, `line` et les commentaires) et ignore celles déjà résolues.
+  Les commentaires de revue globaux viennent de `gh pr view <N> --json reviews,comments` ;
+- après le push, elle répond dans chaque discussion avec `addPullRequestReviewThreadReply` : ce qui a changé et le SHA du commit, ou la raison pour laquelle le commentaire n'a pas été appliqué, dans
+  la langue des tickets du projet (`language.tickets` dans `.saasfoundry.json`). Elle ne résout une discussion avec `resolveReviewThread` que lorsque la correction est complète ; un commentaire non
+  appliqué reste ouvert pour vous. Les commentaires de revue globaux reçoivent une seule réponse avec `gh pr comment`.
+
+Chaque document GraphQL est écrit dans un fichier et passé avec `gh api graphql -F query=@<fichier>`, pour que chaque appel reste une commande simple. Répondre et résoudre font partie d'In Review : la
+skill ne fusionne jamais, n'approuve jamais, ne sort jamais une PR du mode draft et ne déplace jamais un ticket.
 
 ## `sf-git-merge`
 
