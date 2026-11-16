@@ -37,6 +37,27 @@ describe('guardCommand', () => {
     expect(CLAUDE_GUARD_COMMAND).toContain('*) exit 0;; esac')
   })
 
+  // #1251 — a line that is not one plain command has to reach the guard: the filter lets through a superset of the
+  // characters and interpreter flags it needs, on the raw JSON of the payload, and still stops a plain call
+  it('lets through what a line that is not one plain command needs, quoted so that the shell reads it as text', () => {
+    for (const literal of [';', '&&', '||', '$(', '`', '<<', '<(', '>(', '\\n', '& ', '&"', '":"(', '","-', 'node -', 'python', ' -', 'sh -', 'eval ', 'deno eval', '| bash', '| python']) {
+      expect(CLAUDE_GUARD_COMMAND).toContain(`'${literal}'`)
+    }
+    // a JSON newline is the two characters `\n`, matched as such
+    expect(CLAUDE_GUARD_COMMAND).toContain("*'\\n'*")
+    // a pair of pieces is two quoted texts around a `*`
+    expect(CLAUDE_GUARD_COMMAND).toContain("*'python'*' -'*")
+    // no keyword is matched: the description of a call is prose ("for", "if"), and a loop needs a `;` or a newline anyway
+    for (const keyword of ['for', 'while', 'until', 'if', 'case', 'select', 'function']) expect(CLAUDE_GUARD_COMMAND).not.toContain(`*'${keyword}'*`)
+  })
+
+  it('keeps the filter ahead of everything else: nothing runs before the case, and the case is one alternation', () => {
+    const filter = CLAUDE_GUARD_COMMAND.slice(0, CLAUDE_GUARD_COMMAND.indexOf(' esac') + 5)
+    expect(filter.startsWith('p=$(cat); case "$p" in ')).toBe(true)
+    expect(filter.endsWith(') ;; *) exit 0;; esac')).toBe(true)
+    expect(CLAUDE_GUARD_COMMAND.indexOf('node "$d/bin/sf.js"')).toBeGreaterThan(CLAUDE_GUARD_COMMAND.indexOf('esac'))
+  })
+
   it('runs the CLI the project resolves, never a bare sf, and always exits 0', () => {
     expect(CLAUDE_GUARD_COMMAND).toContain('"$d/node_modules/.bin/saasfoundryai"')
     expect(CLAUDE_GUARD_COMMAND).toContain('node "$d/bin/sf.js"')
@@ -54,6 +75,25 @@ describe('guardCommand', () => {
     expect(CODEX_GUARD_COMMAND).toContain('"host":"codex","event":"PreToolUse","stage":"cli"')
     expect(CLAUDE_GUARD_COMMAND).toContain('saasfoundry/capture-errors.jsonl')
     expect(CLAUDE_GUARD_COMMAND).not.toContain('@HOST@')
+  })
+})
+
+// #1251 — this repository dogfoods the harness it ships: its own hook files carry the line `guard-hook.ts` builds today,
+// exactly once. A line from a build that was never released (#1228) is neither the current one nor a v1.2.0 literal, so a
+// refresh would keep it and add the new one: the two copies are replaced by hand, and this pins them.
+describe("this repository's own guard hooks", () => {
+  const ROOT = join(__dirname, '../../../..')
+  const guardCommands = async (file: string): Promise<string[]> => {
+    const config = JSON.parse(await readFile(join(ROOT, file), 'utf8')) as { hooks?: { PreToolUse?: { hooks: { command: string }[] }[] } }
+    return (config.hooks?.PreToolUse ?? []).flatMap((group) => group.hooks.map((hook) => hook.command)).filter((command) => command.includes('agents guard'))
+  }
+
+  it('is the line of today for Claude Code, in .claude/settings.json, once', async () => {
+    expect(await guardCommands('.claude/settings.json')).toEqual([CLAUDE_GUARD_COMMAND])
+  })
+
+  it('is the line of today for Codex, in .codex/hooks.json, once', async () => {
+    expect(await guardCommands('.codex/hooks.json')).toEqual([CODEX_GUARD_COMMAND])
   })
 })
 

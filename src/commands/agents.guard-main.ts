@@ -1,0 +1,124 @@
+import { isAbsolute } from 'path'
+
+import { readShellShapeMode } from '../harness/shell-guard-mode'
+import { SHELLS } from '../harness/shell-shape'
+import { evaluateToolCall, GUARDED_TOOLS, guardHookOutput, type GuardHost } from '../harness/tool-call-guard'
+
+/**
+ * The body of `sf agents guard` (#1106, #1251), without the command line around it: this module loads no commander,
+ * no other command and none of the harness the CLI needs, because `bin/sf.js` runs it directly when the hook line
+ * calls `agents guard --host <host>`. The hook runs on every shell call whose payload might need a check, and loading
+ * the whole CLI for it costs about a second, where the guard alone costs a Node start. What the error path needs (the
+ * capture error log) is loaded only when a call goes wrong.
+ */
+export const GUARD_HOSTS: readonly GuardHost[] = ['claude-code', 'codex']
+
+export interface AgentsGuardOptions {
+  host?: string
+}
+
+/** A payload no guard decision can be read from; larger than this, it is not a command a person or an agent typed. */
+const MAX_PAYLOAD_BYTES = 1024 * 1024
+
+class GuardPayloadError extends Error {}
+
+async function readStdin(limit = MAX_PAYLOAD_BYTES): Promise<string> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of process.stdin) {
+    const buffer = Buffer.from(chunk as Uint8Array)
+    size += buffer.length
+    if (size > limit) throw new GuardPayloadError('the hook payload is larger than 1 MiB')
+    chunks.push(buffer)
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+const record = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined)
+
+/**
+ * The line a shell tool runs when it is given as an argument vector `[shell, -c|-lc, line]`: the host's own
+ * wrapper (Codex runs `bash -lc '<line>'`), not something the agent wrote. The line is what the guard reads, so
+ * that every Codex call is not an inline script.
+ */
+function shellLineOf(words: string[]): string | undefined {
+  const [program, ...rest] = words
+  if (program === undefined || !SHELLS.has(program.slice(program.lastIndexOf('/') + 1)) || rest.length < 2) return undefined
+  const flags = rest.slice(0, -1)
+  return flags.every((word) => word.startsWith('-')) && flags.some((word) => /^-[A-Za-z]*c[A-Za-z]*$/.test(word)) ? rest[rest.length - 1] : undefined
+}
+
+/**
+ * The command a host is about to run, from the shape of its tool event. Claude Code and Codex both put it in
+ * `tool_input.command`; Codex `exec_command` calls it `cmd`, and a shell tool may pass an argument vector: a
+ * shell wrapper (`bash -lc '<line>'`) stands for its line, any other vector is quoted word by word so that the
+ * tokeniser reads it as the shell would.
+ */
+function commandOf(toolInput: unknown): string {
+  const input = record(toolInput)
+  const value = input?.command ?? input?.cmd
+  if (typeof value === 'string') return value
+  if (Array.isArray(value) && value.every((word) => typeof word === 'string')) {
+    return shellLineOf(value as string[]) ?? (value as string[]).map((word) => `'${word.replace(/'/g, `'\\''`)}'`).join(' ')
+  }
+  return ''
+}
+
+/**
+ * `sf agents guard --host <claude-code|codex>`: the command the `PreToolUse` hook of a host runs, with the tool
+ * event on stdin. It prints the host's deny decision when the call is one the guard refuses (`tool-call-guard.ts`),
+ * the same text as context when the project asks for a warning only (`modules.harness.guard.shellShape: warn`),
+ * and nothing otherwise: staying silent leaves the host's own permission flow in place. A hook must never break
+ * the agent it watches, so it always exits 0, and fails open: a payload it cannot read lets the call through and
+ * is written to the capture error log, where `sf status` counts it.
+ */
+export async function agentsGuard(options: AgentsGuardOptions): Promise<void> {
+  const host = options.host
+  if (host !== 'claude-code' && host !== 'codex') {
+    process.stderr.write(`sf agents guard: --host must be ${GUARD_HOSTS.join(' or ')}.\n`)
+    return
+  }
+  if (process.stdin.isTTY) {
+    process.stderr.write('sf agents guard reads a hook payload on stdin: it is run by the PreToolUse hook of the host, not by hand.\n')
+    return
+  }
+  let project: string | undefined
+  try {
+    let payload: unknown
+    try {
+      payload = JSON.parse(await readStdin())
+    } catch (error) {
+      // The message of a JSON syntax error quotes the text it choked on: the payload stays out of every log.
+      throw error instanceof SyntaxError ? new GuardPayloadError('the hook payload is not valid JSON') : error
+    }
+    const event = record(payload)
+    if (!event) throw new GuardPayloadError('the hook payload is not an object')
+    const cwd = typeof event.cwd === 'string' && isAbsolute(event.cwd) ? event.cwd : undefined
+    project = cwd
+    const toolName = typeof event.tool_name === 'string' ? event.tool_name : ''
+    if (!GUARDED_TOOLS[host].includes(toolName)) return
+    const decision = evaluateToolCall({
+      host,
+      toolName,
+      command: commandOf(event.tool_input),
+      // What to do with a line that is not one plain command comes from the manifest of the project (#1251): refuse when it says nothing.
+      shellShape: readShellShapeMode(cwd),
+      ...(cwd ? { cwd } : {}),
+      ...(typeof event.agent_id === 'string' && event.agent_id ? { agentId: event.agent_id } : {})
+    })
+    if (!decision) return
+    process.stdout.write(`${JSON.stringify(guardHookOutput(decision))}\n`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`sf agents guard: the call was let through (${message})\n`)
+    try {
+      // Loaded here and not at the top: the log pulls in the ledger, which the guard does not need on any call that goes right.
+      const { resolveLedgerDir } = await import('../harness/delegation-ledger')
+      const { appendCaptureError } = await import('../harness/capture-errors')
+      const dir = await resolveLedgerDir(project ?? process.cwd())
+      if (dir) await appendCaptureError(dir, { host, event: 'PreToolUse', stage: 'payload', message: `the guard hook let a call through: ${message}` })
+    } catch {
+      // The log is a courtesy: the line above is all there is outside a Git checkout.
+    }
+  }
+}
