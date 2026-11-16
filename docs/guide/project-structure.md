@@ -274,6 +274,11 @@ export const envSchema = z.object({
 }
 ```
 
+`projectName` follows the stack. `sf new` asks for lowercase letters, digits and hyphens, because the technical stack names its packages, its multirepo directories (`apps/<name>-api`), its Docker
+resources and its default bucket after it. A harness-only project keeps the name it was adopted with: `sf update` accepts letters of any case, digits, dots, underscores and hyphens there
+(`SaaSFoundryAI`, `Notulia`), and never renames the project. Adding a technical stack to such a project with `sf update --target-profile full` is refused with the reason `project-name-not-a-slug`, and
+no file is changed. Since 1.3.0.
+
 ## Scripts
 
 ### Root Package Scripts

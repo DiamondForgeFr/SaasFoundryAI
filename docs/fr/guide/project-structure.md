@@ -274,6 +274,11 @@ export const envSchema = z.object({
 }
 ```
 
+`projectName` suit la stack. `sf new` demande des minuscules, des chiffres et des tirets, parce que la stack technique nomme d'après lui ses paquets, ses répertoires multirepo (`apps/<nom>-api`), ses
+ressources Docker et son bucket par défaut. Un projet harness seul garde le nom avec lequel il a été adopté : `sf update` y accepte des lettres de toute casse, des chiffres, des points, des tirets bas
+et des tirets (`SaaSFoundryAI`, `Notulia`), et ne renomme jamais le projet. Ajouter une stack technique à un tel projet avec `sf update --target-profile full` est refusé avec la raison
+`project-name-not-a-slug`, sans toucher aucun fichier. Depuis la 1.3.0.
+
 ## Scripts
 
 ### Scripts racine

@@ -38,7 +38,7 @@ import { Answers, SaaSFoundryManifest, SrsToolConfig, isScaffoldManifest } from 
 import { upsertEnvKey } from '../utils/env-file'
 import { reconcileSrsIntentHook } from '../utils/claude-settings'
 import { ensureGitignorePatterns } from '../utils/gitignore'
-import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix, hashFileContent, validateProjectName } from '../utils'
+import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix, hashFileContent, validateManifestProjectName } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import {
   buildUpdatePrefillFromOptions,
@@ -1229,7 +1229,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
   let manifestSnapshot = await readManifestFileSafe(manifestPath)
   const manifestBytes = manifestSnapshot.bytes
   let manifest: SaaSFoundryManifest = JSON.parse(manifestBytes.toString('utf8'))
-  validateProjectName(manifest.projectName)
+  validateManifestProjectName(manifest.projectName, { technicalStack: isScaffoldManifest(manifest) })
   // Capability decisions and technical adoption must see the current schema
   // even when the on-disk manifest predates the migration registry. Keep the
   // original bytes for the transaction compare-and-swap, while building the

@@ -3,7 +3,18 @@ import { mkdir, writeFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
-import { hashFileContent, computeFileHashes, validateProjectName, generateJwtSecret, setDefaultDbCredentials, fileExists, readManifest, writeManifest } from '../../utils'
+import {
+  hashFileContent,
+  computeFileHashes,
+  validateProjectName,
+  isProjectSlug,
+  validateManifestProjectName,
+  generateJwtSecret,
+  setDefaultDbCredentials,
+  fileExists,
+  readManifest,
+  writeManifest
+} from '../../utils'
 import { SaaSFoundryManifest } from '../../types'
 
 describe('utils', () => {
@@ -178,6 +189,36 @@ describe('utils', () => {
 
     it('should reject empty string', () => {
       expect(() => validateProjectName('')).toThrow('Invalid project name')
+    })
+  })
+
+  // ── isProjectSlug / validateManifestProjectName (#966) ──────
+
+  describe('isProjectSlug', () => {
+    it('accepts the names sf new accepts and nothing else', () => {
+      expect(isProjectSlug('my-project-2')).toBe(true)
+      expect(isProjectSlug('SaaSFoundryAI')).toBe(false)
+      expect(isProjectSlug(undefined)).toBe(false)
+    })
+  })
+
+  describe('validateManifestProjectName', () => {
+    it.each(['SaaSFoundryAI', 'DiamondForge', 'Notulia', 'my-project', 'my_project', 'app.v2', '2fast', '-legacy'])('keeps the existing harness name %p', (name) => {
+      expect(() => validateManifestProjectName(name)).not.toThrow()
+    })
+
+    it.each(['', '../escape', 'a/b', 'a\\b', 'my project', '-Flag', '.hidden', 'x;rm', 'a$b', 'é'])('refuses the unsafe name %p', (name) => {
+      expect(() => validateManifestProjectName(name)).toThrow(/Invalid projectName .* in \.saasfoundry\.json/)
+    })
+
+    it('refuses a value that is not a string', () => {
+      expect(() => validateManifestProjectName(undefined)).toThrow('Invalid projectName undefined')
+      expect(() => validateManifestProjectName(42)).toThrow('Invalid projectName 42')
+    })
+
+    it('keeps the slug rule for a project with a technical stack', () => {
+      expect(() => validateManifestProjectName('my-saas', { technicalStack: true })).not.toThrow()
+      expect(() => validateManifestProjectName('MySaaS', { technicalStack: true })).toThrow('Invalid project name "MySaaS"')
     })
   })
 
