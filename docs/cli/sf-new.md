@@ -65,6 +65,42 @@ Both application topologies are supported:
 Topology affects repository boundaries, not the product capabilities. Review [monorepo versus multirepo](/guide/monorepo-vs-multirepo) before choosing. `sf update` can add missing capabilities later,
 but V1 does not convert one topology into the other.
 
+## What `sf new` commits
+
+`sf new` makes the first commit of each repository it creates, as its last step: the scaffold, the harness, the agent instructions and `.saasfoundry.json` are all on disk by then, so the repository
+starts on one root commit with a clean `git status`.
+
+| Case                               | What is committed                                                                                                                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Monorepo                           | One root commit in the project folder, on the main branch, with the manifest and the harness.                                                                                                     |
+| Multirepo                          | One root commit in each application repository (`apps/<name>-api`, `apps/<name>-web`), each with its own manifest and harness. The project folder itself is not a repository and holds no commit. |
+| `--setup-repo local`               | The commit only. There is no remote yet.                                                                                                                                                          |
+| `--setup-repo existing`            | The same commit, and the URL you gave is added as `origin`. Nothing is pushed: push the main branch yourself.                                                                                     |
+| `--workflow <preset>` (a workflow) | No commit: the workflow makes it. See below.                                                                                                                                                      |
+| `--profile harness`                | No commit. The harness lands in your existing repository; commit it with your own work.                                                                                                           |
+
+The commit message is `Initial commit`. It does not run the project's Git hooks: Husky installs them from the `prepare` script of `npm install`, which `sf new` runs before the repository exists, so
+they are installed by your next `npm install` (or `npx husky`) and apply from your second commit on. Files generated after the commit, such as the migrations created by `--start-services`, are not
+part of it.
+
+If the commit cannot be made (no `user.name` or `user.email`, a hook of your own), `sf new` still finishes, says so in its summary and names the commit to make by hand.
+
+### With a workflow: the first ticket makes the first commit
+
+A workflow's commit format needs a ticket (`type(#N): description`), and a project that has just been generated has none. `workflow-cli.sh bootstrap` exists for that moment: on an empty repository it
+commits everything under `chore(#N): bootstrap the repository`, pushes the main and working branches, and closes ticket `N`. It refuses a repository whose root commit is anything else, so an
+`Initial commit` made by `sf new` would have made it unusable.
+
+When you pass `--workflow`, `sf new` therefore leaves each repository on its main branch with no commit, and the summary and `sf status` name the next step:
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh create-ticket task "Bootstrap the repository" --complexity low
+.claude/skills/sf-workflow/workflow-cli.sh bootstrap <ticket>
+```
+
+`bootstrap` needs an `origin` remote: pass `--setup-repo existing` with the repository URL, or add it with `git remote add origin <url>` first. On a multirepo project, run it in each application
+repository.
+
 ## The ownership boundary
 
 SaaSFoundry records hashes for files it generated and still manages. Those hashes become the **base** of the next three-way update comparison:
@@ -165,8 +201,8 @@ sf status --agent-friendly --no-network
 git status
 ```
 
-The first command reports the effective profile, topology, modules, tools, and any actionable configuration issue without contacting external services. Review and commit the generated files, including
-`.saasfoundry.json`, before starting feature work.
+The first command reports the effective profile, topology, modules, tools, and any actionable configuration issue without contacting external services. Without a workflow, `git status` is clean: the
+generated files, including `.saasfoundry.json`, are [already committed](#what-sf-new-commits). With one, the repository has no commit yet, and `sf status` points to `bootstrap`.
 
 For local startup commands, follow the generated README because they depend on the chosen topology and service options.
 

@@ -157,6 +157,9 @@ Un dépôt sans aucun commit n'a ni branche de travail d'où partir, ni pull req
 
 Le garde-fou de Done accepte ce ticket parce que l'unique commit racine du dépôt le nomme. Tous les tickets suivants exigent une pull request fusionnée, sans aucune variable de contournement.
 
+Un projet que `sf new` vient de générer avec un workflow est dans cet état : `sf new` ne fait pas de commit racine à votre place, pour que `bootstrap` puisse faire le sien. Voir
+[Ce que `sf new` versionne](/fr/cli/sf-new#ce-que-sf-new-versionne).
+
 ## Commandes de statut et de configuration
 
 ```bash

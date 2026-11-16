@@ -40,6 +40,9 @@ Sans aucun commit, il n'existe pas de branche de travail d'où partir. Faites de
 `.claude/skills/sf-workflow/workflow-cli.sh create-ticket task "Bootstrap the repository" --complexity low`, puis `.claude/skills/sf-workflow/workflow-cli.sh bootstrap <N>`. La commande commite
 l'installation sur la branche principale, crée la branche de travail et ferme ce ticket. Ce guide s'applique ensuite à partir du deuxième ticket.
 
+Un projet généré par `sf new` avec un workflow commence ainsi : il ne contient aucun commit avant ce ticket, et [`sf new` le dit](/fr/cli/sf-new#ce-que-sf-new-versionne). Sans workflow, il est déjà
+versionné.
+
 :::
 
 ## Étape 1 — Backlog : créer le ticket

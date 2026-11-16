@@ -152,6 +152,9 @@ A repository with no commit yet has no working branch to branch from and no pull
 
 The Done guard accepts that ticket because the repository's single root commit names it. Every later ticket needs a merged pull request, and no bypass variable is involved.
 
+A project that `sf new` has just generated with a workflow is in this state: `sf new` makes no root commit of its own, so that `bootstrap` can make its own. See
+[What `sf new` commits](/cli/sf-new#what-sf-new-commits).
+
 ## Status and configuration commands
 
 ```bash
