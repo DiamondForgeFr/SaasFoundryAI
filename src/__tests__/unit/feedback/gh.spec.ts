@@ -4,7 +4,8 @@ jest.mock('child_process', () => ({
 
 import { execFile } from 'child_process'
 
-import { ghAddReaction, ghCurrentUser, ghIssueCreate, ghIssueSearch } from '../../../feedback/gh'
+import { GITHUB_ISSUE_BODY_LIMIT, IssueBodyTooLargeError } from '../../../feedback/body-limit'
+import { ghAddReaction, ghCurrentUser, ghIssueComment, ghIssueCreate, ghIssueSearch } from '../../../feedback/gh'
 
 const mockExecFile = execFile as unknown as jest.Mock
 
@@ -68,5 +69,65 @@ describe('feedback/gh', () => {
   it('execGh surfaces stderr on failure', async () => {
     mockError('HTTP 404: Not Found')
     await expect(ghIssueSearch({ repo: 'OWNER/REPO' })).rejects.toThrow(/HTTP 404/)
+  })
+
+  describe('a failed call shows what gh answered, not what was sent (#972)', () => {
+    const BODY = 'BODY-CANARY '.repeat(500)
+
+    it('names the call and relays gh stderr, without the title, the body or any flag', async () => {
+      mockError('GraphQL: Body is too long (maximum is 65536 characters) (createIssue)')
+      const failure = ghIssueCreate({ repo: 'OWNER/REPO', title: 'TITLE-CANARY', body: BODY, labels: ['cli-bug'] })
+      await expect(failure).rejects.toThrow('gh issue create failed: GraphQL: Body is too long (maximum is 65536 characters) (createIssue)')
+      await failure.catch((error: Error) => {
+        expect(error.message).not.toContain('BODY-CANARY')
+        expect(error.message).not.toContain('TITLE-CANARY')
+        expect(error.message).not.toContain('--body')
+        expect(error.message.length).toBeLessThan(200)
+      })
+    })
+
+    it('does not fall back to the message Node builds, which quotes every argument', async () => {
+      mockExecFile.mockImplementationOnce((_cmd: string, args: string[], _opts: unknown, cb: (err: Error & { code?: number }, stdout: string, stderr: string) => void) => {
+        const err = new Error(`Command failed: gh ${args.join(' ')}`) as Error & { code?: number }
+        err.code = 1
+        cb(err, '', '')
+      })
+      const failure = ghIssueCreate({ repo: 'OWNER/REPO', title: 't', body: BODY })
+      await expect(failure).rejects.toThrow('gh issue create failed: gh exited with code 1 and printed nothing')
+      await failure.catch((error: Error) => expect(error.message).not.toContain('BODY-CANARY'))
+    })
+
+    it('says so when gh is not installed', async () => {
+      mockExecFile.mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: (err: Error & { code?: string }, stdout: string, stderr: string) => void) => {
+        const err = new Error('spawn gh ENOENT') as Error & { code?: string }
+        err.code = 'ENOENT'
+        cb(err, '', '')
+      })
+      await expect(ghCurrentUser()).rejects.toThrow('gh api user failed: the gh executable was not found on PATH')
+    })
+
+    it('keeps the words of a comment call that identify it, and drops the flags', async () => {
+      mockError('HTTP 403')
+      await expect(ghIssueComment('OWNER/REPO', 42, 'COMMENT-CANARY')).rejects.toThrow(/^gh issue comment 42 failed: HTTP 403$/)
+    })
+
+    it('clips a stderr that runs on', async () => {
+      mockError('e'.repeat(10_000))
+      const failure = ghIssueSearch({ repo: 'OWNER/REPO' })
+      await failure.catch((error: Error) => expect(error.message.length).toBeLessThan(2100))
+      await expect(failure).rejects.toThrow(/^gh issue list failed: e+…$/)
+    })
+  })
+
+  it('ghIssueCreate refuses a body over the GitHub limit without starting gh (#972)', async () => {
+    const body = 'x'.repeat(GITHUB_ISSUE_BODY_LIMIT + 1)
+    await expect(ghIssueCreate({ repo: 'OWNER/REPO', title: 't', body })).rejects.toThrow(IssueBodyTooLargeError)
+    expect(mockExecFile).not.toHaveBeenCalled()
+  })
+
+  it('ghIssueCreate accepts a body of exactly the limit', async () => {
+    mockStdout('https://github.com/OWNER/REPO/issues/43\n')
+    await ghIssueCreate({ repo: 'OWNER/REPO', title: 't', body: 'x'.repeat(GITHUB_ISSUE_BODY_LIMIT) })
+    expect(mockExecFile).toHaveBeenCalledTimes(1)
   })
 })
