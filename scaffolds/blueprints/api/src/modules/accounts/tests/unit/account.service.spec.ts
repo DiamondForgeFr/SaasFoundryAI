@@ -1513,7 +1513,7 @@ class AccountServiceScopeTest extends AccountServiceTest {
         })
       })
 
-      describe('an ENTITY role assigned nowhere yet is shaped for its entity type (#1230)', () => {
+      describe('an ENTITY role is shaped for its entity type by the account admin (#1230)', () => {
         const projectRole = { name: 'project-reviewer', scope: 'ENTITY' as const, subModuleIds: [PROJECT_VISION.id], permissionIds: [PROJECT_TICKET_EDIT.id] }
 
         it('the account admin creates it with the sections the entity type allows, which it does not hold on the account', async () => {
@@ -1556,11 +1556,11 @@ class AccountServiceScopeTest extends AccountServiceTest {
         })
 
         describe('the account admin keeps the entity type allowance once the role is used (#1245)', () => {
-          it.each([
+          it.each<[string, Pick<Given, 'assignedIn' | 'invitedIn'>]>([
             ['assigned in an entity of the account', { assignedIn: [E1] }],
             ['assigned in several entities', { assignedIn: [E1, E2] }],
             ['promised by a pending invitation (#1222)', { invitedIn: [E2] }]
-          ] as const)('adds what the entity type allows to a role %s', async (_where, usage) => {
+          ])('adds what the entity type allows to a role %s', async (_where, usage) => {
             const { prisma, tx } = given({ actor: accountAdminOfA, ...usage })
 
             await update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [PROJECT_TICKET_EDIT.id] })
@@ -1583,10 +1583,10 @@ class AccountServiceScopeTest extends AccountServiceTest {
             expect(prisma.role.findMany).not.toHaveBeenCalled()
           })
 
-          it.each([
+          it.each<[string, Pick<Given, 'assignedIn' | 'invitedIn'>]>([
             ['assigned', { assignedIn: [E2] }],
             ['promised by a pending invitation', { invitedIn: [E2] }]
-          ] as const)('an entity admin of another entity cannot touch a role %s in a sibling (403)', async (_how, usage) => {
+          ])('an entity admin of another entity cannot touch a role %s in a sibling (403)', async (_how, usage) => {
             const { prisma } = given({ actor: entityAdminOfE1, ...usage })
 
             await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }), 'used in an entity you do not administer')
