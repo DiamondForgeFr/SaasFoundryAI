@@ -102,6 +102,38 @@ The CLI does not create a backup of the overwritten file. Commit the working tre
 
 :::
 
+## Pinned versions and the lockfile
+
+A template refresh can change the versions a `package.json` pins (the 1.2.0 stack refresh moved dozens of them). Your `package-lock.json` still holds the previous ones, and a plain `npm install` does
+not replace them: it keeps the previous versions hoisted at the root, where every peer resolves them (`@nestjs/jwt`, `@nestjs/swagger`, `react-dom`), and nests the new pins under the workspace that
+declares them. The project then has two copies of `@nestjs/common` and `@nestjs/core`, or a `react` and a `react-dom` of different versions: `nest build` fails on `INestApplication` (TS2345), the web
+unit tests on "Incompatible React versions", and the shared UI package on two `@types/react`.
+
+`npm dedupe` does not fix it: it moves the shared copy to the newest version in range, not to the pin. Removing only the lockfile does not either, because npm builds on the installed `node_modules`.
+Resolving the lockfile again, with `node_modules` and `package-lock.json` both removed, gives one copy of each.
+
+When an applied update changes a pinned version (or an `overrides` entry) in a `package.json` that a `package-lock.json` resolves (the root of a monorepo, each app of a multirepo), it names the pins
+and the lockfile, then:
+
+| Run                                         | What happens                                                                                                                                                                                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Interactive                                 | It asks whether to resolve the lockfile again now. On yes, it re-creates `package-lock.json` and `node_modules` under the Node version of the project's `.nvmrc`, then runs `npm ls` on the pinned frameworks and reports any installed twice. |
+| Interactive, answered no                    | It prints the command to run, below.                                                                                                                                                                                                           |
+| `--non-interactive`                         | It installs nothing and prints the command to run, below.                                                                                                                                                                                      |
+| The resolve fails (network, a registry)     | The previous lockfile and `node_modules` are put back, the command to retry is printed, and the update exits with code 1. The template update itself is already recorded.                                                                      |
+| A `package.json` conflict left as a sidecar | Nothing is resolved, since the file on disk did not change: the update says the sidecar changes pins, and to resolve the lockfile once it is merged.                                                                                           |
+| No `package-lock.json`                      | Nothing is said: the first `npm install` resolves the new pins.                                                                                                                                                                                |
+
+The command, from the directory that holds the lockfile, under the Node version of its `.nvmrc` (`nvm use`):
+
+```bash
+rm -rf node_modules package-lock.json && npm install
+npm ls @nestjs/common @nestjs/core react react-dom @types/react @types/react-dom @prisma/client prisma --all
+```
+
+The second line lists each of those frameworks with every version installed; after the resolve each appears in one version. TypeScript is not checked: the API pins 5.9 and the web app 6 on purpose.
+Commit the new `package-lock.json` with the update. A framework still installed twice after the resolve is pinned by a dependency of your own: `npm ls <name> --all` shows which one.
+
 ## Migrations and recovery
 
 Updates can involve three distinct mechanisms:
@@ -362,8 +394,9 @@ Then:
 3. Apply with the default `save-new` strategy unless overwrite is intentional.
 4. Inspect `git diff` and every `.saasfoundry.new` sidecar.
 5. Merge or discard sidecars deliberately, then remove them.
-6. Run the generated project's build, lint, tests, and any required database procedure.
-7. Commit the updated files and `.saasfoundry.json` together.
+6. If the update changed pinned versions and you did not let it resolve the lockfile, resolve it again (see [Pinned versions and the lockfile](#pinned-versions-and-the-lockfile)).
+7. Run the generated project's build, lint, tests, and any required database procedure.
+8. Commit the updated files, `package-lock.json` and `.saasfoundry.json` together.
 
 If the command fails, read its recovery message and rerun the same lifecycle command after correcting the reported cause. Do not delete transition journals or rewrite ownership hashes manually.
 

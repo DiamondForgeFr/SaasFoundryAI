@@ -104,6 +104,39 @@ Le CLI ne crée aucune sauvegarde du fichier remplacé. Versionnez l'arbre et in
 
 :::
 
+## Versions épinglées et lockfile
+
+Une mise à jour des modèles peut changer les versions qu'un `package.json` épingle (celle de la pile en 1.2.0 en a déplacé plusieurs dizaines). Votre `package-lock.json` garde les précédentes, et un
+simple `npm install` ne les remplace pas : il laisse les anciennes versions hissées à la racine, là où chaque pair les résout (`@nestjs/jwt`, `@nestjs/swagger`, `react-dom`), et imbrique les nouvelles
+sous le workspace qui les déclare. Le projet a alors deux copies de `@nestjs/common` et `@nestjs/core`, ou un `react` et un `react-dom` de versions différentes : `nest build` échoue sur
+`INestApplication` (TS2345), les tests unitaires web sur « Incompatible React versions », et le paquet d'UI partagé sur deux `@types/react`.
+
+`npm dedupe` ne corrige pas : il déplace la copie partagée vers la version la plus récente de la plage, pas vers la version épinglée. Supprimer seulement le lockfile non plus, car npm repart du
+`node_modules` installé. Résoudre de nouveau le lockfile, `node_modules` et `package-lock.json` supprimés tous les deux, donne une seule copie de chacun.
+
+Quand une mise à jour appliquée change une version épinglée (ou une entrée `overrides`) dans un `package.json` qu'un `package-lock.json` résout (la racine d'un monorepo, chaque application d'un
+multirepo), elle nomme les versions et le lockfile, puis :
+
+| Exécution                                       | Ce qui se passe                                                                                                                                                                                                                                                   |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Interactive                                     | Elle demande s'il faut résoudre le lockfile de nouveau maintenant. Sur oui, elle recrée `package-lock.json` et `node_modules` avec la version de Node du `.nvmrc` du projet, puis lance `npm ls` sur les frameworks épinglés et signale ceux installés deux fois. |
+| Interactive, réponse non                        | Elle affiche la commande à lancer, ci-dessous.                                                                                                                                                                                                                    |
+| `--non-interactive`                             | Elle n'installe rien et affiche la commande à lancer, ci-dessous.                                                                                                                                                                                                 |
+| La résolution échoue (réseau, registre)         | Le lockfile et le `node_modules` précédents sont remis en place, la commande pour réessayer est affichée, et la mise à jour sort avec le code 1. La mise à jour des modèles est déjà enregistrée.                                                                 |
+| Un conflit sur `package.json` laissé en sidecar | Rien n'est résolu, puisque le fichier sur disque n'a pas changé : la mise à jour indique que le sidecar change des versions épinglées, et qu'il faudra résoudre le lockfile une fois la fusion faite.                                                             |
+| Pas de `package-lock.json`                      | Rien n'est dit : le premier `npm install` résout les nouvelles versions.                                                                                                                                                                                          |
+
+La commande, depuis le dossier qui contient le lockfile, avec la version de Node de son `.nvmrc` (`nvm use`) :
+
+```bash
+rm -rf node_modules package-lock.json && npm install
+npm ls @nestjs/common @nestjs/core react react-dom @types/react @types/react-dom @prisma/client prisma --all
+```
+
+La seconde ligne liste chacun de ces frameworks avec toutes ses versions installées ; après la résolution, chacun n'apparaît qu'en une version. TypeScript n'est pas vérifié : l'API épingle la 5.9 et
+l'application web la 6, exprès. Committez le nouveau `package-lock.json` avec la mise à jour. Un framework encore installé deux fois après la résolution est épinglé par une de vos propres dépendances
+: `npm ls <nom> --all` montre laquelle.
+
 ## Migrations et récupération
 
 Une mise à jour peut combiner trois mécanismes distincts :
@@ -372,8 +405,9 @@ Puis :
 3. Appliquez avec `save-new` sauf si un écrasement est intentionnel.
 4. Inspectez `git diff` et chaque sidecar `.saasfoundry.new`.
 5. Fusionnez ou écartez chaque sidecar explicitement, puis supprimez-le.
-6. Lancez le build, le lint, les tests et la procédure de base requise par le projet généré.
-7. Versionnez ensemble les fichiers mis à jour et `.saasfoundry.json`.
+6. Si la mise à jour a changé des versions épinglées sans que vous la laissiez résoudre le lockfile, résolvez-le de nouveau (voir [Versions épinglées et lockfile](#versions-epinglees-et-lockfile)).
+7. Lancez le build, le lint, les tests et la procédure de base requise par le projet généré.
+8. Versionnez ensemble les fichiers mis à jour, `package-lock.json` et `.saasfoundry.json`.
 
 Si la commande échoue, suivez son message de récupération et relancez la même commande après correction. Ne supprimez pas les journaux de transition et ne réécrivez pas les empreintes de propriété
 manuellement.
