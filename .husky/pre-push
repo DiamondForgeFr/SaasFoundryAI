@@ -9,12 +9,18 @@ url="$2"
 
 # RC pushes are validation-only. Version changes must already be committed,
 # and release tags are created from the verified master commit after merge.
-if [[ "$current_branch" =~ ^rc- ]]; then
+# Husky runs hooks with sh (dash on most Linux images): match with a POSIX case and grep -E,
+# no bash-only test.
+is_rc_branch=false
+case "$current_branch" in
+  rc-*) is_rc_branch=true ;;
+esac
+if [ "$is_rc_branch" = true ]; then
   echo "Release candidate branch detected: $current_branch"
   expected_version="${current_branch#rc-}"
   current_version=$(node -p "require('./package.json').version")
 
-  if [[ ! "$expected_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+  if ! printf '%s\n' "$expected_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
     echo "❌ Invalid release branch name. Expected rc-X.Y.Z, got $current_branch."
     exit 1
   fi

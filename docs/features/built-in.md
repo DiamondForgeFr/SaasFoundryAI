@@ -204,7 +204,7 @@ checks and the heavier pre-push gate.
 ```
 
 `prepare-commit-msg` and `pre-push` only act on release candidate branches (`rc-*`). On a detached HEAD, such as every step of a rebase, they exit without checking anything, so a rebase that stops on
-a conflict continues with `git rebase --continue`.
+a conflict continues with `git rebase --continue`. Husky runs the hooks with `sh`, so they are written in POSIX shell: the `rc-*` checks also run where `sh` is dash, as on most Linux images.
 
 Docker starts the development database, and dedicated test Compose configuration isolates API database tests. Generated GitHub Actions are topology-aware and can limit jobs to the surfaces changed by
 a pull request.
