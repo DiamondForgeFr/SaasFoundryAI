@@ -467,6 +467,26 @@ are tracked over the **whole message** from its first line (a fence closes only 
 or a long fenced block cannot decide the verdict. Any other key on the line (`kind=`, `ticket=`, `trial=`) is ignored. A message without the line is an unknown outcome, and the delegate is asked for
 it once (next section).
 
+### Interim stops
+
+A delegate that ends a turn while a job it started in the background still runs (a test suite, a commit hook, `molten ci run`) is not done: the host wakes it when the job reports, and the delegation
+ends at a later stop. Every tier agent is told to wait for its own jobs (on Claude Code, the Monitor tool with an until-loop) and never to write its final message while one runs. A turn that ends
+anyway is an **interim stop**, and the capture records it without an outcome:
+
+- **Claude Code** lists the session's background tasks in every `SubagentStop` payload (`background_tasks`: id, type, status). That list is the session's, with the shells and monitors of every
+  delegate running beside this one and the stopping agent itself, so the capture keeps only the running tasks the agent's own transcript launched (a shell run in the background, a monitor, a subagent
+  launched in the background). When one of them still runs, the stop is interim.
+- **On any host**, a delegate that ends a turn with `SF-DELEGATION: pending route=<id>` says the same. It is the only signal on Codex, and on a Claude Code release whose payload has no task list.
+
+An interim stop keeps its cost and its route, carries the evidence references `interim-stop` (and `background-work-running` when the task list showed it), and, when the delegate wrote a verdict all
+the same, `interim-verdict-<pass|fail>`: a fact, never the outcome. It is never asked for the line. While an interim stop is an agent's latest one, the delegation is censored, a verdict an earlier
+stop gave included, and `sf agents routing report` counts it apart. Its final stop carries the verdict that counts. A CLI older than this change reads a `pending` line as a missing line and asks for
+it once, as it did before.
+
+The routing report and the adjustment read the same folded ledger; on 2026-11-13 they disagreed only in time. The adjustment runs after each capture, and three delegations had just recorded a `fail`
+at an interim stop: `bug-fix` was moved up on "3 failures in the last 10 rated runs", and the final `pass` of the same delegations, recorded later, did not undo the move. An interim stop now has no
+outcome, so neither reads a failure there.
+
 ### Asking for the missing line
 
 A delegate that forgets its closing line used to be recorded as an unknown outcome and dropped: nobody saw it, and the routing could not learn from the run. The capture now answers the `SubagentStop`
@@ -483,6 +503,7 @@ It asks only when every condition holds, and never twice:
 
 - the event is a `SubagentStop` of a routed `sf-<tier>` agent whose tier is declared for the host, with a non-empty final message that has **no line at all** (a `pass` that names only a self-review
   has a line, so it is never asked: asking again would not change the check);
+- the stop is not [interim](#interim-stops): a delegate whose own background job still runs, or that wrote `SF-DELEGATION: pending`, gives its line at its final stop;
 - the host does not say it is already continuing because of a stop hook (`stop_hook_active`);
 - no earlier segment of the same agent carries the evidence reference `asked-for-sf-delegation-line`. That guard is ours: it holds when a host's own loop flag is wrong or missing.
 

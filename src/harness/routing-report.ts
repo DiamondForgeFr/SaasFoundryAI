@@ -101,7 +101,8 @@ export interface ComplexityRow extends TicketAggregate {
 export interface RoutingReport {
   reportVersion: typeof REPORT_VERSION
   generatedAt: string
-  ledger: { runs: number; stops: number; rated: number; censored: number; manual: number; unattributed: number; skippedLines: number; unmatchedSignals: number }
+  /** `interim`: delegations whose latest stop was interim (#1241), censored until their final stop. */
+  ledger: { runs: number; stops: number; rated: number; censored: number; interim: number; manual: number; unattributed: number; skippedLines: number; unmatchedSignals: number }
   policy: Omit<AdjustPolicy, 'prices'> & { declaredPrices: string[] }
   /** Models that ran with a token count but have no price: their runs count for reliability, never for cost. Declare them in routing.adjust.prices. */
   unpricedModels: string[]
@@ -295,6 +296,7 @@ export async function buildRoutingReport(state: RoutingState, now: Date = new Da
       stops: all.length,
       rated: runs.filter((run) => !run.censored).length,
       censored: runs.filter((run) => run.censored).length,
+      interim: runs.filter((run) => run.interim).length,
       manual: runs.filter((run) => run.host === 'manual').length,
       unattributed: runs.filter((run) => run.taskKind === null).length,
       skippedLines: state.ledger.skipped,
@@ -339,6 +341,10 @@ export function renderRoutingReport(report: RoutingReport): string {
   lines.push(
     `Delegations recorded: ${ledger.runs} (${ledger.rated} rated, ${ledger.censored} censored${ledger.unattributed ? `, ${ledger.unattributed} without a route` : ''}${ledger.manual ? `, ${ledger.manual} recorded by hand and never moving the routing` : ''}). A censored run has no usable outcome: it is kept, and never counts as a success.`
   )
+  if (ledger.interim)
+    lines.push(
+      `${ledger.interim} delegation${ledger.interim === 1 ? ' is' : 's are'} still at an interim stop (background work of its own was running, or it wrote SF-DELEGATION: pending): censored until the final stop.`
+    )
   if (ledger.stops > ledger.runs) lines.push(`${ledger.stops - ledger.runs} further stop${ledger.stops - ledger.runs === 1 ? '' : 's'} of resumed agents are counted in their delegation.`)
   if (ledger.skippedLines) lines.push(`${ledger.skippedLines} ledger line${ledger.skippedLines === 1 ? ' was' : 's were'} not a valid record and skipped.`)
   lines.push(`Capture: ${report.capture.map((entry) => `${entry.agent} ${entry.state}`).join(', ') || 'no declared coding agent'}.`)

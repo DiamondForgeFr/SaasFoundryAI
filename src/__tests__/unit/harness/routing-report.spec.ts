@@ -181,6 +181,31 @@ describe('sf agents routing report (#1035, AC-3)', () => {
       expect(report.kinds[0].tiers[0]).toMatchObject({ runs: 1, cost: { priced: 1, mean: '4.000000' }, durationMs: { median: 20_000, p95: 20_000 } })
       expect(renderRoutingReport(report)).toContain('1 further stop of resumed agents are counted in their delegation.')
     })
+
+    // The report and the adjustment read the same fold: an agent whose latest stop is interim is a failure in neither (#1241)
+    it('counts a delegation whose latest stop is interim as censored, never as the verdict an earlier stop gave', async () => {
+      const agent = agentToken('a2')
+      const stop = (eventKey: string, from: number, to: number, minutes: number, extra: Partial<Parameters<typeof buildRunRecord>[0]> = {}) =>
+        buildRunRecord({
+          host: 'claude-code',
+          provider: 'claude-code',
+          tier: 'fix',
+          taskKind: 'bug-fix',
+          model: 'claude-opus-5-5',
+          effort: 'medium',
+          eventKey,
+          agentId: agent,
+          segment: { from, to },
+          at: new Date(NOW.getTime() + minutes * 60_000).toISOString(),
+          durationMs: 10_000,
+          tokens: { input: 1, output: 0, cacheRead: 0, cacheWrite: 0 },
+          ...extra
+        })
+      const fold = foldLedger([stop('one', 0, 10, 0, { outcome: 'fail', checks: ['type-check'] }), stop('two', 10, 20, 5, { evidenceRefs: ['interim-stop'] })])
+      const report = await buildRoutingReport({ ...state(fold.runs), ledger: fold }, NOW, { probe: probe(true) })
+      expect(report.ledger).toMatchObject({ runs: 1, stops: 2, rated: 0, censored: 1, interim: 1 })
+      expect(renderRoutingReport(report)).toContain('1 delegation is still at an interim stop')
+    })
   })
 
   describe('per ticket, by complexity', () => {

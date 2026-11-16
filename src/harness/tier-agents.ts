@@ -58,6 +58,16 @@ export const DELEGATION_REPORT_LINE =
   'the codes being what you really ran among type-check, automated-tests, affected-tests, integration-tests, independent-review, security-tests, self-review (`none` if nothing): ' +
   '`pass` only if the check the brief named was run and met. Without the line the outcome is recorded as unknown.'
 
+/**
+ * Waiting for one's own background work (#1241). A delegate that ended its turn while a job it started still ran was
+ * stopped early, wrote `fail` about unfinished work, and the routing read it. The capture now records such a stop as
+ * interim; the line keeps the delegate from producing it, and names the `pending` keyword for a turn that ends anyway.
+ */
+export const BACKGROUND_WORK_LINE =
+  'Never write your final message while a background job you started (a test suite, a commit hook, `molten ci run`) still runs: ' +
+  'wait for it (on Claude Code, the Monitor tool with an until-loop), never with a foreground sleep, and stop the monitors you no longer need. ' +
+  'If a turn ends while one still runs (the host wakes you when it reports), end that turn with `SF-DELEGATION: pending route=<id>`, never with a verdict.'
+
 function instructions(assignment: TierAssignment): string {
   const lines = [
     `You are the ${assignment.tier} tier delegate of this project. The coordinating agent hands you one task of kind ${assignment.kinds.join(', ')}.`,
@@ -68,6 +78,7 @@ function instructions(assignment: TierAssignment): string {
     // below and the workflow skill's "Delegated ticket delivery" say the same thing.
     `- ${WHOLE_TICKET_LINE}`,
     '- Report back what you changed or found, with file:line references, and anything you could not finish.',
+    `- ${BACKGROUND_WORK_LINE}`,
     `- ${DELEGATION_REPORT_LINE}`
   ]
   if (assignment.excludedFor.length) {

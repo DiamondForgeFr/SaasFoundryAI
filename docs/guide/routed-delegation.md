@@ -104,7 +104,9 @@ The harness does not trust a delegate's own account of its work. It measures thr
   echoes within seven days expires.
 - **The verdict line.** Each tier agent ends its final message with `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`. `pass` means the check the brief named was run and met. A delegate that ends
   without the line is asked for it once, while it is still running: the capture hook answers its stop with a block that carries the exact line to write, and the answer is the next stop of the same
-  delegation. A message that still has no line is an unknown outcome.
+  delegation. A message that still has no line is an unknown outcome. A delegate waits for the background jobs it started before its final message; a turn that ends while one still runs (Claude Code
+  lists the running tasks in the stop, or the delegate writes `SF-DELEGATION: pending route=<id>`) is an interim stop: it keeps its cost, records no outcome and asks nothing, and only the final stop's
+  verdict reaches the routing (see [`sf agents`](../cli/sf-agents.md#interim-stops)).
 - **The ledger.** `<git-common-dir>/saasfoundry/delegations.jsonl` is an append-only file that holds the runs (tokens, cost, active time, outcome, checks, tier and candidate), the route records, and
   the signals. On Claude Code, `SubagentStop` and `PostToolUse` hooks capture each run automatically. Other hosts record by hand with `sf agents outcome record`. A cost is never guessed: a model
   without a published price keeps its reliability but has no cost until the project declares one. A capture that fails is not silent: it is logged next to the ledger, and `sf status` and

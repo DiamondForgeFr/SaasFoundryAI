@@ -37,6 +37,12 @@ export const LEDGER_DIR = 'saasfoundry'
 export const LEDGER_FILE = 'delegations.jsonl'
 const SPOOL_DIR = 'delegations.spool'
 const LOCK_FILE = 'delegations.lock'
+/**
+ * The evidence ref of a stop the capture judged interim (#1241): the delegate ended a turn while it still had background
+ * work running, or said so with `SF-DELEGATION: pending`. Such a stop carries no outcome, and while it is an agent's
+ * latest stop the delegation counts for nothing: only the final stop's verdict reaches the routing.
+ */
+export const INTERIM_STOP_REF = 'interim-stop'
 const LOCK_WAIT_MS = 5_000
 /** A lock older than this is broken even when its pid looks alive (the pid may have been reused). */
 const LOCK_HARD_STALE_MS = 10 * 60_000
@@ -522,6 +528,11 @@ export interface LedgerRun extends DelegationRunRecord {
   superseded: boolean
   /** Segments of the agent up to and including this one. */
   chainSegments: number
+  /**
+   * The agent's latest stop was interim (#1241): it ended a turn while background work of its own still ran, or
+   * wrote `SF-DELEGATION: pending`. The delegation has no verdict until a final stop: censored, an earlier verdict included.
+   */
+  interim: boolean
   /** The outcome the rates use: the agent's latest verdict, and a success the session reworked, a Human Testing defect or a retry on a higher tier is a failure. */
   effectiveOutcome: ExecutionActualOutcomeCode
   /** What a rate counts for this run: the cost of every segment of the agent (null when one has none), the active time of all of them. */
@@ -620,6 +631,7 @@ export function foldLedger(entries: readonly LedgerEntry[], skipped = 0): Ledger
     escalated: false,
     superseded: false,
     chainSegments: 1,
+    interim: record.evidenceRefs.includes(INTERIM_STOP_REF),
     effectiveOutcome: record.outcome,
     countedCost: record.cost,
     countedDurationMs: record.durationMs,
@@ -663,8 +675,9 @@ export function foldLedger(entries: readonly LedgerEntry[], skipped = 0): Ledger
     last.chainSegments = chain.length
     if (chain.length === 1) continue
     for (const run of chain.slice(0, -1)) run.superseded = true
-    // The agent's latest verdict is its outcome, and its cost is every segment's.
-    last.effectiveOutcome = [...chain].reverse().find((run) => run.outcome !== 'outcome-unknown')?.outcome ?? last.outcome
+    // The agent's latest verdict is its outcome, and its cost is every segment's. An agent whose latest stop is interim
+    // is still working (#1241): no verdict counts until its final stop, not even one an earlier stop gave.
+    last.effectiveOutcome = last.interim ? 'outcome-unknown' : ([...chain].reverse().find((run) => run.outcome !== 'outcome-unknown')?.outcome ?? last.outcome)
     last.countedCost = sumCosts(chain.map((run) => run.cost))
     const spans = chain.flatMap((run) => (run.durationMs === null ? [] : [run.durationMs]))
     last.countedDurationMs = spans.length ? spans.reduce((sum, span) => sum + span, 0) : null
@@ -708,6 +721,7 @@ export function foldLedger(entries: readonly LedgerEntry[], skipped = 0): Ledger
 
   for (const run of runs) {
     const retried = run.escalated || run.signals.length > 0
+    if (run.interim) run.effectiveOutcome = 'outcome-unknown'
     run.effectiveOutcome = run.effectiveOutcome === 'success' && retried ? 'validation-failed' : run.effectiveOutcome
     run.censored = run.taskKind === null || run.superseded || !RATED_OUTCOMES.includes(run.effectiveOutcome)
     run.decisive = !run.censored && run.host !== 'manual'
