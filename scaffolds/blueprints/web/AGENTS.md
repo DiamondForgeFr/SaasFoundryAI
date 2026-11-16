@@ -146,7 +146,7 @@ npm run dev                 # Start Vite dev server (port 5173)
 
 # Testing
 npm run test:e2e            # Run Playwright E2E tests
-npm run test:full           # Format + Lint + Type-check + E2E
+npm run test:full           # Format + Lint + Type-check + Build + E2E
 
 # Code Quality
 npm run format              # Prettier
