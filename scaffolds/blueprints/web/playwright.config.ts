@@ -22,7 +22,11 @@ export default defineConfig({
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    viewport: { width: 1300, height: 1100 }
+    viewport: { width: 1300, height: 1100 },
+    /* A service worker (the PWA module registers one in the preview build) answers requests
+       before `page.route` sees them, so WebKit specs would hit the network instead of their
+       mocks. The specs test the app, not offline behaviour: keep workers out. */
+    serviceWorkers: 'block'
   },
 
   /* Configure projects for major browsers */
@@ -56,7 +60,9 @@ export default defineConfig({
     }
   ],
 
-  /* Run your local dev server before starting the tests */
+  /* Run your local dev server before starting the tests. On CI it serves the existing build
+     (`dist/`): the pipeline builds first (Turborepo's `test:e2e` depends on `build` in a
+     monorepo, the lifecycle lane runs `npm run build` in a standalone app). */
   webServer: {
     command: process.env.CI
       ? 'npm run preview -- --mode test --strictPort'
