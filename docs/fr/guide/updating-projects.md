@@ -269,6 +269,8 @@ rm **/*.saasfoundry.new
 # 7. Si la mise à jour a changé des versions épinglées sans résoudre le lockfile
 rm -rf node_modules package-lock.json && npm install
 npm ls @nestjs/common @nestjs/core react react-dom @types/react @types/react-dom @prisma/client prisma --all
+# ...et qu'elle a déplacé la version de Prisma : régénérer le client que l'API versionne (multirepo : depuis l'app API)
+cd apps/api && npx prisma generate && cd -
 
 # 8. Relancer les tests et committer
 npm test
@@ -284,7 +286,10 @@ version du modèle qui lui a été proposée : fusionner (ou écarter) le sideca
 - Il ne lance pas `npm install` ou `prisma generate` à votre place, à une exception près. Les ajouts de modules peuvent installer leurs dépendances. Une mise à jour de modèles qui change des versions
   épinglées dans un `package.json` résolu par un `package-lock.json` propose, en exécution interactive, de résoudre ce lockfile de nouveau, puis signale les frameworks installés deux fois ; avec
   `--non-interactive`, elle affiche la commande à la place. Un simple `npm install` garderait les anciennes versions à côté des nouvelles (voir
-  [Versions épinglées et lockfile](/fr/cli/sf-update#versions-epinglees-et-lockfile)). Lancez `prisma generate` vous-même après avoir relu le diff.
+  [Versions épinglées et lockfile](/fr/cli/sf-update#versions-epinglees-et-lockfile)). Quand cette mise à jour déplace la version de Prisma de l'API, la résolution que vous acceptez est suivie de
+  `npx prisma generate` dans l'API, et le client versionné porte la nouvelle version ; sans résolution (`--non-interactive`, réponse non, échec), la commande est affichée parmi les étapes (voir
+  [Le client Prisma suit la version de Prisma](/fr/cli/sf-update#le-client-prisma-suit-la-version-de-prisma)). Pour tout autre changement du schéma Prisma, lancez `prisma generate` vous-même après
+  avoir relu le diff.
 - Il ne migre pas la base. Les évolutions Prisma sont seulement propagées comme fichiers ; exécutez séparément `npx prisma db push` ou `npm run db:setup:dev`, ce dernier reconstruisant et repeuplant
   la base de manière destructive.
 - Il ne touche pas à l’historique Git et ne crée aucun commit. L’arbre reste modifié pour votre revue.

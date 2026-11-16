@@ -39,6 +39,31 @@ export const PINNED_FRAMEWORKS = ['@nestjs/common', '@nestjs/core', 'react', 're
 /** What a developer runs in a package root to resolve its lockfile again. */
 export const LOCKFILE_RESOLVE_COMMAND = 'rm -rf node_modules package-lock.json && npm install'
 
+/**
+ * The pins whose version the generated Prisma client carries (#1246). The client the API commits
+ * under `src/generated/prisma` stamps the Prisma version that generated it (`internal/class.ts`,
+ * `internal/prismaNamespace.ts`): after the pin moves, the next `prisma generate` (the database
+ * scripts, the e2e setup) rewrites those stamps and leaves the tree dirty after an update that
+ * reported success. The update regenerates it once the dependencies are installed at the new pin.
+ */
+export const PRISMA_CLIENT_PINS = ['prisma', '@prisma/client'] as const
+
+/** What the stack runs to generate the client, in the API directory (`api.builder`, `sf resume`). */
+export const PRISMA_GENERATE_COMMAND = 'npx prisma generate'
+
+export interface PrismaClientTarget {
+  /** Project-relative directory of the `package.json` that pins Prisma: the API. */
+  dir: string
+  from: string
+  to: string
+}
+
+export interface PrismaClientResult {
+  dir: string
+  to: string
+  outcome: 'regenerated' | 'manual' | 'failed'
+}
+
 export interface PinChange {
   /** Project-relative path of the `package.json`. */
   manifest: string
@@ -95,6 +120,25 @@ export function pinChanges(manifest: string, before: string | undefined, after: 
     }
   }
   return changes
+}
+
+/**
+ * The directories whose Prisma client the update must regenerate: every `package.json` whose
+ * `prisma` or `@prisma/client` pin moved from one version to another (an added or removed pin is
+ * not a version change). The `prisma` CLI pin names the version, since it is what generates.
+ */
+export function prismaClientTargets(changes: readonly PinChange[]): PrismaClientTarget[] {
+  const targets = new Map<string, PrismaClientTarget & { cli: boolean }>()
+  for (const change of changes) {
+    if (!(PRISMA_CLIENT_PINS as readonly string[]).includes(change.name)) continue
+    if (change.field !== 'dependencies' && change.field !== 'devDependencies') continue
+    if (change.from === undefined || change.to === undefined) continue
+    const dir = dirname(change.manifest) || '.'
+    const cli = change.name === 'prisma'
+    const known = targets.get(dir)
+    if (!known || (cli && !known.cli)) targets.set(dir, { dir, from: change.from, to: change.to, cli })
+  }
+  return [...targets.values()].map(({ dir, from, to }) => ({ dir, from, to }))
 }
 
 /** True for a project-relative path whose file is a `package.json` (a sidecar is not). */
@@ -194,6 +238,35 @@ export interface LockfileResolutionResult {
   outcome: 'resolved' | 'declined' | 'non-interactive' | 'failed'
   /** Frameworks still installed in more than one version; `undefined` when `npm ls` could not be read. */
   duplicates?: FrameworkCopies[]
+  /** The Prisma clients whose pin moved: regenerated, or left with the command to run. */
+  prismaClients?: PrismaClientResult[]
+}
+
+const prismaPinLabel = ({ from, to }: PrismaClientTarget): string => `prisma ${from} → ${to}`
+
+/** The step a developer runs once the dependencies are installed at the new pin. */
+function logPrismaGenerateStep(targets: readonly PrismaClientTarget[], log: (line: string) => void, lead: string): void {
+  for (const target of targets) {
+    log(chalk.yellow(`    ${lead} regenerate the Prisma client the API commits (${prismaPinLabel(target)}): ${inRoot(target.dir, PRISMA_GENERATE_COMMAND)}`))
+  }
+}
+
+/** Generate each client under the Node version its directory's `.nvmrc` names, after the resolve. */
+function regeneratePrismaClients(targets: readonly PrismaClientTarget[], deps: LockfileResolutionDeps, log: (line: string) => void): PrismaClientResult[] {
+  const execute = deps.run ?? ((command: string, options: { cwd: string }) => run(command, options))
+  return targets.map((target) => {
+    const prefix = (deps.nvmPrefix ?? getNvmPrefix)(target.dir)
+    const result = execute(`${prefix}${PRISMA_GENERATE_COMMAND}`, { cwd: target.dir })
+    if (result.code === 0) {
+      log(chalk.green(`    ✓ Prisma client regenerated at ${target.to} (${target.dir}/src/generated/prisma): commit it with the update.`))
+      return { dir: target.dir, to: target.to, outcome: 'regenerated' }
+    }
+    log(chalk.red(`    Regenerating the Prisma client failed (exit ${result.code}).`))
+    const detail = (result.stderr || result.stdout).trim().split('\n').slice(-5)
+    for (const line of detail) if (line) log(chalk.red(`    ${line}`))
+    logPrismaGenerateStep([target], log, 'To retry,')
+    return { dir: target.dir, to: target.to, outcome: 'failed' }
+  })
 }
 
 /** Run `npm ls` on the pinned frameworks in one package root and read the copies it lists. */
@@ -230,22 +303,26 @@ export async function offerLockfileResolution(roots: readonly LockfileRoot[], op
       (content) => content.trim() || undefined,
       () => undefined
     )
+    const prismaTargets = prismaClientTargets(changes)
+    const manualPrisma = (): PrismaClientResult[] => prismaTargets.map(({ dir, to }) => ({ dir, to, outcome: 'manual' }))
+    const withPrisma = (clients: PrismaClientResult[]): Pick<LockfileResolutionResult, 'prismaClients'> => (clients.length > 0 ? { prismaClients: clients } : {})
     const manual = (): void => {
       log(chalk.yellow(`    Resolve it again: ${inRoot(root, LOCKFILE_RESOLVE_COMMAND)}`))
       // The generated projects require npm 11, which Node 22 does not ship (#589).
       if (nodeVersion) log(chalk.gray(`    Run it under the Node version .nvmrc names (${nodeVersion}, for example with nvm use).`))
       log(chalk.gray(`    Then check one copy of each framework is installed: ${inRoot(root, frameworkCheckCommand())}`))
       log(chalk.gray('    npm dedupe is not enough: it moves the shared copy to the newest version in range, not to the pin.'))
+      logPrismaGenerateStep(prismaTargets, log, 'Once installed,')
     }
     if (!options.interactive) {
       manual()
-      results.push({ root, outcome: 'non-interactive' })
+      results.push({ root, outcome: 'non-interactive', ...withPrisma(manualPrisma()) })
       continue
     }
     const accepted = await deps.confirm(`Resolve ${lockfile} again now? node_modules and the lockfile are re-created; the previous ones come back if it fails.`)
     if (!accepted) {
       manual()
-      results.push({ root, outcome: 'declined' })
+      results.push({ root, outcome: 'declined', ...withPrisma(manualPrisma()) })
       continue
     }
     try {
@@ -254,7 +331,7 @@ export async function offerLockfileResolution(roots: readonly LockfileRoot[], op
       log(chalk.red(`    Resolving ${lockfile} again failed; the previous lockfile and node_modules are back.`))
       log(chalk.red(`    ${error instanceof Error ? error.message.split('\n').join('\n    ') : String(error)}`))
       manual()
-      results.push({ root, outcome: 'failed' })
+      results.push({ root, outcome: 'failed', ...withPrisma(manualPrisma()) })
       continue
     }
     const duplicates = checkFrameworkCopies(root, deps)
@@ -267,7 +344,9 @@ export async function offerLockfileResolution(roots: readonly LockfileRoot[], op
       for (const { name, versions } of duplicates) log(chalk.yellow(`      ! ${name}: ${versions.join(', ')}`))
       log(chalk.yellow(`    A dependency of your own may pin another version: ${inRoot(root, `npm ls <name> --all`)} shows which.`))
     }
-    results.push({ root, outcome: 'resolved', ...(duplicates !== undefined ? { duplicates } : {}) })
+    // The client is generated from the installed CLI, so only once the tree holds the new pin.
+    const prismaClients = regeneratePrismaClients(prismaTargets, deps, log)
+    results.push({ root, outcome: 'resolved', ...(duplicates !== undefined ? { duplicates } : {}), ...withPrisma(prismaClients) })
   }
   return results
 }
@@ -281,5 +360,6 @@ export function logPendingSidecarPins(roots: readonly LockfileRoot[], log: (line
     const sidecars = [...new Set(changes.map((change) => `${change.manifest}.saasfoundry.new`))]
     log(chalk.yellow(`\n  ⚠ ${sidecars.join(', ')} change${sidecars.length === 1 ? 's' : ''} pinned versions (${summarizeChanges(changes)}).`))
     log(chalk.yellow(`    Once merged, resolve the lockfile again: ${inRoot(root, LOCKFILE_RESOLVE_COMMAND)}, then ${inRoot(root, frameworkCheckCommand())}`))
+    logPrismaGenerateStep(prismaClientTargets(changes), log, 'Once installed,')
   }
 }
