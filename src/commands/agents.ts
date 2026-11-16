@@ -14,6 +14,7 @@ import { resolveRouteFacts, type RouteFacts } from '../harness/ticket-labels'
 import { registerGuardCommand } from './agents.guard'
 import { registerOutcomeCommands } from './agents.outcome'
 import { registerRoutingCommands } from './agents.routing'
+import { registerShellGuardCommand } from './agents.shell-guard'
 import { errorPayload, parsePositiveInteger } from './agents.shared'
 
 interface AgentCommandOptions {
@@ -377,5 +378,6 @@ export function registerAgentCommands(command: Command): void {
     .action((options: AgentCommandOptions) => agentsCommand('list', [], options))
   registerOutcomeCommands(command)
   registerGuardCommand(command)
+  registerShellGuardCommand(command)
   registerRoutingCommands(command)
 }

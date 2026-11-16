@@ -405,7 +405,11 @@ function checkGuardHook(report: StatusReport): Precondition {
   const broken = guard.filter((entry) => entry.state === 'declared-not-runnable')
   const older = guard.filter((entry) => entry.state === 'declared-outdated-cli')
   const off = guard.filter((entry) => entry.state === 'missing' || entry.state === 'outdated')
-  if (broken.length === 0 && older.length === 0 && off.length === 0) return { name, description, status: 'ok', details: guard.map((entry) => `${entry.agent} ${entry.state}`).join('; ') }
+  if (broken.length === 0 && older.length === 0 && off.length === 0) {
+    // The shell shape mode is said when it is not the default: a team that switched it to warn or off sees it here (#1251).
+    const shape = routing.shellShape && routing.shellShape !== 'refuse' ? [`shell shape ${routing.shellShape}`] : []
+    return { name, description, status: 'ok', details: [...guard.map((entry) => `${entry.agent} ${entry.state}`), ...shape].join('; ') }
+  }
   const details = [
     ...broken.map((entry) => `${entry.agent} guard hook reaches ${hookCliText(entry)}, which cannot run \`sf agents guard\``),
     ...older.map((entry) => `${entry.agent} guard hook reaches ${hookCliText(entry)}, older than ${report.manifest?.version ?? 'the project'}, the version that last updated this project`),

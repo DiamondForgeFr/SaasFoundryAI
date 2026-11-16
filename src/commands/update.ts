@@ -58,6 +58,7 @@ import { getSharedAgentEntrypoints } from '../harness/agent-registry'
 import { previewCodexInstructionLimits } from '../harness/codex-instruction-limit-preview'
 import { logHarnessSettings, syncHarnessSettingsForProject } from '../harness/harness-settings'
 import { hookCliNotice } from '../harness/hook-cli-notice'
+import { DEFAULT_SHELL_SHAPE, recordedShellShape, shellShapeNotice } from '../harness/shell-guard-mode'
 import { TIER_AGENT_PATH } from '../harness/tier-agents'
 import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
@@ -1591,6 +1592,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     if (!dryRun && manifest.modules?.harness) {
       const lines = await hookCliNotice('.', manifest.modules.harness.agents ?? ['claude-code'], { requiredVersion: cliVersion })
       for (const line of lines) console.log((line.needsAttention ? chalk.yellow : chalk.gray)(`  ${line.text}`))
+      // The shell shape check is on by absence (#1251): nothing is written, so an update says what the guard now does and how to change it.
+      if ((manifest.modules.harness.agents ?? ['claude-code']).some((agent) => agent === 'claude-code' || agent === 'codex'))
+        console.log(chalk.gray(`  ${shellShapeNotice(recordedShellShape(manifest) ?? DEFAULT_SHELL_SHAPE)}`))
     }
 
     // The agent-instruction refresh above raises Codex's `project_doc_max_bytes` when the AGENTS.md chain a

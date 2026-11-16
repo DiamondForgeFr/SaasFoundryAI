@@ -1,4 +1,4 @@
-import { evaluateToolCall, parseShell, type GuardRule, type ToolCall } from '../../../harness/tool-call-guard'
+import { evaluateToolCall, guardHookOutput, parseShell, type GuardRule, type ToolCall } from '../../../harness/tool-call-guard'
 
 // #1106 — the guard hook refuses the calls that teach an agent to get past a guard: a bypass variable, a nature
 // label it puts on its own ticket, and, for a delegated agent, the consent, `ready-pr` and a merge.
@@ -436,6 +436,22 @@ describe('evaluateToolCall: the shell shape rule', () => {
 
     it('still denies a bypass: the escape hatches do not depend on the mode', () => {
       expect(evaluateToolCall(shaped('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog', { shellShape: 'warn' }))).toMatchObject({ decision: 'deny', rule: 'bypass-variable' })
+    })
+  })
+
+  describe('what the hook prints', () => {
+    it('denies the call for a refusal, and adds the same text as context for a warning, never an allow', () => {
+      const refused = evaluateToolCall(shaped('a && b'))!
+      const warned = evaluateToolCall(shaped('a && b', { shellShape: 'warn' }))!
+
+      expect(guardHookOutput(refused)).toEqual({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: refused.reason } })
+      expect(guardHookOutput(warned)).toEqual({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: warned.reason } })
+      expect(JSON.stringify([guardHookOutput(refused), guardHookOutput(warned)])).not.toContain('"allow"')
+    })
+
+    it('denies a bypass the same way whatever the mode', () => {
+      const bypass = evaluateToolCall(shaped('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog', { shellShape: 'warn' }))!
+      expect(guardHookOutput(bypass).hookSpecificOutput.permissionDecision).toBe('deny')
     })
   })
 

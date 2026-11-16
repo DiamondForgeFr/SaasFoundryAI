@@ -147,6 +147,15 @@ describe('the automatic routing in sf status (#1035)', () => {
 
     it('says nothing of the guard when the report does not carry it', () => {
       expect(routingSummary(routingState())).not.toContain('guard')
+      expect(routingSummary(routingState({ shellShape: 'off' }))).not.toContain('shell shape')
+    })
+
+    // #1251 — the mode ends the guard part of the line: refuse when the report does not say
+    it('ends the guard text with what the hook does with a shell line that is not one plain command', () => {
+      const guard = [{ agent: 'claude-code', state: 'enforced' as const }]
+      expect(routingSummary(routingState({ guard }))).toContain('claude-code guard enforced; shell shape: refuse')
+      expect(routingSummary(routingState({ guard, shellShape: 'warn' }))).toContain('; shell shape: warn (')
+      expect(routingSummary(routingState({ guard, shellShape: 'off' }))).toContain('; shell shape: off (')
     })
 
     it('says an earlier release hook needs a refresh', () => {
@@ -205,6 +214,7 @@ describe('the automatic routing in sf status (#1035)', () => {
           { agent: 'claude-code', state: 'missing' },
           { agent: 'codex', state: 'missing' }
         ],
+        shellShape: 'refuse',
         captureErrors: { count: 0, since: expect.any(String) }
       })
       expect(await render(renderAgentFriendly)).toContain(
@@ -235,6 +245,7 @@ describe('the automatic routing in sf status (#1035)', () => {
         holds: [{ kind: 'terminal-ci', provider: 'claude-code', reason: 'top-of-ladder', since: AT }],
         capture: [{ agent: 'claude-code', state: 'enforced' }],
         guard: [{ agent: 'claude-code', state: 'missing' }],
+        shellShape: 'refuse',
         captureErrors: { count: 0, since: expect.any(String) }
       })
       expect(await render(renderAgentFriendly)).toContain(
@@ -348,6 +359,35 @@ describe('the automatic routing in sf status (#1035)', () => {
         await manifest()
         expect(await checkOf()).toMatchObject({ status: 'skip', details: 'No managed harness' })
       })
+
+      // #1251 — what the hook does with a shell line that is not one plain command: refuse by absence, said when it is not
+      describe('the shell shape mode', () => {
+        const shapeOf = async () => ((await report()).routing as StatusRoutingState).shellShape
+
+        it('is refuse when the manifest records nothing, and the routing line says so after the guard', async () => {
+          await manifest({ version: 5, agents: ['claude-code'] })
+          await settings({ ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS })
+          expect(await shapeOf()).toBe('refuse')
+          expect(await render(renderAgentFriendly)).toContain('claude-code guard enforced; shell shape: refuse')
+          expect(await checkOf()).toMatchObject({ status: 'ok', details: 'claude-code enforced' })
+        })
+
+        it.each([
+          ['warn', 'shell shape: warn (a chained, substituted or scripted line is flagged, not refused; sf agents shell-guard refuse)'],
+          ['off', 'shell shape: off (the shape of a line is not checked; sf agents shell-guard refuse)']
+        ])('is %s when the manifest records it, said on the routing line and in the precondition', async (mode, text) => {
+          await manifest({ version: 5, agents: ['claude-code'], guard: { shellShape: mode } })
+          await settings({ ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS })
+          expect(await shapeOf()).toBe(mode)
+          expect(await render(renderAgentFriendly)).toContain(`claude-code guard enforced; ${text}`)
+          expect(await checkOf()).toMatchObject({ status: 'ok', details: `claude-code enforced; shell shape ${mode}` })
+        })
+
+        it('is refuse when the recorded value is one this release does not know', async () => {
+          await manifest({ version: 5, agents: ['claude-code'], guard: { shellShape: 'allow' } })
+          expect(await shapeOf()).toBe('refuse')
+        })
+      })
     })
 
     it('reads a manifest that switches the adjustment off', async () => {
@@ -440,7 +480,7 @@ describe('the automatic routing in sf status (#1035)', () => {
         await failure('the ledger is locked', 1)
         const status = await collect()
         const json = JSON.parse(renderJson({ report: status, preconditions: evaluatePreconditions(status) }))
-        expect(Object.keys(json.routing)).toEqual(['gridVersion', 'overrides', 'tierAgents', 'adjustment', 'adjustments', 'holds', 'capture', 'guard', 'captureErrors'])
+        expect(Object.keys(json.routing)).toEqual(['gridVersion', 'overrides', 'tierAgents', 'adjustment', 'adjustments', 'holds', 'capture', 'guard', 'shellShape', 'captureErrors'])
         expect(json.routing.captureErrors).toMatchObject({ count: 1, since: '2026-10-31T10:00:00.000Z', last: { stage: 'ledger', message: 'the ledger is locked' } })
       })
 
