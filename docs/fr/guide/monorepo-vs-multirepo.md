@@ -59,6 +59,11 @@ Deux garanties pratiques en découlent :
 
 Les noms de packages générés utilisent le scope du projet, par exemple `@acme-portal/shared-validation`. Le builder remplace le placeholder du projet avant de livrer le scaffold.
 
+`shared-config` est compilé en CommonJS parce que l'API l'exige ; son `package.json` porte donc une table `exports` qui indique à chaque consommateur le fichier à lire : le serveur de dev et le build
+Vite de l'application web lisent `src/index.ts` (condition `browser`), le vérificateur de types lit `dist/index.d.ts`, et l'API lit `dist/index.js`. Un import nommé comme `STORAGE_LOGO_MAX_BYTES`
+fonctionne donc dans le serveur de dev, et une modification du package atteint le navigateur sans reconstruction. Si un projet généré avant la 1.3.0 affiche `does not provide an export named …` dans
+le navigateur, voir le [dépannage](../troubleshooting.md).
+
 ### Pourquoi les types et validations ont aussi des miroirs
 
 Même en monorepo, les applications générées conservent des miroirs sous `apps/api/src/shared-*` et `apps/web/src/shared-*`. Les alias stables `@shared-types/*` et `@shared-validation/*` fonctionnent

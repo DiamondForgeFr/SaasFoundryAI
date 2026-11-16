@@ -114,6 +114,39 @@ dernière release : il satisfait `@<version>`, et ce sont ses templates non publ
    `--dry-run --json`.
 2. Pour utiliser le paquet publié, repérez le lien avec `npm ls -g --depth=0`, retirez-le avec `npm rm -g <nom>`, puis relancez la commande.
 
+## Le serveur de dev web dit que `shared-config` « does not provide an export named … »
+
+**Symptôme** — Dans un monorepo, `npm run dev` sert l'application web, mais une route qui importe depuis `@<projet>/shared-config` plante, et la console du navigateur affiche :
+
+```text
+Uncaught SyntaxError: The requested module '/@fs/…/packages/shared-config/dist/index.js' does not provide an export named 'STORAGE_LOGO_ALLOWED_MIMES'
+```
+
+`npm run build` fonctionne.
+
+**Cause** — `shared-config` est compilé en CommonJS, car l'API l'exige. Le serveur de dev de Vite sert un paquet de workspace lié comme du source au lieu de le regrouper : le navigateur reçoit
+`exports.X = …` et `__exportStar(require('./storage'), exports)` et ne peut pas lier un import nommé dessus. Cela échoue pour tous les noms, `SHARED_CONFIG_PLACEHOLDER` compris. Le build de production
+n'est pas touché, car son bundler résout le CommonJS. Les projets générés avant la 1.3.0 n'ont pas de table `exports` dans `packages/shared-config/package.json`.
+
+**Correction**
+
+1. Lancez `sf update`. Le rafraîchissement des templates écrit le nouveau `packages/shared-config/package.json` si vous ne l'avez pas modifié, et un sidecar `.saasfoundry.new` sinon (voir plus haut).
+   Aucune migration n'intervient et rien d'autre ne change.
+2. Ou ajoutez la table à la main dans `packages/shared-config/package.json`, à côté de `main` et `types`, puis relancez le serveur de dev :
+   ```json
+   "exports": {
+     ".": {
+       "types": "./dist/index.d.ts",
+       "browser": "./src/index.ts",
+       "default": "./dist/index.js"
+     },
+     "./package.json": "./package.json"
+   },
+   ```
+
+Vite lit alors le source TypeScript du paquet, et l'API continue de lire `dist/`. Ne contournez pas avec `optimizeDeps.include` dans `apps/web/vite.config.ts` : le serveur de dev garderait une copie
+pré-regroupée des constantes et ignorerait vos modifications jusqu'à un redémarrage avec `--force`.
+
 ## Port déjà utilisé — 3000, 5173 ou 5435
 
 **Symptôme**

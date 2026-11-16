@@ -57,8 +57,24 @@ import { SHARED_CONFIG_PLACEHOLDER } from '@{{PROJECT_NAME}}/shared-config'
 console.log(`Hello from ${SHARED_CONFIG_PLACEHOLDER}`)
 ```
 
-Module resolution is handled by npm workspaces: the apps consume the package's `main`/`types` entries (`dist/index.js` + `dist/index.d.ts`) through its symlink in the root `node_modules`. No tsconfig
-path alias is required in the consuming apps.
+Module resolution is handled by npm workspaces: the apps import the package through its symlink in the root `node_modules`, and the `exports` map of `package.json` decides which file each consumer
+reads. No tsconfig path alias is required in the consuming apps.
 
-Because consumers read from `dist/`, any edit to this package's source must be followed by a build step before the apps pick it up. `npm run build` at the repo root (which calls `turbo run build`)
-handles the dependency order automatically.
+| Consumer                                         | Entry     | File read         | Why                                                                               |
+| ------------------------------------------------ | --------- | ----------------- | --------------------------------------------------------------------------------- |
+| `apps/web`: Vite dev server and `vite build`     | `browser` | `src/index.ts`    | Vite reads the TypeScript source: named imports work and an edit shows up at once |
+| `apps/web` type-check                            | `types`   | `dist/index.d.ts` | The declarations come from the build                                              |
+| `apps/api`: NestJS, Jest and any other Node code | `default` | `dist/index.js`   | The API is compiled to CommonJS, and Node never sets the `browser` condition      |
+
+`main` and `types` stay as top-level fields for the resolvers that do not read `exports`, such as the API's `moduleResolution: node`.
+
+**Why `browser` points to the source.** The package is compiled to CommonJS (`module: commonjs`) because the API requires it. Vite serves a linked workspace package as source instead of bundling it,
+so without that entry the web dev server hands the browser a CommonJS file (`exports.X = …`, `__exportStar(require('./storage'), exports)`) and the first named import fails with
+`The requested module '…/dist/index.js' does not provide an export named '…'`. Pre-bundling the package (`optimizeDeps.include`) avoids the error, but Vite then keeps a copy of the constants until the
+dev server restarts with `--force`.
+
+Keep `types` first (TypeScript takes the first condition that matches) and `default` last. Do not add an `import` entry that points to `src/`: Node ESM would load a `.ts` file. Deep imports such as
+`@{{PROJECT_NAME}}/shared-config/dist/storage` are not exported: import from the package root.
+
+The type-checker and the API read `dist/`, so an edit to this package's source needs a build before they see it. The web dev server does not. `npm run build` at the repo root (which calls
+`turbo run build`) handles the dependency order automatically.
