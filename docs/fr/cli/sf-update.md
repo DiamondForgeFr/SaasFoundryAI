@@ -137,6 +137,21 @@ La seconde ligne liste chacun de ces frameworks avec toutes ses versions install
 l'application web la 6, exprès. Committez le nouveau `package-lock.json` avec la mise à jour. Un framework encore installé deux fois après la résolution est épinglé par une de vos propres dépendances
 : `npm ls <nom> --all` montre laquelle.
 
+### Le client Prisma suit la version de Prisma
+
+L'API versionne son client Prisma généré sous `src/generated/prisma`, et ce client porte la version de Prisma qui l'a généré. Quand la mise à jour déplace la version épinglée de `prisma` (ou de
+`@prisma/client`) de l'API, par exemple 7.10.0 → 7.10.1 avec le rafraîchissement de la 1.2.0, le client garde l'ancienne version, et le prochain `prisma generate` (les scripts de base, la préparation
+des tests e2e) le réécrit et laisse l'arbre modifié. Lequel des deux cas s'applique dépend de la résolution du lockfile ci-dessus :
+
+| La résolution du lockfile                                      | Le client Prisma                                                                                                                                                                    |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A eu lieu et a réussi (interactive, réponse oui)               | `sf update` le régénère juste après, avec `npx prisma generate` dans le dossier de l'API et la version de Node de son `.nvmrc`. Committez-le avec la mise à jour.                   |
+| N'a pas eu lieu (`--non-interactive`, réponse non) ou a échoué | La commande est affichée parmi les étapes, après la résolution du lockfile : `cd apps/api && npx prisma generate` en monorepo, `npx prisma generate` depuis l'app API en multirepo. |
+| La génération échoue                                           | Son erreur et la commande pour réessayer sont affichées, et la mise à jour sort avec le code 1.                                                                                     |
+| Un conflit sur `package.json` laissé en sidecar change Prisma  | L'avertissement du sidecar ajoute la même commande, à lancer une fois la fusion installée.                                                                                          |
+
+Lancez la commande une fois les dépendances installées à la nouvelle version : `prisma generate` utilise le CLI Prisma installé.
+
 ## Migrations et récupération
 
 Une mise à jour peut combiner trois mécanismes distincts :
@@ -414,9 +429,10 @@ Puis :
 3. Appliquez avec `save-new` sauf si un écrasement est intentionnel.
 4. Inspectez `git diff` et chaque sidecar `.saasfoundry.new`.
 5. Fusionnez ou écartez chaque sidecar explicitement, puis supprimez-le.
-6. Si la mise à jour a changé des versions épinglées sans que vous la laissiez résoudre le lockfile, résolvez-le de nouveau (voir [Versions épinglées et lockfile](#versions-epinglees-et-lockfile)).
+6. Si la mise à jour a changé des versions épinglées sans que vous la laissiez résoudre le lockfile, résolvez-le de nouveau (voir [Versions épinglées et lockfile](#versions-epinglees-et-lockfile)),
+   puis lancez le `prisma generate` qu'elle a affiché si elle a déplacé la version de Prisma (voir [Le client Prisma suit la version de Prisma](#le-client-prisma-suit-la-version-de-prisma)).
 7. Lancez le build, le lint, les tests et la procédure de base requise par le projet généré.
-8. Versionnez ensemble les fichiers mis à jour, `package-lock.json` et `.saasfoundry.json`.
+8. Versionnez ensemble les fichiers mis à jour, `package-lock.json`, le client Prisma régénéré et `.saasfoundry.json`.
 
 Si la commande échoue, suivez son message de récupération et relancez la même commande après correction. Ne supprimez pas les journaux de transition et ne réécrivez pas les empreintes de propriété
 manuellement.

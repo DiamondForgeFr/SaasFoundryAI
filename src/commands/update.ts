@@ -1542,7 +1542,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               confirm: async (message) => (await promptWithPrefill<{ confirm: boolean }>([{ type: 'confirm', name: 'confirm', message, default: true }])).confirm
             }
           )
-          if (resolutions.some((resolution) => resolution.outcome === 'failed')) process.exitCode = 1
+          const failedResolve = resolutions.some((resolution) => resolution.outcome === 'failed')
+          const failedPrismaGenerate = resolutions.some((resolution) => resolution.prismaClients?.some((client) => client.outcome === 'failed'))
+          if (failedResolve || failedPrismaGenerate) process.exitCode = 1
           logPendingSidecarPins(pendingSidecarRoots)
         }
 

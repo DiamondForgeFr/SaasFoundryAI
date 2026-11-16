@@ -11,6 +11,8 @@ import {
   logPendingSidecarPins,
   offerLockfileResolution,
   pinChanges,
+  PRISMA_GENERATE_COMMAND,
+  prismaClientTargets,
   readPackageManifests,
   type LockfileResolutionDeps,
   type LockfileRoot
@@ -243,6 +245,93 @@ describe('update lockfile resolution (#1229)', () => {
       expect(output()).toContain(`Resolve it again: cd apps/acme-api && ${LOCKFILE_RESOLVE_COMMAND}`)
     })
 
+    describe('an update that bumps Prisma (#1246)', () => {
+      const prismaBump: LockfileRoot[] = [
+        {
+          root: '.',
+          changes: [
+            { manifest: 'apps/api/package.json', name: '@prisma/client', field: 'dependencies', from: '7.10.0', to: '7.10.1' },
+            { manifest: 'apps/api/package.json', name: 'prisma', field: 'devDependencies', from: '7.10.0', to: '7.10.1' },
+            { manifest: 'apps/web/package.json', name: 'react', field: 'dependencies', from: '19.2.5', to: '19.3.1' }
+          ]
+        }
+      ]
+      const generateCommand = `cd apps/api && ${PRISMA_GENERATE_COMMAND}`
+
+      it('regenerates the client in the API, under its Node, after the resolve', async () => {
+        const order: string[] = []
+        const deps = depsWith({
+          refresh: jest.fn(async () => {
+            order.push('resolve')
+          }),
+          run: jest.fn((command: string) => {
+            order.push(command)
+            return { code: 0, stdout: command.includes('npm ls') ? JSON.stringify({ dependencies: {} }) : '', stderr: '' }
+          }),
+          nvmPrefix: (dir: string) => `NVM(${dir}); `
+        })
+        const [result] = await offerLockfileResolution(prismaBump, { interactive: true }, deps)
+        expect(deps.run).toHaveBeenCalledWith(`NVM(apps/api); ${PRISMA_GENERATE_COMMAND}`, { cwd: 'apps/api' })
+        expect(order[0]).toBe('resolve')
+        expect(order.at(-1)).toBe(`NVM(apps/api); ${PRISMA_GENERATE_COMMAND}`)
+        expect(result.prismaClients).toEqual([{ dir: 'apps/api', to: '7.10.1', outcome: 'regenerated' }])
+        expect(output()).toContain('Prisma client regenerated at 7.10.1 (apps/api/src/generated/prisma)')
+        expect(output()).not.toContain(generateCommand)
+      })
+
+      it('names the prisma generate command among the steps on a non-interactive run', async () => {
+        const deps = depsWith({})
+        const [result] = await offerLockfileResolution(prismaBump, { interactive: false }, deps)
+        expect(deps.run).not.toHaveBeenCalled()
+        expect(result.prismaClients).toEqual([{ dir: 'apps/api', to: '7.10.1', outcome: 'manual' }])
+        expect(output()).toContain(`Once installed, regenerate the Prisma client the API commits (prisma 7.10.0 → 7.10.1): ${generateCommand}`)
+      })
+
+      it('names the command when the developer declines, or when the resolve fails', async () => {
+        const declined = await offerLockfileResolution(prismaBump, { interactive: true }, depsWith({ confirm: jest.fn(async () => false) }))
+        const failed = await offerLockfileResolution(
+          prismaBump,
+          { interactive: true },
+          depsWith({
+            refresh: jest.fn(async () => {
+              throw new Error('lock refresh failed')
+            })
+          })
+        )
+        expect(declined[0].prismaClients).toEqual([{ dir: 'apps/api', to: '7.10.1', outcome: 'manual' }])
+        expect(failed[0].prismaClients).toEqual([{ dir: 'apps/api', to: '7.10.1', outcome: 'manual' }])
+        expect(output().split(generateCommand)).toHaveLength(3)
+      })
+
+      it('reports a failed generate with the command to retry', async () => {
+        const deps = depsWith({
+          run: jest.fn((command: string) => (command.includes('prisma generate') ? { code: 1, stdout: '', stderr: 'Error: Could not load schema' } : { code: 0, stdout: '{}', stderr: '' }))
+        })
+        const [result] = await offerLockfileResolution(prismaBump, { interactive: true }, deps)
+        expect(result.outcome).toBe('resolved')
+        expect(result.prismaClients).toEqual([{ dir: 'apps/api', to: '7.10.1', outcome: 'failed' }])
+        expect(output()).toContain('Regenerating the Prisma client failed (exit 1)')
+        expect(output()).toContain('Could not load schema')
+        expect(output()).toContain('To retry, regenerate the Prisma client')
+        expect(output()).toContain(generateCommand)
+      })
+
+      it('runs the command in a multirepo API, its own lockfile root', async () => {
+        const deps = depsWith({})
+        const changes = [{ manifest: 'apps/acme-api/package.json', name: 'prisma', field: 'devDependencies', from: '7.10.0', to: '7.10.1' }]
+        const [result] = await offerLockfileResolution([{ root: 'apps/acme-api', changes }], { interactive: true }, deps)
+        expect(deps.run).toHaveBeenCalledWith(`NVM; ${PRISMA_GENERATE_COMMAND}`, { cwd: 'apps/acme-api' })
+        expect(result.prismaClients).toEqual([{ dir: 'apps/acme-api', to: '7.10.1', outcome: 'regenerated' }])
+      })
+
+      it('leaves the client alone when no Prisma pin moved', async () => {
+        const deps = depsWith({})
+        const [result] = await offerLockfileResolution(roots, { interactive: true }, deps)
+        expect(result.prismaClients).toBeUndefined()
+        expect(deps.run).not.toHaveBeenCalledWith(expect.stringContaining('prisma generate'), expect.anything())
+      })
+    })
+
     it('does nothing when no lockfile holds a changed pin', async () => {
       const deps = depsWith({})
       expect(await offerLockfileResolution([], { interactive: true }, deps)).toEqual([])
@@ -256,5 +345,38 @@ describe('update lockfile resolution (#1229)', () => {
     const text = strip(lines.join('\n'))
     expect(text).toContain('apps/web/package.json.saasfoundry.new changes pinned versions')
     expect(text).toContain(`Once merged, resolve the lockfile again: ${LOCKFILE_RESOLVE_COMMAND}`)
+    expect(text).not.toContain('prisma generate')
+  })
+
+  it('tells a package.json sidecar that bumps Prisma will need the client regenerated (#1246)', () => {
+    const lines: string[] = []
+    logPendingSidecarPins([{ root: '.', changes: [{ manifest: 'apps/api/package.json', name: 'prisma', field: 'devDependencies', from: '7.10.0', to: '7.10.1' }] }], (line) => lines.push(line))
+    expect(strip(lines.join('\n'))).toContain(`(prisma 7.10.0 → 7.10.1): cd apps/api && ${PRISMA_GENERATE_COMMAND}`)
+  })
+
+  describe('prismaClientTargets (#1246)', () => {
+    it('names the API whose prisma pin moved, at the CLI version', () => {
+      expect(
+        prismaClientTargets([
+          { manifest: 'apps/api/package.json', name: '@prisma/client', field: 'dependencies', from: '7.10.0', to: '7.10.2' },
+          { manifest: 'apps/api/package.json', name: 'prisma', field: 'devDependencies', from: '7.10.0', to: '7.10.1' }
+        ])
+      ).toEqual([{ dir: 'apps/api', from: '7.10.0', to: '7.10.1' }])
+    })
+
+    it('falls back to @prisma/client, and reads a root package.json as the current directory', () => {
+      expect(prismaClientTargets([{ manifest: 'package.json', name: '@prisma/client', field: 'dependencies', from: '7.10.0', to: '7.10.1' }])).toEqual([{ dir: '.', from: '7.10.0', to: '7.10.1' }])
+    })
+
+    it('ignores an added or removed pin, an override and other packages', () => {
+      expect(
+        prismaClientTargets([
+          { manifest: 'apps/api/package.json', name: 'prisma', field: 'devDependencies', to: '7.10.1' },
+          { manifest: 'apps/api/package.json', name: '@prisma/client', field: 'dependencies', from: '7.10.0' },
+          { manifest: 'package.json', name: 'prisma', field: 'overrides', from: '"7.10.0"', to: '"7.10.1"' },
+          { manifest: 'apps/api/package.json', name: '@prisma/adapter-pg', field: 'dependencies', from: '7.10.0', to: '7.10.1' }
+        ])
+      ).toEqual([])
+    })
   })
 })

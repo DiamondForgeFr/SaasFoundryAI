@@ -134,6 +134,21 @@ npm ls @nestjs/common @nestjs/core react react-dom @types/react @types/react-dom
 The second line lists each of those frameworks with every version installed; after the resolve each appears in one version. TypeScript is not checked: the API pins 5.9 and the web app 6 on purpose.
 Commit the new `package-lock.json` with the update. A framework still installed twice after the resolve is pinned by a dependency of your own: `npm ls <name> --all` shows which one.
 
+### The Prisma client follows the Prisma pin
+
+The API commits its generated Prisma client under `src/generated/prisma`, and that client stamps the Prisma version that generated it. When the update moves the `prisma` (or `@prisma/client`) pin of
+the API, for example 7.10.0 → 7.10.1 in the 1.2.0 stack refresh, the client still carries the previous version, and the next `prisma generate` (the database scripts, the e2e setup) rewrites it and
+leaves the tree dirty. Which of the two cases applies depends on the lockfile resolve above:
+
+| The lockfile resolve                                     | The Prisma client                                                                                                                                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ran and succeeded (interactive, answered yes)            | `sf update` regenerates it right after, with `npx prisma generate` in the API directory under the Node version of its `.nvmrc`. Commit it with the update.                     |
+| Did not run (`--non-interactive`, answered no) or failed | The command is printed among the steps, after the lockfile resolve: `cd apps/api && npx prisma generate` in a monorepo, `npx prisma generate` from the API app in a multirepo. |
+| The generate fails                                       | Its error and the command to retry are printed, and the update exits with code 1.                                                                                              |
+| A `package.json` conflict left as a sidecar bumps Prisma | The sidecar notice adds the same command, to run once the merge is installed.                                                                                                  |
+
+Run the command after the dependencies are installed at the new pin: `prisma generate` uses the installed Prisma CLI.
+
 ## Migrations and recovery
 
 Updates can involve three distinct mechanisms:
@@ -402,9 +417,10 @@ Then:
 3. Apply with the default `save-new` strategy unless overwrite is intentional.
 4. Inspect `git diff` and every `.saasfoundry.new` sidecar.
 5. Merge or discard sidecars deliberately, then remove them.
-6. If the update changed pinned versions and you did not let it resolve the lockfile, resolve it again (see [Pinned versions and the lockfile](#pinned-versions-and-the-lockfile)).
+6. If the update changed pinned versions and you did not let it resolve the lockfile, resolve it again (see [Pinned versions and the lockfile](#pinned-versions-and-the-lockfile)), then run the
+   `prisma generate` it printed when it moved the Prisma pin (see [The Prisma client follows the Prisma pin](#the-prisma-client-follows-the-prisma-pin)).
 7. Run the generated project's build, lint, tests, and any required database procedure.
-8. Commit the updated files, `package-lock.json` and `.saasfoundry.json` together.
+8. Commit the updated files, `package-lock.json`, the regenerated Prisma client and `.saasfoundry.json` together.
 
 If the command fails, read its recovery message and rerun the same lifecycle command after correcting the reported cause. Do not delete transition journals or rewrite ownership hashes manually.
 
