@@ -218,6 +218,17 @@
                   "description": "ISO-8601 timestamp of the developer's answer."
                 }
               }
+            },
+            "guard": {
+              "type": "object",
+              "description": "How the guard hook behaves. Written only by sf agents shell-guard. Omission means shellShape refuse.",
+              "properties": {
+                "shellShape": {
+                  "type": "string",
+                  "enum": ["refuse", "warn", "off"],
+                  "description": "What the guard does with a shell line that is not one plain command (a chain, a substitution, a loop, an inline script, a file written through a heredoc). refuse: deny it and name the split to make. warn: let the host's own permission flow go on and say the same to the agent. off: do not look at the shape of a line. Omission means refuse."
+                }
+              }
             }
           }
         },

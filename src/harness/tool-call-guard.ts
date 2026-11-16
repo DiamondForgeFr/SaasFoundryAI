@@ -575,6 +575,20 @@ function shapeMessage(finding: ShapeFinding, analysis: ShapeAnalysis, host: Guar
   }
 }
 
+/**
+ * What a `PreToolUse` hook prints for a decision, for Claude Code and Codex alike: a refusal denies the call, a
+ * warning adds the same text as context for the agent (`additionalContext`, which both hosts honour on this event)
+ * and leaves the host's own permission flow in place. The guard never prints an `allow`.
+ */
+export function guardHookOutput(decision: GuardDecision): { hookSpecificOutput: Record<string, string> } {
+  return {
+    hookSpecificOutput:
+      decision.decision === 'warn'
+        ? { hookEventName: 'PreToolUse', additionalContext: decision.reason }
+        : { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: decision.reason }
+  }
+}
+
 /** The decision for a line that is not one plain command, or `undefined` when it is one. */
 function shellShapeDecision(call: ToolCall, mode: 'refuse' | 'warn'): GuardDecision | undefined {
   const analysis = analyzeShellShape(call.command, { allowQuotedHeredocArgument: call.host === 'claude-code' })

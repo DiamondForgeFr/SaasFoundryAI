@@ -37,6 +37,8 @@ import {
 } from './delegation'
 import { CODEX_HOOKS_PATH } from './delegation-hooks'
 import { requireLedgerDir } from './delegation-ledger'
+import { DEFAULT_SHELL_SHAPE, recordedShellShape, validateGuardConfig } from './shell-guard-mode'
+import type { ShellShapeMode } from './tool-call-guard'
 import { summarizeHarnessSettings, syncHarnessSettings } from './harness-settings'
 import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
 import { updateLocalRouting, withLogEntry } from './routing-local'
@@ -128,6 +130,7 @@ function validateManifest(value: unknown): asserts value is SaaSFoundryManifest 
       if (harness.managed !== undefined && typeof harness.managed !== 'boolean') throw new Error('Invalid manifest managed harness capability.')
       if (harness.agents !== undefined) validateAgents(harness.agents)
       if (harness.delegation !== undefined) validateDelegation(harness.delegation)
+      if (harness.guard !== undefined) validateGuardConfig(harness.guard)
     }
   }
   if (value.fileHashes !== undefined && (!isObject(value.fileHashes) || Object.values(value.fileHashes).some((hash) => typeof hash !== 'string'))) {
@@ -207,9 +210,9 @@ export interface DelegationRecord extends DelegationState {
   changed: boolean
 }
 
-function requireHarness(manifest: SaaSFoundryManifest): NonNullable<NonNullable<SaaSFoundryManifest['modules']>['harness']> {
+function requireHarness(manifest: SaaSFoundryManifest, what = 'a delegation answer'): NonNullable<NonNullable<SaaSFoundryManifest['modules']>['harness']> {
   const harness = manifest.modules?.harness
-  if (!harness) throw new Error(`Cannot record a delegation answer: ${NO_HARNESS_REASON}.`)
+  if (!harness) throw new Error(`Cannot record ${what}: ${NO_HARNESS_REASON}.`)
   return harness
 }
 
@@ -242,6 +245,39 @@ export async function recordDelegation(params: { targetPath: string; ticketDeliv
   if (harness.delegation?.ticketDelivery === params.ticketDelivery) return { ...resolveDelegation(harness.delegation, local), scope, changed: false }
   await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, delegation: recorded } } })
   return { ...resolveDelegation(recorded, local), scope, changed: true }
+}
+
+/** What the guard hook does with a shell line that is not one plain command, and where that comes from. */
+export interface ShellGuardState {
+  shellShape: ShellShapeMode
+  /** `manifest`: recorded in `.saasfoundry.json`. `default`: nothing is recorded, and absence means `refuse`. */
+  source: 'manifest' | 'default'
+}
+
+export interface ShellGuardRecord extends ShellGuardState {
+  /** False when the same mode was already recorded: nothing was written. */
+  changed: boolean
+}
+
+/** The shell shape mode a project records (#1251), read-only: `refuse` by default. */
+export async function readShellGuard(targetPath: string): Promise<ShellGuardState> {
+  const { manifest } = await snapshot(resolve(targetPath))
+  const recorded = recordedShellShape(manifest)
+  return { shellShape: recorded ?? DEFAULT_SHELL_SHAPE, source: recorded === undefined ? 'default' : 'manifest' }
+}
+
+/**
+ * Record the shell shape mode in `modules.harness.guard.shellShape` (#1251) through the same atomic, edit-detecting
+ * manifest replacement as `sf agents delegation`: it is the team's default and travels with the repository. Every
+ * other key of the harness block, and of the guard block, is kept. Recording the mode already recorded writes nothing.
+ */
+export async function recordShellGuard(params: { targetPath: string; shellShape: ShellShapeMode }): Promise<ShellGuardRecord> {
+  const root = resolve(params.targetPath)
+  const before = await snapshot(root)
+  const harness = requireHarness(before.manifest, 'the shell shape mode')
+  if (harness.guard?.shellShape === params.shellShape) return { shellShape: params.shellShape, source: 'manifest', changed: false }
+  await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, guard: { ...harness.guard, shellShape: params.shellShape } } } })
+  return { shellShape: params.shellShape, source: 'manifest', changed: true }
 }
 
 export interface RoutingPromotion {

@@ -51,17 +51,24 @@ export function routingSummary(routing: StatusRouting): string {
         .join('; ')}; sf agents routing report, promote or reset)`
     : 'shipped grid and shared overrides, no local adjustment'
   const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry)}`).join('; ')
-  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${guardSummary(routing.guard)}${captureErrorsSummary(routing.captureErrors)}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${guardSummary(routing.guard, routing.shellShape)}${captureErrorsSummary(routing.captureErrors)}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
 }
 
 /**
  * Whether the PreToolUse hook that refuses an agent's own bypass of a guard is in place for each declared coding
  * agent (#1106): `; claude-code guard enforced; codex guard declared (...)`. Said for every agent, like the capture
- * hook: a fail-open hook is acceptable only if its absence is visible.
+ * hook: a fail-open hook is acceptable only if its absence is visible. It ends with what the hook does with a shell
+ * line that is not one plain command (#1251): `; shell shape: refuse` (the default), `warn` or `off`.
  */
-export function guardSummary(guard: StatusRoutingState['guard']): string {
+export function guardSummary(guard: StatusRoutingState['guard'], shellShape: StatusRoutingState['shellShape'] = 'refuse'): string {
   if (!guard?.length) return ''
-  return `; ${guard.map((entry) => `${entry.agent} ${GUARD_TEXT[entry.state](entry)}`).join('; ')}`
+  return `; ${guard.map((entry) => `${entry.agent} ${GUARD_TEXT[entry.state](entry)}`).join('; ')}; shell shape: ${SHELL_SHAPE_TEXT[shellShape]}`
+}
+
+const SHELL_SHAPE_TEXT: Record<NonNullable<StatusRoutingState['shellShape']>, string> = {
+  refuse: 'refuse',
+  warn: 'warn (a chained, substituted or scripted line is flagged, not refused; sf agents shell-guard refuse)',
+  off: 'off (the shape of a line is not checked; sf agents shell-guard refuse)'
 }
 
 interface HookEntry {

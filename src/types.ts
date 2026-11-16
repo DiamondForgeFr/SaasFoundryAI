@@ -1,6 +1,7 @@
 import { resolve } from 'path'
 import type { HarnessAgent } from './harness/agent-registry'
 import type { HarnessDelegation } from './harness/delegation'
+import type { HarnessGuard } from './harness/shell-guard-mode'
 import type { RoutingOverrides } from './harness/routing-grid'
 
 export interface DbCredentials {
@@ -407,6 +408,12 @@ export interface SaaSFoundryManifest {
        * .claude/docs/migration-framework.md, "When NOT to add a migration").
        */
       delegation?: HarnessDelegation
+      /**
+       * How the guard hook treats a shell line that is not one plain command (#1251), written only by
+       * `sf agents shell-guard`. Optional with `refuse` as its absence, so an existing manifest keeps validating and
+       * needs no migration (see .claude/docs/migration-framework.md, "When NOT to add a migration").
+       */
+      guard?: HarnessGuard
     }
     // PWA module — makes the generated web app installable as a desktop
     // application through the browser's own flow. Versioned shape (not the flat

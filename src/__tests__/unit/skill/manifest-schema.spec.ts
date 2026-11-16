@@ -5,6 +5,7 @@ import addFormats from 'ajv-formats'
 
 import { TICKET_DELIVERY_DECISIONS } from '../../../harness/delegation'
 import { ROUTING_EFFORTS, ROUTING_PROVIDERS, TASK_KINDS, routingOverrideIssues } from '../../../harness/routing-grid'
+import { SHELL_SHAPE_MODES } from '../../../harness/shell-guard-mode'
 
 // Regression guard for #286: the JSON Schema is the single source of truth
 // for `.saasfoundry.json`. If a canonical shape from manifest-schema.md stops
@@ -346,5 +347,42 @@ describe('saasfoundry-manifest.schema.json — ticket delivery delegation consen
     const delegation = schema.properties.modules.properties.harness.properties.delegation
     expect(delegation.properties.ticketDelivery.enum).toEqual([...TICKET_DELIVERY_DECISIONS])
     expect(delegation.required).toEqual(['ticketDelivery', 'decidedAt'])
+  })
+})
+
+// An optional block of the harness block, with "refuse" as its absence (#1251): no manifest version bump and no
+// numbered migration (migration-framework.md, "When NOT to add a migration").
+describe('saasfoundry-manifest.schema.json — the guard hook shell shape mode (#1251)', () => {
+  const harness = (guard: unknown) => ({ ...baseManifest, modules: { harness: { version: 5, agents: ['claude-code'], guard } } })
+
+  it('accepts a manifest that records no guard block — the shape every existing project is in', () => {
+    expect(validate({ ...baseManifest, modules: { harness: { version: 5, agents: ['claude-code'] } } })).toBe(true)
+    expect(validate(harness({}))).toBe(true)
+  })
+
+  it.each(SHELL_SHAPE_MODES)('accepts the %s mode', (shellShape) => {
+    expect(validate(harness({ shellShape }))).toBe(true)
+  })
+
+  it('accepts a key a later release adds to the block', () => {
+    expect(validate(harness({ shellShape: 'warn', allow: ['x'] }))).toBe(true)
+  })
+
+  it.each([
+    ['an unknown mode', { shellShape: 'allow' }],
+    ['the command name instead of the mode', { shellShape: 'shell-guard' }],
+    ['a boolean', { shellShape: false }],
+    ['a bare string', 'refuse']
+  ])('rejects %s', (_, guard) => {
+    expect(validate(harness(guard))).toBe(false)
+  })
+
+  it('names exactly the modes the command records', () => {
+    expect(schema.properties.modules.properties.harness.properties.guard.properties.shellShape.enum).toEqual([...SHELL_SHAPE_MODES])
+  })
+
+  it('does not bump the manifest version or add a migration: the harness block stays version-agnostic', () => {
+    expect(schema.properties.modules.properties.harness.required).toEqual(['version'])
+    expect(schema.properties.modules.properties.harness.properties.version.minimum).toBe(0)
   })
 })

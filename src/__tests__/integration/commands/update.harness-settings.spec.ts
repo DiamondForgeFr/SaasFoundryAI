@@ -138,6 +138,41 @@ describe('updateCommand — .claude/settings.json and the harness v4 → v5 migr
       expect(output()).not.toContain('.claude/settings.json')
     })
 
+    // #1251 — the shell shape check is on by absence: an update writes nothing to the manifest, and says what the guard does and how to change it
+    describe('the shell shape check of the guard hook (#1251)', () => {
+      const update = async (guard?: { shellShape: string }, agents?: string[]): Promise<void> => {
+        const hashes = await installHarnessWith(await released('1.0.1', 'settings.json'))
+        await writeManifest({
+          modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true, ...(agents ? { agents: agents as never } : {}), ...(guard ? { guard: guard as never } : {}) } },
+          workflow: { tool: 'none' },
+          fileHashes: hashes
+        })
+        await updateCommand({ nonInteractive: true })
+      }
+
+      it('says that the guard now refuses a line that is not one plain command, and how to switch it, and records nothing', async () => {
+        await update()
+
+        expect(output()).toContain('The guard hook now refuses a shell line that is not one plain command')
+        expect(output()).toContain('sf agents shell-guard warn')
+        expect(output()).toContain('sf agents shell-guard off')
+        expect((await readManifest()).modules?.harness).not.toHaveProperty('guard')
+      })
+
+      it('says the mode a project recorded, and keeps it', async () => {
+        await update({ shellShape: 'warn' })
+        expect(output()).toContain('shell shape is warn')
+        expect(output()).not.toContain('now refuses a shell line')
+        expect((await readManifest()).modules?.harness?.guard).toEqual({ shellShape: 'warn' })
+      })
+
+      it('says nothing for a harness that declares neither Claude Code nor Codex, which have no guard hook', async () => {
+        await update(undefined, ['gemini-cli'])
+        expect(output()).not.toContain('shell shape')
+        expect(output()).not.toContain('shell line')
+      })
+    })
+
     // Review of #935, row 1: the revoke list used to run on every update and silently removed a rule the project added on purpose
     it('never removes a rule on a plain update: a project that pre-approved the evidence commands on purpose keeps them, run after run', async () => {
       const mark = 'Bash(sf agents outcome mark *)'

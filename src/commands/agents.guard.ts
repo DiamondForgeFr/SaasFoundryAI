@@ -3,8 +3,9 @@ import { isAbsolute } from 'path'
 
 import { appendCaptureError } from '../harness/capture-errors'
 import { resolveLedgerDir } from '../harness/delegation-ledger'
+import { readShellShapeMode } from '../harness/shell-guard-mode'
 import { SHELLS } from '../harness/shell-shape'
-import { evaluateToolCall, GUARDED_TOOLS, type GuardHost } from '../harness/tool-call-guard'
+import { evaluateToolCall, GUARDED_TOOLS, guardHookOutput, type GuardHost } from '../harness/tool-call-guard'
 
 export const GUARD_HOSTS: readonly GuardHost[] = ['claude-code', 'codex']
 
@@ -62,6 +63,7 @@ function commandOf(toolInput: unknown): string {
 /**
  * `sf agents guard --host <claude-code|codex>`: the command the `PreToolUse` hook of a host runs, with the tool
  * event on stdin. It prints the host's deny decision when the call is one the guard refuses (`tool-call-guard.ts`),
+ * the same text as context when the project asks for a warning only (`modules.harness.guard.shellShape: warn`),
  * and nothing otherwise: staying silent leaves the host's own permission flow in place. A hook must never break
  * the agent it watches, so it always exits 0, and fails open: a payload it cannot read lets the call through and
  * is written to the capture error log, where `sf status` counts it.
@@ -95,12 +97,13 @@ export async function agentsGuard(options: AgentsGuardOptions): Promise<void> {
       host,
       toolName,
       command: commandOf(event.tool_input),
+      // What to do with a line that is not one plain command comes from the manifest of the project (#1251): refuse when it says nothing.
+      shellShape: readShellShapeMode(cwd),
       ...(cwd ? { cwd } : {}),
       ...(typeof event.agent_id === 'string' && event.agent_id ? { agentId: event.agent_id } : {})
     })
-    // The guard is run in its default mode here, which refuses: a warning is only produced when a mode says so.
-    if (decision?.decision !== 'deny') return
-    process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: decision.reason } })}\n`)
+    if (!decision) return
+    process.stdout.write(`${JSON.stringify(guardHookOutput(decision))}\n`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     process.stderr.write(`sf agents guard: the call was let through (${message})\n`)
