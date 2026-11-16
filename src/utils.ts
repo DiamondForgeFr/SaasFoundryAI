@@ -148,11 +148,43 @@ export function checkNodeVersion(): void {
 }
 
 /**
- * Validate that a project name is safe for use in shell commands and file paths
+ * Validate the name of a project about to be generated or given a technical stack.
+ *
+ * The stack names its npm packages, its multirepo directories (`apps/<name>-api`), its Docker
+ * resources and its default bucket after it, and all of these want a lowercase slug.
  */
 export function validateProjectName(name: string): void {
-  if (typeof name !== 'string' || !/^[a-z0-9-]+$/.test(name)) {
+  if (!isProjectSlug(name)) {
     throw new Error(`Invalid project name "${name}": can only contain lowercase letters, numbers, and hyphens`)
+  }
+}
+
+/** Whether a name meets the slug rule of `validateProjectName`. */
+export function isProjectSlug(name: unknown): name is string {
+  return typeof name === 'string' && /^[a-z0-9-]+$/.test(name)
+}
+
+/**
+ * Validate the `projectName` an existing manifest declares (#966).
+ *
+ * An existing project keeps the name it was given: a harness adopted as `Notulia` or
+ * `SaaSFoundryAI` is not renamed by an update, and the harness only prints the name. The name
+ * still reaches file paths and shell arguments, so it must be one path segment of letters (any
+ * case), digits, dots, underscores and hyphens, starting with a letter or a digit. Every name the
+ * slug rule accepts stays accepted, so no project that updated before is refused now.
+ *
+ * A project with a technical stack keeps the slug rule of `validateProjectName`: its live
+ * directories, packages and Docker resources were named after that slug, and the update
+ * regenerates them from it.
+ */
+export function validateManifestProjectName(name: unknown, { technicalStack = false }: { technicalStack?: boolean } = {}): asserts name is string {
+  if (technicalStack) {
+    validateProjectName(name as string)
+    return
+  }
+  if (isProjectSlug(name)) return
+  if (typeof name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) {
+    throw new Error(`Invalid projectName ${JSON.stringify(name)} in .saasfoundry.json: it must start with a letter or a digit and contain only letters, digits, dots, underscores and hyphens`)
   }
 }
 
