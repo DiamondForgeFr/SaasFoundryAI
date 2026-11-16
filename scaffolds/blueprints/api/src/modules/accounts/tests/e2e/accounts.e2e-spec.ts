@@ -1120,8 +1120,8 @@ describe('Accounts Module (e2e)', () => {
   /**
    * Entity-type roles (#1230): a project adds an entity type whose sections exist only on its entities (a project's
    * vision, its tickets), granted by a system role of that type (a `project-owner`). Nobody holds them on the account,
-   * so the account administrator shapes an ENTITY role assigned nowhere yet against what the entity type allows,
-   * never beyond it.
+   * so the account administrator shapes an ENTITY role against what the entity type allows, never beyond it, whether
+   * the role is assigned nowhere yet or already used (#1245).
    */
   describe('entity-type roles are shaped against what the entity type allows', () => {
     const createdRoleIds: number[] = []
@@ -1232,7 +1232,8 @@ describe('Accounts Module (e2e)', () => {
         })
         invitationIds.push(invitation.id)
       }
-      const addVision = { subModuleIds: [visionSectionId], permissionIds: [ticketEditPermissionId] }
+      /** Read when a case runs: the section and permission ids are set by the `beforeAll` above. */
+      const addVision = () => ({ subModuleIds: [visionSectionId], permissionIds: [ticketEditPermissionId] })
 
       beforeAll(async () => {
         // A project of the account that the seeded entity admin does not administer.
@@ -1249,7 +1250,7 @@ describe('Accounts Module (e2e)', () => {
         const roleId = await createEmptyRole('e2e-project-assigned')
         await assignInProject(roleId)
 
-        await agent.patch(`/api/accounts/roles/${roleId}`).send(addVision).expect(200)
+        await agent.patch(`/api/accounts/roles/${roleId}`).send(addVision()).expect(200)
         expect(await grantsOf(roleId)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
       })
 
@@ -1257,12 +1258,12 @@ describe('Accounts Module (e2e)', () => {
         const roleId = await createEmptyRole('e2e-project-invited')
         await inviteIntoProject(roleId, 'e2e-project-invitee@saasfoundryai.test')
 
-        await agent.patch(`/api/accounts/roles/${roleId}`).send(addVision).expect(200)
+        await agent.patch(`/api/accounts/roles/${roleId}`).send(addVision()).expect(200)
         expect(await grantsOf(roleId)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
       })
 
       it('nobody grants beyond what the entity type allows on a used role (403, nothing written)', async () => {
-        const roleId = await createEmptyRole('e2e-project-assigned-secret')
+        const roleId = await createEmptyRole('e2e-project-secret-2')
         await assignInProject(roleId)
 
         await agent
@@ -1273,13 +1274,13 @@ describe('Accounts Module (e2e)', () => {
       })
 
       it('an entity admin of another entity still gets 403 on a role assigned or promised in the project (nothing written)', async () => {
-        const assignedRoleId = await createEmptyRole('e2e-project-assigned-entity-admin')
+        const assignedRoleId = await createEmptyRole('e2e-project-assigned-ea')
         await assignInProject(assignedRoleId)
-        const invitedRoleId = await createEmptyRole('e2e-project-invited-entity-admin')
+        const invitedRoleId = await createEmptyRole('e2e-project-invited-ea')
         await inviteIntoProject(invitedRoleId, 'e2e-project-invitee-2@saasfoundryai.test')
 
-        await entityAdminAgent.patch(`/api/accounts/roles/${assignedRoleId}`).send(addVision).expect(403)
-        await entityAdminAgent.patch(`/api/accounts/roles/${invitedRoleId}`).send(addVision).expect(403)
+        await entityAdminAgent.patch(`/api/accounts/roles/${assignedRoleId}`).send(addVision()).expect(403)
+        await entityAdminAgent.patch(`/api/accounts/roles/${invitedRoleId}`).send(addVision()).expect(403)
         expect(await grantsOf(assignedRoleId)).toEqual({ permissionIds: [], subModuleIds: [] })
         expect(await grantsOf(invitedRoleId)).toEqual({ permissionIds: [], subModuleIds: [] })
       })
@@ -1288,7 +1289,7 @@ describe('Accounts Module (e2e)', () => {
         const roleId = await createEmptyRole('e2e-project-own-entity')
         await prismaService.userRoleAssignment.create({ data: { userId: testUser2.id, roleId, entityId } })
 
-        await entityAdminAgent.patch(`/api/accounts/roles/${roleId}`).send(addVision).expect(403)
+        await entityAdminAgent.patch(`/api/accounts/roles/${roleId}`).send(addVision()).expect(403)
         expect(await grantsOf(roleId)).toEqual({ permissionIds: [], subModuleIds: [] })
       })
     })
