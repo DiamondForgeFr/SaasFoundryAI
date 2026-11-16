@@ -23,6 +23,7 @@ import { assertBoardUrl, boardRemediation, isMissingBoard } from '../utils/workf
 import { getRemoteUrl } from '../utils/git-info'
 import { AGENT_LOCAL_CI_CONTEXT, localCiGateSummary, moltenPublishesToGithub, moltenStatusContexts, resolveLocalCiGate } from '../local-ci-gate'
 import { MOLTEN_PROJECT_FILE } from '../molten-pipeline'
+import { workflowStatusNames } from '../status/render'
 import type { SaaSFoundryManifest, WorkflowStatus, WorkflowTemplate } from '../types'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
@@ -150,7 +151,7 @@ function showWorkflowConfig(manifest: SaaSFoundryManifest) {
   if (workflow.projectUrl) {
     console.log(chalk.bold('Project URL:'), workflow.projectUrl)
   }
-  console.log(chalk.bold('Branch de travail:'), chalk.cyan(workflow.workingBranch))
+  console.log(chalk.bold('Working branch:'), chalk.cyan(workflow.workingBranch))
   console.log(chalk.bold('PR target branch:'), workflow.prTargetBranch)
   console.log(chalk.bold('Require code review:'), workflow.requireCodeReview ? 'Yes' : 'No')
   // The statuses the local CI gate requires before review, and where that list comes from (#1104)
@@ -178,13 +179,13 @@ function showWorkflowConfig(manifest: SaaSFoundryManifest) {
     })
   }
 
+  // The statuses in the order of the manifest, by name: each entry is an object, which printed as [object Object] (#1249)
   console.log(chalk.blue('\n📊 Workflow Statuses\n'))
-  if (workflow.statuses) {
-    Object.entries(workflow.statuses).forEach(([key, value]) => {
-      if (value) {
-        console.log(`  ${chalk.gray(key)}: ${value}`)
-      }
-    })
+  const statuses = workflowStatusNames(workflow)
+  if (statuses.length) {
+    statuses.forEach((name, index) => console.log(`  ${chalk.gray(`${index + 1}.`)} ${name}`))
+  } else {
+    console.log(chalk.gray('  (none recorded)'))
   }
   console.log()
 }
