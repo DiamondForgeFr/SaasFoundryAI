@@ -234,4 +234,53 @@ describe('skill/plan-new', () => {
       expect(stderr).toMatch(/invalid value "badvalue" in advancedSkills/)
     })
   })
+
+  // #968 — six real `sf new` flags were absent from the table, so plan-new refused them as
+  // unknown intent fields and an agent could not plan them at all
+  describe('language, ports, tools and offline checks', () => {
+    it('plans the flags the table used to miss', async () => {
+      const { stdout, stderr, code } = await runWithIntent({
+        projectName: 'acme',
+        structure: 'monorepo',
+        language: 'fr',
+        apiPort: '3600',
+        webPort: '5200',
+        tracker: 'github-projects',
+        docs: 'local-markdown',
+        design: ['figma', 'miro'],
+        noNetwork: true
+      })
+      expect(stderr).toBe('')
+      expect(code).toBe(0)
+      expect(stdout).toContain('--language fr')
+      expect(stdout).toContain('--api-port 3600')
+      expect(stdout).toContain('--web-port 5200')
+      expect(stdout).toContain('--docs local-markdown')
+      expect(stdout).toContain('--design figma,miro')
+      expect(stdout).toContain('--no-network')
+    })
+
+    it('leaves --no-network out when noNetwork is false', async () => {
+      const { stdout, code } = await runWithIntent({ projectName: 'acme', structure: 'monorepo', noNetwork: false })
+      expect(code).toBe(0)
+      expect(stdout).not.toContain('--no-network')
+    })
+
+    it('accepts none for the tracker and the docs backend', async () => {
+      const { stdout, code } = await runWithIntent({ projectName: 'acme', structure: 'monorepo', tracker: 'none', docs: 'none' })
+      expect(code).toBe(0)
+      expect(stdout).toContain('--tracker none')
+      expect(stdout).toContain('--docs none')
+    })
+
+    it('rejects a docs backend or a design tool the CLI does not know', async () => {
+      const docs = await runWithIntent({ projectName: 'acme', structure: 'monorepo', docs: 'gitbook' })
+      expect(docs.code).toBe(2)
+      expect(docs.stderr).toMatch(/invalid value "gitbook" for docs/)
+
+      const design = await runWithIntent({ projectName: 'acme', structure: 'monorepo', design: ['sketch'] })
+      expect(design.code).toBe(2)
+      expect(design.stderr).toMatch(/invalid value "sketch" in design/)
+    })
+  })
 })

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "description": "Source of truth for the sf new command surface used by the tool-saasfoundry skill. Each entry maps an intent JSON field to its corresponding --flag on `sf new`. Both plan-new.sh and the skill's discovery conversation read this file \u2014 keep them in sync by editing here, never by hardcoding flag names elsewhere.",
+  "description": "Source of truth for the sf new command surface used by the tool-saasfoundry skill. Each entry maps an intent JSON field to its corresponding --flag on `sf new`. Both plan-new.sh and the skill's discovery conversation read this file \u2014 keep them in sync by editing here, never by hardcoding flag names elsewhere. The table mirrors the Commander definition of `sf new` (registerNewCommandOptions in src/commands/new.options.ts): a spec fails when a flag exists on one side and not the other.",
   "command": "sf new",
   "alwaysAppend": [
     "--non-interactive"
@@ -113,6 +113,18 @@
       "type": "string",
       "required": false
     },
+    "apiPort": {
+      "flag": "--api-port",
+      "type": "string",
+      "required": false,
+      "description": "Host port the generated API listens on. Omitted: the first free port from 3500. An explicit port is honoured or refused when it is taken, never moved to another one."
+    },
+    "webPort": {
+      "flag": "--web-port",
+      "type": "string",
+      "required": false,
+      "description": "Host port the generated web dev server listens on. Omitted: the first free port from 5173. An explicit port is honoured or refused when it is taken, never moved to another one."
+    },
     "emailService": {
       "flag": "--email-service",
       "type": "enum",
@@ -194,6 +206,13 @@
       ],
       "required": false,
       "description": "Comma-separated list of advanced skills to install"
+    },
+    "language": {
+      "flag": "--language",
+      "type": "string",
+      "required": false,
+      "default": "en",
+      "description": "BCP-47 tag of the language the AI writes the project's artefacts in: SRS pages, tickets and code comments (en, fr, es, de, it, pt, nl, or any other tag). It sets all three surfaces of the manifest's `language` block; it does not translate the generated app."
     },
     "agents": {
       "flag": "--agents",
@@ -324,10 +343,40 @@
         "github-projects",
         "jira",
         "notion",
-        "linear"
+        "linear",
+        "none"
       ],
       "required": false,
-      "description": "Ticket tracker the workflow drives. The workflow tool defaults to github-projects when omitted."
+      "description": "Ticket tracker the workflow drives. The workflow tool defaults to github-projects when omitted; `none` records that the project has no tracker."
+    },
+    "docs": {
+      "flag": "--docs",
+      "type": "enum",
+      "values": [
+        "notion",
+        "confluence",
+        "local-markdown",
+        "none"
+      ],
+      "required": false,
+      "description": "Docs / SRS backend recorded in the manifest's tool registry. `local-markdown` keeps the docs in the repository with no remote service; `none` records that the project has none."
+    },
+    "design": {
+      "flag": "--design",
+      "type": "csv",
+      "values": [
+        "figma",
+        "miro"
+      ],
+      "required": false,
+      "description": "Comma-separated design tools recorded in the manifest's tool registry."
+    },
+    "noNetwork": {
+      "flag": "--no-network",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Skip the live connection checks of the selected tools (tracker, docs, design) and verify only that their credentials are present. Those checks run only in an interactive session, so the flag changes nothing on a --non-interactive run, which every plan-new command is. It does not make sf new offline: installing the generated project's dependencies still needs the npm registry."
     },
     "projectUrl": {
       "flag": "--project-url",
