@@ -267,6 +267,16 @@ You apply a hatch from the primary checkout, in either of two ways:
 
 Nature labels are added by you on GitHub, or with `!` in Claude Code.
 
+The same hook also keeps an agent to **one plain command per shell call**, which `AGENTS.md` asks of it. A host cannot analyse a line that chains commands (`&&`, `;`, `||`, a newline), substitutes the
+output of one into another (`$(…)`, backticks), loops, runs an inline script (`node -e`, `python3 -c`, `bash -c`, `eval`) or writes a file through a heredoc, so it asks you for a permission on every
+such call, even when each command in it is allowed. The hook refuses the line and names the split to make, so the agent rewrites its call instead of asking you. That is not an escape hatch: nothing is
+left for you to apply. It is on by default (`modules.harness.guard.shellShape` is `refuse` when nothing is recorded, and `sf update` writes nothing), and which mode a project uses is your decision:
+`sf agents shell-guard warn` makes the hook warn the agent without refusing (the host's own permission prompt still applies), and `sf agents shell-guard off` stops reading the shape of a line. The
+refusal of an escape hatch, a nature label and a delegated merge holds in every mode. Claude Code does not ask about `git commit -m "$(cat <<'EOF' … EOF)"` or
+`gh pr create --body "$(cat <<'EOF' … EOF)"` with a single-quoted delimiter (measured on 2.1.325), so the hook leaves those two forms alone on Claude Code; on Codex, and for any other command, text
+goes through a file (`git commit -F <file>`, `--body-file <file>`). The details, the table of constructs and the measurement are in
+[`sf agents guard`](/cli/sf-agents#a-shell-line-that-is-not-one-plain-command).
+
 The hook is a guardrail against the ordinary path the refusals used to teach, not a security boundary: it reads the command the agent wrote, covers the Bash tool only, and fails open (no CLI, an old
 CLI or a payload it cannot read lets the call through). `sf status` says so on its `routing:` line (`guard enforced`, `guard declared`, `guard hook missing`…) and warns when the hook cannot work.
 Claude Code reads its settings when a session starts, so a running session keeps its old hooks until it restarts. Codex runs a project hook only once the `.codex/` layer and the hook are trusted:

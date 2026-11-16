@@ -95,6 +95,29 @@ and, only for a **delegated agent** (an `agent_id` in the tool event, or a worki
 
 The same calls from the primary checkout are allowed: the session and the developer run them. Every refusal says why and what to do instead (stop, report, ask the developer).
 
+### A shell line that is not one plain command
+
+The same hook also reads the shape of the line, after the rules above. This is not an escape hatch: the refusal asks the agent to rewrite its call, not to ask the developer. A host cannot analyse a
+chained, substituted or scripted line before it runs, so it stops for a permission on every such call, even when each command in it is allowed. The hook refuses it (on Claude Code for the Bash tool
+only, a PowerShell line has other quoting) and the refusal names the construct and the split to make:
+
+| The call                  | What is refused                                                                                                                   | What to do instead                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| A chain                   | `a && b`, `a; b`, `a \|\| b`, two lines in one call (`cd dir && cmd` included)                                                    | One command per call, in order; no `cd`, give the directory to the command (`git -C`) |
+| A substitution            | `$(…)`, backticks, `<(…)` and `>(…)`, also inside double quotes and in an unquoted heredoc body                                   | Run the inner command in its own call, then use its output in the next                |
+| A loop or a group         | `for`, `while`, `until`, `if`, `case`, `{ …; }`, `( … )`, a function                                                              | One call per item, or one command that takes every item                               |
+| A background job          | a trailing or middle `&`                                                                                                          | The host's background option (`run_in_background` on Claude Code)                     |
+| An inline script          | `node -e`, `python3 -c`, `python3 - <<EOF`, `bash -c`, `eval`, a script piped into a shell, also behind `env`, `timeout`, `xargs` | Write the script to a scratch file with the Write tool, then run the file             |
+| A file written by heredoc | `cat <<EOF > path`, `tee path <<EOF`                                                                                              | The Write and Edit tools                                                              |
+
+A pipe, a redirection (`2>&1`, `> file`), a separator inside quotes, a heredoc fed to a program that only reads it (`git commit -F - <<'EOF'`) and a script file with flags after it are not refused. On
+Claude Code, `git commit -m "$(cat <<'EOF' … EOF)"` and `gh pr create --body "$(cat <<'EOF' … EOF)"`, with a single-quoted delimiter and nothing else in the substitution, are not refused either:
+Claude Code does not ask about them (measured on 2.1.325 on #1251). The same text is refused on Codex, and an unquoted `<<EOF` is refused everywhere.
+
+What the hook does with such a line is a setting of the project, `modules.harness.guard.shellShape` in `.saasfoundry.json`, written only by `sf agents shell-guard <refuse|warn|off|status>`. Absence
+means `refuse`. `warn` lets the host's own permission flow go on and gives the agent the same text as context; `off` does not look at the shape of a line. The rules above apply in every mode. Choosing
+a mode is the developer's decision, not the agent's.
+
 ### How the developer applies a hatch
 
 1. **Claude Code: `! <command>`**, typed in the session from the primary checkout. The command runs directly, without going through the Bash tool, so no hook fires, and its output joins the

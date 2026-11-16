@@ -69,8 +69,8 @@ tried. Whatever the ticket changes among these, its commits also carry the repos
 - the tier agents or the routing → `.claude/agents/` and `.codex/agents/`;
 - a `modules.harness` field → this repository's `.saasfoundry.json` (recorded with its own CLI command, never by hand).
 
-Regenerate with `npm run build && node bin/sf.js agents refresh --scope shared && npx prettier --write .saasfoundry.json`, and commit the result with the change. A ticket that leaves this repository behind
-the harness it ships is not done.
+Regenerate with three separate calls (the guard hook refuses a chained line): `npm run build`, then `node bin/sf.js agents refresh --scope shared`, then `npx prettier --write .saasfoundry.json`, and
+commit the result with the change. A ticket that leaves this repository behind the harness it ships is not done.
 
 ### Reading before acting
 
@@ -194,9 +194,14 @@ scripts/              # Version management (tag-manager.sh)
 Edit files with the agent's native file tools (read, edit, write), never with interpreter
 heredocs or scripts that rewrite files (`python3 - <<EOF`, `node -e`): a host cannot analyse
 those calls before running them. Keep each shell call to one plain command, run from the
-project root. Hosts that support it pre-approve the harness's read-only commands
-(`workflow-cli.sh status|next|help`, `sf status`, `sf agents list`); commands that change a
-ticket, a board or a pull request still ask.
+project root: no `&&`, `;` or `||` chain, no `$(...)` substitution, no loop, no inline script
+(`node -e`, `python3 -c`, `bash -c`), no file written through a heredoc, no trailing `&`. Give
+the directory to the command (`git -C <dir>`) instead of `cd <dir> &&`, and pass long text through
+a file (`git commit -F <file>`, `--body-file <file>`). A pipe and a redirection are fine. The guard
+hook of Claude Code and Codex refuses such a line and names the split to make; for any other agent
+nothing stops it, so follow the rule yourself. Hosts that support it pre-approve the harness's
+read-only commands (`workflow-cli.sh status|next|help`, `sf status`, `sf agents list`); commands
+that change a ticket, a board or a pull request still ask.
 
 ## Managed project capabilities
 

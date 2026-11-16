@@ -264,9 +264,14 @@ export const TOOLING_HYGIENE_INSTRUCTIONS = `## File edits and shell calls
 
 Edit files with the agent's native file tools (read, edit, write), never with interpreter
 heredocs or scripts that rewrite files (\`python3 - <<EOF\`, \`node -e\`). Keep each shell call
-to one plain command, run from the project root. The harness's read-only commands
-(\`workflow-cli.sh status|next|help\`, \`sf status\`, \`sf agents list\`) are allowed in
-\`.claude/settings.json\`; commands that change a ticket, a board or a pull request still ask.
+to one plain command, run from the project root: no \`&&\`, \`;\` or \`||\` chain, no \`$(...)\`
+substitution, no loop, no inline script (\`node -e\`, \`python3 -c\`, \`bash -c\`), no file written
+through a heredoc, no trailing \`&\`. Give the directory to the command (\`git -C <dir>\`) instead
+of \`cd <dir> &&\`, and pass long text through a file (\`git commit -F <file>\`, \`--body-file <file>\`).
+A pipe and a redirection are fine. The guard hook refuses such a line and names the split to make.
+The harness's read-only commands (\`workflow-cli.sh status|next|help\`, \`sf status\`,
+\`sf agents list\`) are allowed in \`.claude/settings.json\`; commands that change a ticket, a board
+or a pull request still ask.
 `
 
 /**
@@ -282,9 +287,14 @@ const AGENT_TOOLING_HYGIENE = `## File edits and shell calls
 Edit files with the agent's native file tools (read, edit, write), never with interpreter
 heredocs or scripts that rewrite files (\`python3 - <<EOF\`, \`node -e\`): a host cannot analyse
 those calls before running them. Keep each shell call to one plain command, run from the
-project root. Hosts that support it pre-approve the harness's read-only commands
-(\`workflow-cli.sh status|next|help\`, \`sf status\`, \`sf agents list\`); commands that change a
-ticket, a board or a pull request still ask.
+project root: no \`&&\`, \`;\` or \`||\` chain, no \`$(...)\` substitution, no loop, no inline script
+(\`node -e\`, \`python3 -c\`, \`bash -c\`), no file written through a heredoc, no trailing \`&\`. Give
+the directory to the command (\`git -C <dir>\`) instead of \`cd <dir> &&\`, and pass long text through
+a file (\`git commit -F <file>\`, \`--body-file <file>\`). A pipe and a redirection are fine. The guard
+hook of Claude Code and Codex refuses such a line and names the split to make; for any other agent
+nothing stops it, so follow the rule yourself. Hosts that support it pre-approve the harness's
+read-only commands (\`workflow-cli.sh status|next|help\`, \`sf status\`, \`sf agents list\`); commands
+that change a ticket, a board or a pull request still ask.
 `
 
 export const GENERATED_INSTRUCTIONS = `${GENERATED_REGION_START}

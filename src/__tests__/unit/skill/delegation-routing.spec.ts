@@ -134,9 +134,12 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
       const content = all.find(({ file }) => file === name)?.content
       if (content === undefined) continue // statuses-solo ships with the template only
       const text = flat(content)
-      expect({ name, worktreeForm: text.includes('git fetch origin && git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>') }).toEqual({ name, worktreeForm: true })
+      // one command per call (#1251): the guard hook refuses a `&&` chain, so the two steps are said in order, not chained
+      expect({ name, worktreeForm: text.includes('`git fetch origin`, then `git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>`') }).toEqual({ name, worktreeForm: true })
       expect(text).toContain('the agent creates the branch, and the primary checkout stays on `<workingBranch>`')
-      expect(text).toContain('Built in the primary checkout: `git checkout <workingBranch> && git pull --rebase && git checkout -b feature/<N>-<description>`')
+      expect(text).toContain('Built in the primary checkout, one command per call: `git checkout <workingBranch>`, then `git pull --rebase`, then `git checkout -b feature/<N>-<description>`')
+      expect(text).not.toContain('git fetch origin &&')
+      expect(text).not.toContain('git pull --rebase && git checkout')
     }
   })
 

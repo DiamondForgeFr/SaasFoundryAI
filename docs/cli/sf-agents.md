@@ -64,6 +64,7 @@ runtimes or probe their native discovery behavior.
 | `outcome <record\|mark\|capture\|status-event>`                      | Records what a routed delegation cost and whether it did the job, ties a later signal to it, times a ticket. |
 | `routing <adjust\|promote\|report\|reset>`                           | Adjusts the routing from those outcomes, shares a move, reports the outcomes, undoes a move.                 |
 | `guard --host <claude-code\|codex>`                                  | Run by the `PreToolUse` hook: refuses the tool calls an agent must not make on its own.                      |
+| `shell-guard <refuse\|warn\|off\|status>`                            | Records or reads what the guard does with a shell line that is not one plain command.                        |
 
 All commands accept `--json`. `list` is read-only and reports runtime discovery as `not-checked`.
 
@@ -701,8 +702,9 @@ prints the host's deny decision, or nothing:
 }
 ```
 
-Staying silent leaves the host's normal permission flow in place: the hook only ever denies. It always exits 0 and fails open. A payload it cannot read (not JSON, larger than 1 MiB) lets the call
-through and is written to the [capture error log](#capture-and-signals), which `sf status` counts. Run it by hand only to test a hook.
+Staying silent leaves the host's normal permission flow in place: the hook never allows a call, it denies one, or in `warn` mode [adds context](#the-modes) and leaves the flow in place. It always
+exits 0 and fails open. A payload it cannot read (not JSON, larger than 1 MiB) lets the call through and is written to the [capture error log](#capture-and-signals), which `sf status` counts. Run it
+by hand only to test a hook.
 
 **What it refuses.** For everyone, the main session included:
 
@@ -725,13 +727,82 @@ under `.claude/worktrees/` or `.codex/worktrees/`:
 The same calls from the primary checkout are allowed: the session and the developer run them. The command is read the way a shell reads it: quotes, `;` `&&` `|` and newlines, `bash -c '…'`, `eval`,
 `env`, heredocs and here-strings are looked into, to three levels. It does not expand `$(…)` in a string or a variable.
 
+### A shell line that is not one plain command
+
+`AGENTS.md` asks an agent to keep each shell call to one plain command. A host cannot analyse a chained, substituted or scripted line before it runs, so it stops for a permission on every such call,
+even when each command in it is allowed: the developer is prompted for what the agent could have split. After the rules above, the hook reads the **shape** of the line and refuses what is not one
+plain command. It is not an escape hatch: the refusal asks the agent to rewrite its call, and it names the construct and the split to make (`1. cd apps/site 2. npm install`). On Claude Code it reads
+the Bash tool only, since a PowerShell line has other quoting; on Codex it reads the same constructs, and a Codex argument vector `bash -lc '<line>'` stands for its line.
+
+| Construct                 | Refused                                                                                                                             | Instead                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| A chain                   | `a && b`, `a; b`, `a \|\| b`, two lines in one call (`cd dir && cmd` included)                                                      | One command per call, in order; give the directory to the command (`git -C <dir>`, `npm --prefix <dir>`) |
+| A substitution            | `$(…)`, backticks, `<(…)` and `>(…)`, at the top level, inside double quotes (where the shell runs them) and in an unquoted heredoc | Run the inner command in its own call, then use its output in the next                                   |
+| A loop, a group           | `for`, `while`, `until`, `if`, `case`, `select`, `{ …; }`, `( … )`, a function definition, in command position                      | One call per item, or one command that takes every item                                                  |
+| A background job          | a `&` that is not part of a redirection                                                                                             | The host's background option (`run_in_background` on Claude Code)                                        |
+| An inline script          | `node -e`, `python3 -c`, `python3 - <<EOF`, `bash -c`, `eval`, a script piped into a shell, also behind `env`, `timeout` or `xargs` | Write the script to a file with the file tool, then run the file                                         |
+| A file written by heredoc | `cat <<EOF > path`, `tee path <<EOF`                                                                                                | The file tools (Write, Edit)                                                                             |
+
+Only what is in command position counts: `rg for src`, `git log --grep "if this; then"`, a `;` or `&&` inside quotes, `find … -exec … \;`, `node script.js -e x` and `python3 -m pytest -c conf` are
+plain commands. A pipe, a redirection (`2>&1`, `&>`, `> file`), a comment, a `[[ a && b ]]` test and a heredoc fed to a program that only reads it (`cat <<'EOF' | wc -l`, `git commit -F - <<'EOF'`)
+are not refused either. A substitution that is never closed is refused like any other, and so is text nested more than 24 levels deep, which the lexer does not read further.
+
+**The commit message exception, and what was measured.** The idiom `git commit -m "$(cat <<'EOF' … EOF)"` is a substitution, so by default it is refused, with the instruction to write the text to a
+file and pass it with `git commit -F <file>`. Whether Claude Code prompts on it was measured, on Claude Code 2.1.325 started with `--permission-prompts none` and only the command allowed:
+
+| Allowed rule           | The call                                                                        | Result                    |
+| ---------------------- | ------------------------------------------------------------------------------- | ------------------------- |
+| `Bash(git commit:*)`   | `git commit -m "$(cat <<'EOF' … EOF)"`, single-quoted delimiter                 | ran, no prompt            |
+| `Bash(git commit:*)`   | the same with an unquoted `<<EOF`                                               | denied (would have asked) |
+| `Bash(gh pr create:*)` | `gh pr create --title … --body "$(cat <<'EOF' … EOF)"`, single-quoted delimiter | ran, no prompt            |
+
+So on Claude Code the guard leaves exactly that form alone, for `git commit` and for `gh pr create`: a double-quoted word that is one substitution and nothing else, holding only
+`cat <<'DELIM' … DELIM` with a single-quoted delimiter. Anything around it, another command in the substitution, a redirection, an unquoted or double-quoted delimiter, or another program is refused.
+The `gh pr create` case goes one step past the decision recorded on #1251, which names `git commit`: it is one entry of `takesQuotedHeredocArgument` in `src/harness/shell-shape.ts`, and removing it
+makes the guard refuse that form too. Codex was not measured, so on Codex the form is refused like any other substitution.
+
+#### The modes
+
+What the hook does with such a line is a setting of the project, `modules.harness.guard.shellShape` in `.saasfoundry.json`:
+
+| Mode     | The hook                                                                                                                                                                                                                                                              |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `refuse` | Denies the call and names the split. This is the default: **absence means `refuse`**, in a new project and in one updated from an earlier release. `sf update` writes nothing; it prints one line that says what the guard now does.                                  |
+| `warn`   | Does not deny: it prints the same text as `additionalContext`, which the agent reads, and the host's own permission flow goes on, so a host that prompts for the line still prompts. Claude Code honours it on `PreToolUse` (checked on 2.1.325); Codex documents it. |
+| `off`    | Does not read the shape of a line.                                                                                                                                                                                                                                    |
+
+The rules above (a bypass variable, `--skip-local-ci`, a nature label and, for a delegated agent, a merge) apply in every mode. The hook reads the manifest nearest to the working directory of the call
+(a worktree of an agent has its own copy), then `CLAUDE_PROJECT_DIR`, on every call, so a change applies to the next call; a manifest it cannot read or a value it does not know means `refuse`.
+
+#### `sf agents shell-guard`
+
+```bash
+sf agents shell-guard status
+sf agents shell-guard warn
+sf agents shell-guard refuse
+sf agents shell-guard off
+```
+
+`status` prints the mode and where it comes from (`recorded in .saasfoundry.json`, or the default); `refuse`, `warn` and `off` record it as the shared team default, in
+`modules.harness.guard.shellShape`. It is the only writer: it goes through the same atomic, edit-detecting replacement as `sf agents delegation`, keeps every other key of the harness block and of the
+guard block, writes nothing for the mode already recorded, and says where to commit the change (never directly on a protected working branch). It fails on a project without a `modules.harness` block.
+`--json` prints `{ "shellGuardVersion": 1, "shellShape": "warn", "source": "manifest", "changed": true }` (`changed` only when a mode was recorded; `source` is `default` while nothing is). The schema
+declares the block and leaves it open to a key a later release adds; an older manifest still validates, with no `manifestVersion` bump and no migration. Which mode a project uses is the developer's
+decision: an agent never changes it.
+
 **How the developer applies a hatch.** In Claude Code, `! <command>` typed in the session runs without going through the Bash tool, so the hook does not fire; on any host, the developer's own terminal
 does the same. Run either from the primary checkout.
 
-**The hook line.** It is a shell line, not a bare `sf`, for the reasons [the capture hook](#capture-and-signals) is. It reads the payload and leaves before Node starts unless the payload mentions
-`SF_WORKFLOW_BYPASS_`, `skip-local-ci`, `nature` (in any case), `addLabels`, `delegation`, `ready` or `merge`, so almost no Bash call pays for a process. Then it runs the CLI the project resolves:
-`node_modules/.bin/saasfoundryai`, then this repository's own `bin/sf.js` when `dist/` is built, then `saasfoundryai` on the PATH. With no CLI, or one that lacks `agents guard`, the call goes through;
-a CLI that lacks it exits non-zero, and the hook writes one line on stderr and an entry of stage `cli` in the capture error log, which `sf status` counts.
+**The hook line.** It is a shell line, not a bare `sf`, for the reasons [the capture hook](#capture-and-signals) is. It reads the payload and leaves before Node starts unless the raw JSON of the
+payload mentions `SF_WORKFLOW_BYPASS_`, `skip-local-ci`, `nature` (in any case), `addLabels`, `delegation`, `ready` or `merge`, or one of the characters and flags a line that is not one plain command
+needs: `;`, `&&`, `||`, a newline (`\n` in the JSON), `$(`, a backtick, `<<`, `<(`, a background `&`, an interpreter flag (`node -`, `python … -`, `sh -`, `eval `, `deno eval`), or a script piped into
+a shell (`| bash`). The filter is a deliberate superset: a plain command, a pipe and a redirection pay for no process, a payload that passes it only costs one fast Node start, and no keyword is
+matched (`for`, `if`), because the description of a call is prose. Then it runs the CLI the project resolves: `node_modules/.bin/saasfoundryai`, then this repository's own `bin/sf.js` when `dist/` is
+built, then `saasfoundryai` on the PATH. `bin/sf.js` answers `agents guard --host <claude-code|codex>` through a dedicated entry that loads only the guard (no commander, no other command, not the
+ledger), so a refused call costs a Node start, tens of milliseconds, where the whole CLI takes about half a second to a second; any other form (`--help`, an unknown host) is the full CLI. With no CLI,
+or one that lacks `agents guard`, the call goes through; a CLI that lacks it exits non-zero, and the hook writes one line on stderr and an entry of stage `cli` in the capture error log, which
+`sf status` counts. A project updated to this release but reaching an older CLI is not checked for the shape of a line, and each call that reaches that CLI costs the full CLI: upgrade it (`sf status`
+says so).
 
 **Limits, stated plainly.** The hook is a guardrail against the ordinary path the refusals used to teach, not a security boundary.
 
@@ -741,9 +812,12 @@ a CLI that lacks it exits non-zero, and the hook writes one line on stderr and a
 - Claude Code reads its settings when a session starts: a session that is already running keeps its old hooks. A developer can switch hooks off (`disableAllHooks`).
 - Codex runs a project hook only once the `.codex/` layer and the hook's text are trusted. `sf update` says when it added the hook: review and trust it with `/hooks`. A Codex subagent carries no agent
   id, so the delegated-only rules apply there to a call in a recognised worktree path.
+- It reads the text of the call, not what a script does once it runs: `node script.js` is a plain command whatever the script holds, and a program that wraps another one the lexer does not know
+  (`find … -exec sh -c '…' \;`, `ssh host 'a && b'`) is not looked into.
 - `sf status` reports the state on the `routing:` line for each declared agent, naming the CLI the hook reaches when it cannot run it (`guard enforced`, `guard declared`,
-  `guard hook declared but the CLI it reaches (…) cannot run sf agents guard`, `guard hook missing`, `guard not enforced`), and the `guardHook` precondition **fails** when that CLI cannot run the
-  hook, and warns when it is older than the project or when the hook is missing or outdated (see [`sf status`](./sf-status.md#the-guard-hook)).
+  `guard hook declared but the CLI it reaches (…) cannot run sf agents guard`, `guard hook missing`, `guard not enforced`) and ending with the mode (`shell shape: refuse`, or `warn`, or `off`), and
+  the `guardHook` precondition **fails** when that CLI cannot run the hook, and warns when it is older than the project or when the hook is missing or outdated (see
+  [`sf status`](./sf-status.md#the-guard-hook)).
 
 ## Platform notes
 
