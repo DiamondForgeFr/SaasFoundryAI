@@ -66,6 +66,43 @@ Les deux topologies applicatives sont supportées :
 La topologie modifie les frontières de dépôt, pas les capacités du produit. Comparez [monorepo et multirepo](/fr/guide/monorepo-vs-multirepo) avant de choisir. `sf update` peut ajouter plus tard une
 capacité manquante, mais la V1 ne convertit pas une topologie dans l'autre.
 
+## Ce que `sf new` versionne
+
+`sf new` fait le premier commit de chaque dépôt qu'il crée, en toute dernière étape : le socle, le harness, les instructions d'agents et `.saasfoundry.json` sont alors tous écrits, et le dépôt démarre
+sur un seul commit racine avec un `git status` propre.
+
+| Cas                                 | Ce qui est versionné                                                                                                                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Monorepo                            | Un commit racine dans le dossier du projet, sur la branche principale, avec le manifeste et le harness.                                                                                                |
+| Multirepo                           | Un commit racine dans chaque dépôt applicatif (`apps/<nom>-api`, `apps/<nom>-web`), chacun avec son propre manifeste et son harness. Le dossier du projet n'est pas un dépôt et ne porte aucun commit. |
+| `--setup-repo local`                | Le commit seul. Il n'y a pas encore de dépôt distant.                                                                                                                                                  |
+| `--setup-repo existing`             | Le même commit, et l'URL fournie est ajoutée comme `origin`. Rien n'est poussé : poussez vous-même la branche principale.                                                                              |
+| `--workflow <preset>` (un workflow) | Aucun commit : c'est le workflow qui le fait. Voir ci-dessous.                                                                                                                                         |
+| `--profile harness`                 | Aucun commit. Le harness arrive dans votre dépôt existant ; versionnez-le avec votre propre travail.                                                                                                   |
+
+Le message du commit est `Initial commit`. Il n'exécute pas les hooks Git du projet : Husky les installe depuis le script `prepare` de `npm install`, que `sf new` lance avant que le dépôt existe ; ils
+sont donc installés par votre prochain `npm install` (ou `npx husky`) et s'appliquent dès votre deuxième commit. Les fichiers générés après le commit, comme les migrations créées par
+`--start-services`, n'en font pas partie.
+
+Si le commit ne peut pas être fait (pas de `user.name` ou `user.email`, un hook qui vous est propre), `sf new` va quand même au bout, le dit dans son récapitulatif et nomme le commit à faire à la
+main.
+
+### Avec un workflow : le premier ticket fait le premier commit
+
+Le format de commit d'un workflow exige un ticket (`type(#N): description`), et un projet qui vient d'être généré n'en a pas. `workflow-cli.sh bootstrap` existe pour ce moment : sur un dépôt vide, il
+versionne tout sous `chore(#N): bootstrap the repository`, pousse les branches principale et de travail, et ferme le ticket `N`. Il refuse un dépôt dont le commit racine est autre chose : un
+`Initial commit` fait par `sf new` l'aurait rendu inutilisable.
+
+Quand vous passez `--workflow`, `sf new` laisse donc chaque dépôt sur sa branche principale, sans commit, et le récapitulatif comme `sf status` nomment l'étape suivante :
+
+```bash
+.claude/skills/sf-workflow/workflow-cli.sh create-ticket task "Bootstrap the repository" --complexity low
+.claude/skills/sf-workflow/workflow-cli.sh bootstrap <ticket>
+```
+
+`bootstrap` exige un dépôt distant `origin` : passez `--setup-repo existing` avec l'URL du dépôt, ou ajoutez-le avant avec `git remote add origin <url>`. Sur un projet multirepo, lancez-le dans chaque
+dépôt applicatif.
+
 ## La frontière de propriété
 
 SaaSFoundry enregistre les empreintes des fichiers qu'il a générés et qu'il gère encore. Elles forment la **base** de la prochaine comparaison à trois voies :
@@ -166,8 +203,9 @@ sf status --agent-friendly --no-network
 git status
 ```
 
-La première commande rapporte le profil effectif, la topologie, les modules, les outils et les problèmes de configuration actionnables, sans contacter de service externe. Relisez et versionnez les
-fichiers générés, y compris `.saasfoundry.json`, avant de commencer les fonctionnalités.
+La première commande rapporte le profil effectif, la topologie, les modules, les outils et les problèmes de configuration actionnables, sans contacter de service externe. Sans workflow, `git status`
+est propre : les fichiers générés, y compris `.saasfoundry.json`, sont [déjà versionnés](#ce-que-sf-new-versionne). Avec un workflow, le dépôt n'a pas encore de commit et `sf status` renvoie vers
+`bootstrap`.
 
 Pour le démarrage local, suivez le README généré : les commandes dépendent de la topologie et des services choisis.
 
