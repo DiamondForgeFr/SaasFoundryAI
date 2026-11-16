@@ -33,6 +33,18 @@ sf workflow [subcommand] [args...]
 sf workflow show
 ```
 
+Elle se termine par les statuts du workflow, par leur nom, dans l'ordre et l'orthographe de `workflow.statuses` (avant la 1.3.0, chacun s'affichait `[object Object]`) :
+
+```text
+📊 Workflow Statuses
+
+  1. Backlog
+  2. In progress
+  3. AI testing
+  4. In review
+  5. Done
+```
+
 ```bash
 # Utiliser un modèle existant
 sf workflow use my-template

@@ -93,6 +93,20 @@ n'est pas une stack technique : le projet se lit `harness` (stack `absent`), pas
 du CLI lui-même (le package nommé `saasfoundryai-cli` avec son `bin/sf.js` et son `src/`), la raison du profil le dit, et `sf status` ne propose aucun aperçu `sf update --target-profile full`.
 `sf update` y continue de déposer les skills de stack.
 
+### Workflow
+
+La ligne `workflow:` (`Workflow:` dans la sortie lisible) nomme l'outil de workflow, puis le preset et ses statuts dans l'ordre et l'orthographe de `workflow.statuses` : une session qui lit le rapport
+de début de session sait quels statuts existent sur le projet, Human testing compris :
+
+```text
+- workflow: github-projects (SaaSFoundry Solo: Backlog → In progress → AI testing → In review → Done)
+- workflow: github-projects (SaaSFoundry AI Workflow: Backlog → Ready → In Progress → AI Testing → Human Testing → In Review → Done)
+```
+
+Avant la 1.3.0, la ligne ne nommait que l'outil (`workflow: github-projects`). Un manifest sans `workflow.template` affiche les statuts seuls (`github-projects (Todo → Done)`), et un projet sans outil
+de workflow se lit `workflow: none`. Dans `--json`, `manifest.workflow` reste l'outil, et `manifest.workflowPreset` porte le reste : `{ "name": "SaaSFoundry Solo", "statuses": ["Backlog", …] }`,
+`name` valant `null` quand le manifest n'enregistre aucun preset, et le champ entier `null` sans outil de workflow.
+
 ### Accord de délégation
 
 Sur un projet doté d'un bloc harness, la sortie destinée aux agents porte une ligne `delegation:` et `--json` un objet `delegation` : l'accord du développeur pour déléguer la livraison des tickets à

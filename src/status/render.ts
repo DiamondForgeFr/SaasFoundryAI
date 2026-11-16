@@ -5,6 +5,7 @@ import { CAPTURE_ERROR_WINDOW_DAYS } from '../harness/capture-errors'
 import { hookCliText } from '../harness/hook-cli'
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
 import { localCiGateSummary } from '../local-ci-gate'
+import type { WorkflowConfig, WorkflowStatus } from '../types'
 import type { StatusCli, StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
@@ -24,6 +25,27 @@ export function delegationSummary(delegation: StatusDelegation): string {
   if (delegation.ticketDelivery === 'not-asked') return 'not-asked (ask the developer once, then record it with sf agents delegation allow or decline)'
   const team = delegation.source === 'local' ? `; shared team default: ${delegation.shared.ticketDelivery}` : ''
   return `${delegation.ticketDelivery} (${delegation.source}, ${delegation.decidedAt}${team})`
+}
+
+/** The status names of the workflow, in the order and the spelling of the manifest (#1249). */
+export function workflowStatusNames(workflow: WorkflowConfig | undefined): string[] {
+  const statuses: unknown = workflow?.statuses
+  if (!Array.isArray(statuses)) return []
+  return statuses
+    .map((status: unknown) => (typeof status === 'string' ? status : (status as Partial<WorkflowStatus> | null)?.name))
+    .filter((name): name is string => typeof name === 'string' && name.length > 0)
+}
+
+/**
+ * The workflow on one line (#1249): the tool, then the preset and its statuses in order, so a session reading the
+ * session-start report knows whether Human testing exists on this project:
+ * `github-projects (SaaSFoundry Solo: Backlog → In progress → AI testing → In review → Done)`.
+ */
+export function workflowSummary(workflow: WorkflowConfig | undefined): string {
+  if (!workflow?.tool || workflow.tool === 'none') return 'none'
+  const statuses = workflowStatusNames(workflow)
+  const detail = [workflow.template, statuses.length ? statuses.join(' → ') : undefined].filter(Boolean).join(': ')
+  return detail ? `${workflow.tool} (${detail})` : workflow.tool
 }
 
 /**
@@ -161,6 +183,7 @@ export function renderHuman(payload: RenderPayload): string {
       lines.push(`${chalk.gray('Profile reason:')} ${report.capabilities.reason}`)
       if (report.capabilities.previewCommand) lines.push(`${chalk.gray('Preview full profile:')} ${report.capabilities.previewCommand}`)
     }
+    lines.push(`${chalk.gray('Workflow:')} ${workflowSummary(report.manifest.workflow)}`)
     if (report.delegation) lines.push(`${chalk.gray('Delegation:')} ${delegationSummary(report.delegation)}`)
     if (report.routing) lines.push(`${chalk.gray('Routing:')} ${routingSummary(report.routing)}`)
   } else {
@@ -201,6 +224,12 @@ export function renderHuman(payload: RenderPayload): string {
   return lines.join('\n')
 }
 
+/** `{ name, statuses }` of the workflow for `--json` (#1249); `name` is null when the manifest records no preset. */
+function workflowPresetJson(workflow: WorkflowConfig | undefined): { name: string | null; statuses: string[] } | null {
+  if (!workflow?.tool || workflow.tool === 'none') return null
+  return { name: workflow.template ?? null, statuses: workflowStatusNames(workflow) }
+}
+
 export function renderJson(payload: RenderPayload): string {
   const { report, preconditions } = payload
   const out = {
@@ -212,6 +241,8 @@ export function renderJson(payload: RenderPayload): string {
           projectName: report.manifest.projectName,
           structure: report.manifest.structure,
           workflow: report.manifest.workflow?.tool ?? null,
+          // Additive (#1249): the preset and its statuses in order, null without a workflow tool
+          workflowPreset: workflowPresetJson(report.manifest.workflow),
           tools: report.manifest.tools ?? null,
           // Always resolved, never echoed raw: a consumer must not have to
           // re-implement the "absent means English" rule.
@@ -275,7 +306,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
       lines.push(`- profile reason: ${report.capabilities.reason}`)
       if (report.capabilities.previewCommand) lines.push(`- full-profile preview: ${report.capabilities.previewCommand}`)
     }
-    lines.push(`- workflow: ${report.manifest.workflow?.tool ?? 'none'}`)
+    lines.push(`- workflow: ${workflowSummary(report.manifest.workflow)}`)
     if (report.delegation) lines.push(`- delegation: ${delegationSummary(report.delegation)}`)
     if (report.routing) lines.push(`- routing: ${routingSummary(report.routing)}`)
     const srs = report.manifest.tools?.srs

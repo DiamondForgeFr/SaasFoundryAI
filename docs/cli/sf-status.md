@@ -90,6 +90,20 @@ technical stack: the project reads as `harness` (stack `absent`), not `inconsist
 named `saasfoundryai-cli` with its `bin/sf.js` and `src/`), the profile reason says so, and `sf status` offers no `sf update --target-profile full` preview. `sf update` keeps depositing the stack
 skills there.
 
+### Workflow
+
+The `workflow:` line (`Workflow:` in the human output) names the workflow tool, then the preset and its statuses in the order and the spelling of `workflow.statuses`, so a session reading the
+session-start report knows which statuses exist on the project, Human testing among them:
+
+```text
+- workflow: github-projects (SaaSFoundry Solo: Backlog → In progress → AI testing → In review → Done)
+- workflow: github-projects (SaaSFoundry AI Workflow: Backlog → Ready → In Progress → AI Testing → Human Testing → In Review → Done)
+```
+
+Before 1.3.0 the line named the tool only (`workflow: github-projects`). A manifest without `workflow.template` shows the statuses alone (`github-projects (Todo → Done)`), and a project without a
+workflow tool reads `workflow: none`. In `--json`, `manifest.workflow` is still the tool, and `manifest.workflowPreset` carries the rest: `{ "name": "SaaSFoundry Solo", "statuses": ["Backlog", …] }`,
+`name` being `null` when the manifest records no preset, and the whole field `null` without a workflow tool.
+
 ### Delegation consent
 
 On a project with a harness block, the agent-friendly output carries a `delegation:` line and `--json` a `delegation` object: the developer's consent to delegate ticket delivery to background agents
