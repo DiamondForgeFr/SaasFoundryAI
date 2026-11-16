@@ -11,10 +11,15 @@ jest.mock('../../../feedback/repo', () => ({
   readFeedbackRepo: jest.fn()
 }))
 
+import { writeFile } from 'fs/promises'
+import path from 'path'
+
 import { feedbackCommand } from '../../../commands/feedback'
+import { GITHUB_ISSUE_BODY_LIMIT, countCharacters } from '../../../feedback/body-limit'
 import { ensureGhAuth, ghAddReaction, ghCurrentUser, ghIssueComment, ghIssueCreate, ghIssueSearch } from '../../../feedback/gh'
 import { readFeedbackRepo } from '../../../feedback/repo'
 import { readPreferences } from '../../../skill/preferences'
+import { fullManifestFixture } from '../../helpers/full-manifest'
 import { createTempDir } from '../../helpers/temp-dir'
 
 const mockEnsureGhAuth = ensureGhAuth as jest.Mock
@@ -170,6 +175,39 @@ describe('feedbackCommand (integration)', () => {
       await feedbackCommand('bug', '--source', 'scaffold', '--title', 'vite build fails', '--description', 'd', '--non-interactive')
 
       expect(mockGhIssueCreate.mock.calls[0][0].labels).toEqual(['scaffold-bug'])
+    })
+
+    it('files --auto-repro from a real-sized full project without crossing the GitHub body limit (#972)', async () => {
+      const { dir, cleanup } = await createTempDir()
+      const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue(dir)
+      try {
+        const manifest = JSON.stringify(fullManifestFixture(), null, 2)
+        expect(countCharacters(manifest)).toBeGreaterThan(GITHUB_ISSUE_BODY_LIMIT)
+        await writeFile(path.join(dir, '.saasfoundry.json'), manifest, 'utf8')
+        mockGhIssueSearch.mockResolvedValue([])
+        mockGhIssueCreate.mockResolvedValue({ number: 11, url: 'https://x/11', title: 'repro', state: 'OPEN', labels: [{ name: 'cli-bug' }], author: { login: '' } })
+
+        await feedbackCommand('bug', '--source', 'cli', '--title', 'repro', '--description', 'fails on a full project', '--auto-repro', '--yes', '--non-interactive')
+
+        expect(mockGhIssueCreate).toHaveBeenCalledTimes(1)
+        const { body } = mockGhIssueCreate.mock.calls[0][0] as { body: string }
+        expect(countCharacters(body)).toBeLessThanOrEqual(GITHUB_ISSUE_BODY_LIMIT)
+        expect(body).toContain('"profile": "full"')
+        expect(body).toContain('"count": 700')
+        expect(allLog()).toContain('Filed bug #11')
+      } finally {
+        cwdSpy.mockRestore()
+        await cleanup()
+      }
+    })
+
+    it('refuses a description over the GitHub limit before calling GitHub to create it (#972)', async () => {
+      mockGhIssueSearch.mockResolvedValue([])
+      const description = 'stack frame '.repeat(7000)
+      await expect(feedbackCommand('bug', '--source', 'cli', '--title', 'huge', '--description', description, '--non-interactive')).rejects.toThrow(
+        /above the 65536 GitHub accepts.*Nothing was sent to GitHub/
+      )
+      expect(mockGhIssueCreate).not.toHaveBeenCalled()
     })
 
     it('rejects an invalid --source', async () => {
