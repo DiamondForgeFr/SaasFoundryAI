@@ -340,7 +340,7 @@ function RoleDetailSheet({
                 data-testid="role-delete-button"
                 disabled={isDeleting}
                 onClick={() => onDelete(role)}
-                className="disabled:cursor-wait disabled:opacity-60 border-border bg-card text-muted-foreground hover:text-destructive hover:border-destructive/40 inline-flex cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1.5 text-[11px] font-bold tracking-wider uppercase transition-colors"
+                className="border-border bg-card text-muted-foreground hover:text-destructive hover:border-destructive/40 inline-flex cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1.5 text-[11px] font-bold tracking-wider uppercase transition-colors disabled:cursor-wait disabled:opacity-60"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 {tCommon('actions.tk_delete_')}
