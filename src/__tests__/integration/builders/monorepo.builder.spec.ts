@@ -6,7 +6,7 @@ import childProcess from 'node:child_process'
 
 import { createMonorepoRoot } from '../../../builders/monorepo.builder'
 import { monorepoRootParams } from '../../helpers/fixtures'
-import { expectFileExists } from '../../helpers/assertions'
+import { expectFileExists, gitCommandsRun } from '../../helpers/assertions'
 
 describe('createMonorepoRoot (integration)', () => {
   let tempDir: string
@@ -114,6 +114,13 @@ describe('createMonorepoRoot (integration)', () => {
     await createMonorepoRoot(monorepoRootParams())
 
     expect(spawnSpy).toHaveBeenCalledWith('git', ['init'], expect.objectContaining({ shell: false }))
+  })
+
+  // #969 — the harness and the manifest are written after this builder, so a commit made here left them untracked
+  it('should initialise the repository and leave the first commit to sf new', async () => {
+    await createMonorepoRoot(monorepoRootParams({ monorepoUrl: 'https://github.com/test/mono.git', workflow: { tool: 'none', workingBranch: 'develop' } }))
+
+    expect(gitCommandsRun(spawnSpy)).toEqual(['init', 'checkout -b', 'remote add'])
   })
 
   it('should set git remote when monorepoUrl is provided', async () => {

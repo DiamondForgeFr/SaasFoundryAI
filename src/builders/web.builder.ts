@@ -203,7 +203,12 @@ export async function renderWebApp({
   return true
 }
 
-/** Apply the external effects required to make a rendered multirepo web app ready to use. */
+/**
+ * Apply the external effects required to make a rendered multirepo web app ready to use.
+ *
+ * The repository is initialised and left without a commit: `commitBootstrap` makes it once the
+ * harness and the manifest are on disk (#969).
+ */
 export async function provisionWebApp({ targetDir = '.', isMonorepo, projectName, frontendRepoUrl, mainBranch, workflow }: CreateWebAppParams): Promise<void> {
   if (isMonorepo) return
   const webPath = join(targetDir, `apps/${projectName}-web`)
@@ -212,15 +217,11 @@ export async function provisionWebApp({ targetDir = '.', isMonorepo, projectName
   // Install once, after every module installer has finalized package.json.
   runRequired('npm install (web)', `${nvm}npm install`, { cwd: webPath })
 
-  const workingBranch = workflow?.workingBranch
   assertGitBranchName(mainBranch)
-  if (workingBranch) assertGitBranchName(workingBranch)
+  if (workflow?.workingBranch) assertGitBranchName(workflow.workingBranch)
   runBestEffortArgv('git init (web)', 'git', ['init'], { cwd: webPath, onSkipped: warn })
   runBestEffortArgv('git checkout (web)', 'git', ['checkout', '-b', mainBranch], { cwd: webPath, onSkipped: warn })
   if (frontendRepoUrl) runBestEffortArgv('git remote add (web)', 'git', ['remote', 'add', 'origin', frontendRepoUrl], { cwd: webPath, onSkipped: warn })
-  runBestEffortArgv('git add (web)', 'git', ['add', '.'], { cwd: webPath, onSkipped: warn })
-  runBestEffortArgv('git commit (web)', 'git', ['commit', '-m', 'Initial commit'], { cwd: webPath, onSkipped: warn })
-  if (workingBranch && workingBranch !== mainBranch) runBestEffortArgv('git working branch (web)', 'git', ['checkout', '-b', workingBranch], { cwd: webPath, onSkipped: warn })
 }
 
 /** The long logo leaves 363 px for the name after its mark: shrink the type to fit a long name. */

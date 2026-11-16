@@ -103,6 +103,15 @@ export async function expectPackageJsonDep(pkgPath: string, depName: string, dep
 }
 
 /**
+ * The Git commands a spied `spawnSync` was asked to run, as their first two argv items (`init`, `checkout -b`,
+ * `remote add`, `commit -m`…). The branch-name validation (`check-ref-format`) is not a change to the
+ * repository and is left out.
+ */
+export function gitCommandsRun(spawnSpy: jest.SpyInstance): string[] {
+  return spawnSpy.mock.calls.filter((call: unknown[]) => call[0] === 'git' && (call[1] as string[])[0] !== 'check-ref-format').map((call: unknown[]) => (call[1] as string[]).slice(0, 2).join(' '))
+}
+
+/**
  * Assert that a YAML string is valid.
  */
 export function expectValidYaml(content: string): void {
