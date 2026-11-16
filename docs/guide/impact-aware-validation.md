@@ -77,10 +77,11 @@ unchanged. These scoped commit checks are contributor-only and do not alter gene
 
 **In generated projects**, `npm run test:staged` reads `.saasfoundry/validation.commit.json` as well. It holds the same lanes as `.saasfoundry/validation.json` except two: the lifecycle lane runs the
 guards instead of `test:e2e`, and full validation runs the guards and the shared-contract checks. Every API or web change selects the lifecycle lane, so a hook that ran the E2E suite ran it on almost
-every commit. CI keeps `.saasfoundry/validation.json`, where the lifecycle lane still runs `test:e2e`. The generated `.prettierignore` keeps the files SaaSFoundryAI writes and refreshes on `sf update`
-(`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, agent instructions, the validation workflow) and generated artefacts out of `npm run format:check`; formatting them would turn the next update
-into conflicts. It also skips what the test and build tools write (`test-results/`, `playwright-report/`, `blob-report/`, `coverage/`, `coverage-e2e/`, `.nyc_output/`, `dev-dist/`), which the
-generated ESLint configs ignore as well: a Playwright report holds megabytes of minified scripts.
+every commit. CI keeps `.saasfoundry/validation.json`, where the lifecycle lane still runs `test:e2e`. On CI, Playwright serves the web app's existing build (`vite preview`) and builds nothing, so the
+lane builds it first: in a monorepo, `apps/web/turbo.json` makes the web `test:e2e` task depend on its own `build`; a standalone web app's lane runs `npm run build && npm run test:e2e` (#979). The
+generated `.prettierignore` keeps the files SaaSFoundryAI writes and refreshes on `sf update` (`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, agent instructions, the validation workflow) and
+generated artefacts out of `npm run format:check`; formatting them would turn the next update into conflicts. It also skips what the test and build tools write (`test-results/`, `playwright-report/`,
+`blob-report/`, `coverage/`, `coverage-e2e/`, `.nyc_output/`, `dev-dist/`), which the generated ESLint configs ignore as well: a Playwright report holds megabytes of minified scripts.
 
 Inspect an explicit range without executing its commands:
 

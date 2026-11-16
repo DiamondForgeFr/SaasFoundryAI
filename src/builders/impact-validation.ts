@@ -39,7 +39,8 @@ const PROFILE_SCRIPTS: Record<ImpactValidationProfile, Record<string, string>> =
     'test:impact:frontend': 'npm run build && npm run lint && npm run type-check',
     'test:impact:backend': 'npm run format:check',
     'test:impact:shared': 'npm run build && npm run lint && npm run type-check',
-    'test:impact:lifecycle': 'npm run test:e2e',
+    // On CI, Playwright serves the existing `dist/` and builds nothing: build it first (#979).
+    'test:impact:lifecycle': 'npm run build && npm run test:e2e',
     'test:full': 'npm run format:check && npm run build && npm run lint && npm run type-check && npm run test:e2e'
   }
 }
