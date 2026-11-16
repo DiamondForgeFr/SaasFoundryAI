@@ -250,23 +250,41 @@ describe('the PreToolUse guard hook of .claude/settings.json, run through sh -c'
       })
     })
 
-    // The point of the dedicated entry (#1251): the hook line pays for a Node start, not for the whole CLI. The latency is
-    // compared with the full CLI on the same machine at the same moment, so that a loaded one does not fail the spec.
-    it('answers a refused call through the dedicated entry, several times faster than the full CLI would', () => {
-      const best = (run: () => unknown): number => {
-        const times: number[] = []
-        for (let i = 0; i < 3; i++) {
-          const start = process.hrtime.bigint()
-          run()
-          times.push(Number(process.hrtime.bigint() - start) / 1e6)
-        }
-        return Math.min(...times)
-      }
-      const input = payload('cd apps/site && npm install', ROOT)
-      const fast = best(() => expect(decision(hook(input).stdout).permissionDecision).toBe('deny'))
-      const full = best(() => spawnSync(process.execPath, [join(ROOT, 'dist', 'index.js'), 'agents', 'guard', '--host', 'claude-code'], { cwd: ROOT, encoding: 'utf8', input, env: cleanEnv }))
+    // The point of the dedicated entry (#1251): the hook line pays for a Node start, not for the whole CLI. What is
+    // checked is what the Node process of the hook loads, not how long it takes: two timings compared on a loaded
+    // machine went the wrong way (667 ms against 236 ms at a load average near 100, #1240). A preload passed through
+    // NODE_OPTIONS lists the modules once the process exits.
+    it('answers a refused call through the dedicated entry, without loading the CLI, commander or the ledger', async () => {
+      const probe = await mkdtemp(join(tmpdir(), 'sf-guard-modules-'))
+      try {
+        const preload = join(probe, 'list-modules.cjs')
+        await writeFile(preload, "process.on('exit', () => require('fs').writeFileSync(process.env.SF_GUARD_MODULES_OUT, JSON.stringify(Object.keys(require.cache))))\n")
+        const loaded = async (out: string): Promise<string[]> => (JSON.parse(await readFile(out, 'utf8')) as string[]).map((file) => file.split('\\').join('/'))
+        const probeEnv = (out: string) => ({ NODE_OPTIONS: `--require ${preload}`, SF_GUARD_MODULES_OUT: out })
+        const input = payload('cd apps/site && npm install', ROOT)
 
-      expect(fast).toBeLessThan(full / 2)
+        const started = Date.now()
+        const result = hook(input, { CLAUDE_PROJECT_DIR: ROOT, ...probeEnv(join(probe, 'fast.json')) })
+        // One ceiling, and a generous one: the timeout the settings give the host for this hook (asserted above).
+        expect(Date.now() - started).toBeLessThan(10_000)
+        expect(decision(result.stdout).permissionDecision).toBe('deny')
+        const fast = await loaded(join(probe, 'fast.json'))
+        expect(fast.some((file) => file.endsWith('/dist/commands/agents.guard-main.js'))).toBe(true)
+        expect(fast.filter((file) => file.includes('/node_modules/commander/') || file.endsWith('/dist/index.js') || file.endsWith('/dist/harness/delegation-ledger.js'))).toEqual([])
+
+        // The control: the same probe on the full CLI sees what the dedicated entry leaves out.
+        spawnSync(process.execPath, [join(ROOT, 'dist', 'index.js'), 'agents', 'guard', '--host', 'claude-code'], {
+          cwd: ROOT,
+          encoding: 'utf8',
+          input,
+          env: { ...cleanEnv, ...probeEnv(join(probe, 'full.json')) }
+        })
+        const full = await loaded(join(probe, 'full.json'))
+        expect(full.some((file) => file.includes('/node_modules/commander/'))).toBe(true)
+        expect(full.some((file) => file.endsWith('/dist/index.js'))).toBe(true)
+      } finally {
+        await rm(probe, { recursive: true, force: true })
+      }
     })
   })
 
