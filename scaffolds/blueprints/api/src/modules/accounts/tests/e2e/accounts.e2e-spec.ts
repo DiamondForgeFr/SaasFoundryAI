@@ -1021,7 +1021,10 @@ describe('Accounts Module (e2e)', () => {
           const before = await grantsOf(promisedRole.id)
           const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
 
-          await entityAdminAgent.patch(`/api/accounts/roles/${promisedRole.id}`).send({ name: 'hijacked', permissionIds: [allocation] }).expect(403)
+          await entityAdminAgent
+            .patch(`/api/accounts/roles/${promisedRole.id}`)
+            .send({ name: 'hijacked', permissionIds: [allocation] })
+            .expect(403)
           await entityAdminAgent.patch(`/api/accounts/roles/${promisedRole.id}/status`).send({ isActive: false }).expect(403)
           await entityAdminAgent.delete(`/api/accounts/roles/${promisedRole.id}`).expect(403)
 
