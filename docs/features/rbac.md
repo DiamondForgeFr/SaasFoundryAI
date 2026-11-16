@@ -92,22 +92,26 @@ setting.
 The role routes (`POST /accounts/:id/roles`, `POST /accounts/platform/roles`, `PATCH` and `DELETE /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`) carry a role id, so the service
 decides, and answers `403`:
 
-| Role                                        | Who may create, edit, toggle or delete it                                                                                                     |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| System role or global template              | Only a holder of `ROLE_CUSTOM_MANAGEMENT` through a **platform** role. A platform role that merely reads the console does not count.          |
-| Custom `ACCOUNT` role of account A          | `ROLE_CUSTOM_MANAGEMENT` on A (an account role on A, or a platform role). An entity role never counts.                                        |
-| Custom `ENTITY` role of account A           | `ROLE_CUSTOM_MANAGEMENT` in **every entity the role is assigned in**: the account administrator, or an entity administrator of their subtree. |
-| Custom `ENTITY` role of A, assigned nowhere | `ROLE_CUSTOM_MANAGEMENT` on A or on one of its entities.                                                                                      |
+| Role                                    | Who may create, edit, toggle or delete it                                                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| System role or global template          | Only a holder of `ROLE_CUSTOM_MANAGEMENT` through a **platform** role. A platform role that merely reads the console does not count.      |
+| Custom `ACCOUNT` role of account A      | `ROLE_CUSTOM_MANAGEMENT` on A (an account role on A, or a platform role). An entity role never counts.                                    |
+| Custom `ENTITY` role of account A       | `ROLE_CUSTOM_MANAGEMENT` in **every entity the role is used in**: the account administrator, or an entity administrator of their subtree. |
+| Custom `ENTITY` role of A, used nowhere | `ROLE_CUSTOM_MANAGEMENT` on A or on one of its entities.                                                                                  |
+
+An `ENTITY` role is used in an entity when it is assigned there, or when a **pending invitation** that carries it targets that entity. Accepting an invitation assigns its `ENTITY` roles in each of its
+entities, so a change made before then reaches the invitee as well: an entity administrator cannot edit a role that is so far only promised to people invited into a sibling entity. Only an invitation
+that can still be accepted (`SENT`) counts; an expired or canceled one promises nothing, and an accepted one has become assignments.
 
 Two more rules hold for everyone below the platform:
 
 - **Nobody grants what they do not hold.** Each permission or section a request adds to a role must be held by the caller where the role applies; sending back what the role already has, or removing
   from it, needs nothing more. A user who holds a custom role cannot extend it to climb above its editor.
-- **An `ENTITY` role assigned nowhere is shaped for its entity type.** Sections that exist only on an entity (a project's vision, its tickets) are never held on the account, so the account
-  administrator may also grant such a role what the entity type allows: what the active `ENTITY` system roles grant (`entity-admin`, `entity-user`, and the ones a project adds for its own types, such
-  as a `project-owner`). That administrator may already allocate those system roles in any entity of the account, so nobody climbs above their editor. Nothing beyond them is granted, an entity
-  administrator still grants only what it holds, and once the role is assigned, each change is checked in every entity it is used in again. The template's roles carry no entity type, so every `ENTITY`
-  system role counts; a project that types its entity roles narrows `loadEntityTypeGrants` in `account.service.ts` to the system roles of the role's type.
+- **An `ENTITY` role used nowhere is shaped for its entity type.** Sections that exist only on an entity (a project's vision, its tickets) are never held on the account, so the account administrator
+  may also grant such a role what the entity type allows: what the active `ENTITY` system roles grant (`entity-admin`, `entity-user`, and the ones a project adds for its own types, such as a
+  `project-owner`). That administrator may already allocate those system roles in any entity of the account, so nobody climbs above their editor. Nothing beyond them is granted, an entity
+  administrator still grants only what it holds, and once the role is assigned, or promised by a pending invitation, each change is checked in every entity it is used in again. The template's roles
+  carry no entity type, so every `ENTITY` system role counts; a project that types its entity roles narrows `loadEntityTypeGrants` in `account.service.ts` to the system roles of the role's type.
 - **No account or entity role carries a platform section.** A `PLATFORM_ADMINISTRATION` section is refused on an `ACCOUNT` or `ENTITY` role, whoever asks, the platform included.
 
 System roles stay renamable by nobody and deletable by nobody; a platform administrator maintains their grants.
@@ -161,6 +165,14 @@ Role-authoring flows that change behaviour:
 Unchanged: `ACCOUNT` roles, `ENTITY` roles already assigned in an entity, entity administrators, and the platform. A grant that no `ENTITY` system role carries, and that the author does not hold, is
 still refused. If your project types its entity roles, narrow `loadEntityTypeGrants` to the system roles of the role's type when you merge.
 
+In 1.2.0 a pending invitation carrying an `ENTITY` role did not count as a place where the role is used: an entity administrator could edit, toggle or delete a role so far only promised to people
+invited into a sibling entity, and the change reached them on acceptance. 1.2.1 counts the entities of each pending (`SENT`) invitation like assignments (see "Who may change a role" above), in the
+same `account.service.ts`; the test mock `service-mocks.ts` gains `invitationEntityLink.findMany`. Flows that change behaviour:
+
+- **Editing, toggling or deleting an `ENTITY` role** (`PATCH /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`, `DELETE /accounts/roles/:roleId`) as an entity administrator, when a
+  pending invitation carrying it targets an entity outside your subtree: `403 This role is used in an entity you do not administer` (`200` before).
+- **Adding grants to such a role** as the account administrator: it is used, not assigned nowhere, so each grant is checked in the invited entities, without the entity-type allowance above.
+
 :::
 
 ## Roles included in a generated project
@@ -189,8 +201,8 @@ Invitations carry their account, entity and role targets. Before issuing one, th
 - cannot mix a platform role with account or entity targets;
 - cannot assign the technical `guest` role.
 
-Acceptance creates the user links and scoped role assignments together. Expired invitations are handled by the generated scheduler, and the English/French email flow is already wired to the invitation
-module.
+Acceptance creates the user links and scoped role assignments together; until then, a pending invitation counts as a place where its `ENTITY` roles are used (see "Who may change a role"). Expired
+invitations are handled by the generated scheduler, and the English/French email flow is already wired to the invitation module.
 
 ## Defense in depth
 

@@ -92,23 +92,27 @@ modifie rien d'autre au niveau du compte : ni rôle de compte, ni état d'utilis
 Les routes de rôles (`POST /accounts/:id/roles`, `POST /accounts/platform/roles`, `PATCH` et `DELETE /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`) portent un identifiant de rôle :
 c'est donc le service qui décide, et il répond `403` :
 
-| Rôle                                                 | Qui peut le créer, le modifier, l'activer ou le supprimer                                                                                               |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rôle système ou modèle global                        | Seulement un détenteur de `ROLE_CUSTOM_MANAGEMENT` via un rôle **plateforme**. Un rôle plateforme qui ne fait que consulter la console ne compte pas.   |
-| Rôle personnalisé `ACCOUNT` du compte A              | `ROLE_CUSTOM_MANAGEMENT` sur A (un rôle de compte sur A, ou un rôle plateforme). Un rôle d'entité ne compte jamais.                                     |
-| Rôle personnalisé `ENTITY` du compte A               | `ROLE_CUSTOM_MANAGEMENT` dans **chaque entité où le rôle est attribué** : l'administrateur du compte, ou un administrateur d'entité de leur sous-arbre. |
-| Rôle personnalisé `ENTITY` de A, attribué nulle part | `ROLE_CUSTOM_MANAGEMENT` sur A ou sur l'une de ses entités.                                                                                             |
+| Rôle                                                    | Qui peut le créer, le modifier, l'activer ou le supprimer                                                                                             |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rôle système ou modèle global                           | Seulement un détenteur de `ROLE_CUSTOM_MANAGEMENT` via un rôle **plateforme**. Un rôle plateforme qui ne fait que consulter la console ne compte pas. |
+| Rôle personnalisé `ACCOUNT` du compte A                 | `ROLE_CUSTOM_MANAGEMENT` sur A (un rôle de compte sur A, ou un rôle plateforme). Un rôle d'entité ne compte jamais.                                   |
+| Rôle personnalisé `ENTITY` du compte A                  | `ROLE_CUSTOM_MANAGEMENT` dans **chaque entité où le rôle sert** : l'administrateur du compte, ou un administrateur d'entité de leur sous-arbre.       |
+| Rôle personnalisé `ENTITY` de A, qui ne sert nulle part | `ROLE_CUSTOM_MANAGEMENT` sur A ou sur l'une de ses entités.                                                                                           |
+
+Un rôle `ENTITY` sert dans une entité quand il y est attribué, ou quand une **invitation en attente** qui le porte vise cette entité. Accepter une invitation attribue ses rôles `ENTITY` dans chacune
+de ses entités : une modification faite avant atteint donc aussi l'invité. Un administrateur d'entité ne peut pas modifier un rôle qui n'est encore promis qu'à des personnes invitées dans une entité
+sœur. Seule une invitation qui peut encore être acceptée (`SENT`) compte ; une invitation expirée ou annulée ne promet plus rien, et une invitation acceptée est devenue des attributions.
 
 Deux règles s'ajoutent pour tous ceux qui ne sont pas la plateforme :
 
 - **Personne n'accorde ce qu'il ne détient pas.** Chaque permission ou section qu'une requête ajoute à un rôle doit être détenue par l'appelant là où le rôle s'applique ; renvoyer ce que le rôle a
   déjà, ou lui retirer quelque chose, ne demande rien de plus. Un utilisateur qui détient un rôle personnalisé ne peut pas l'étendre pour dépasser celui qui l'a rédigé.
-- **Un rôle `ENTITY` attribué nulle part se façonne pour son type d'entité.** Les sections qui n'existent que sur une entité (la vision d'un projet, ses tickets) ne sont jamais détenues sur le compte
-  : l'administrateur du compte peut donc aussi accorder à un tel rôle ce que le type d'entité permet, c'est-à-dire ce qu'accordent les rôles système `ENTITY` actifs (`entity-admin`, `entity-user`, et
-  ceux qu'un projet ajoute pour ses propres types, comme un `project-owner`). Cet administrateur peut déjà attribuer ces rôles système dans toute entité du compte : personne ne dépasse celui qui l'a
-  rédigé. Rien au-delà n'est accordé, un administrateur d'entité n'accorde toujours que ce qu'il détient, et une fois le rôle attribué, chaque modification est de nouveau contrôlée dans chaque entité
-  où il sert. Les rôles du modèle ne portent pas de type d'entité, donc tous les rôles système `ENTITY` comptent ; un projet qui type ses rôles d'entité restreint `loadEntityTypeGrants` dans
-  `account.service.ts` aux rôles système du type du rôle.
+- **Un rôle `ENTITY` qui ne sert nulle part se façonne pour son type d'entité.** Les sections qui n'existent que sur une entité (la vision d'un projet, ses tickets) ne sont jamais détenues sur le
+  compte : l'administrateur du compte peut donc aussi accorder à un tel rôle ce que le type d'entité permet, c'est-à-dire ce qu'accordent les rôles système `ENTITY` actifs (`entity-admin`,
+  `entity-user`, et ceux qu'un projet ajoute pour ses propres types, comme un `project-owner`). Cet administrateur peut déjà attribuer ces rôles système dans toute entité du compte : personne ne
+  dépasse celui qui l'a rédigé. Rien au-delà n'est accordé, un administrateur d'entité n'accorde toujours que ce qu'il détient, et une fois le rôle attribué, ou promis par une invitation en attente,
+  chaque modification est de nouveau contrôlée dans chaque entité où il sert. Les rôles du modèle ne portent pas de type d'entité, donc tous les rôles système `ENTITY` comptent ; un projet qui type
+  ses rôles d'entité restreint `loadEntityTypeGrants` dans `account.service.ts` aux rôles système du type du rôle.
 - **Aucun rôle de compte ou d'entité ne porte une section de plateforme.** Une section de `PLATFORM_ADMINISTRATION` est refusée sur un rôle `ACCOUNT` ou `ENTITY`, quel que soit le demandeur,
   plateforme comprise.
 
@@ -166,6 +170,16 @@ Les parcours de rédaction de rôle qui changent de comportement :
 Inchangés : les rôles `ACCOUNT`, les rôles `ENTITY` déjà attribués dans une entité, les administrateurs d'entité et la plateforme. Un droit qu'aucun rôle système `ENTITY` ne porte, et que l'auteur ne
 détient pas, reste refusé. Si votre projet type ses rôles d'entité, restreignez `loadEntityTypeGrants` aux rôles système du type du rôle lors de la fusion.
 
+En 1.2.0, une invitation en attente portant un rôle `ENTITY` ne comptait pas comme un endroit où le rôle sert : un administrateur d'entité pouvait modifier, activer, désactiver ou supprimer un rôle
+encore seulement promis à des personnes invitées dans une entité sœur, et la modification les atteignait à l'acceptation. La 1.2.1 compte les entités de chaque invitation en attente (`SENT`) comme des
+attributions (voir « Qui peut modifier un rôle » ci-dessus), dans le même `account.service.ts` ; le mock de test `service-mocks.ts` reçoit `invitationEntityLink.findMany`. Les parcours qui changent de
+comportement :
+
+- **Modifier, activer, désactiver ou supprimer un rôle `ENTITY`** (`PATCH /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`, `DELETE /accounts/roles/:roleId`) en tant qu'administrateur
+  d'entité, quand une invitation en attente qui le porte vise une entité hors de votre sous-arbre : `403 This role is used in an entity you do not administer` (`200` avant).
+- **Ajouter des droits à un tel rôle** en tant qu'administrateur du compte : il sert, il n'est pas attribué nulle part, donc chaque droit est contrôlé dans les entités invitées, sans la marge du type
+  d'entité décrite plus haut.
+
 :::
 
 ## Rôles inclus dans un projet généré
@@ -194,8 +208,8 @@ Les invitations transportent leurs cibles compte, entité et rôle. Avant l'envo
 - ne mélange pas un rôle plateforme avec des cibles compte ou entité ;
 - n'attribue pas le rôle technique `guest`.
 
-L'acceptation crée ensemble les liens utilisateur et les affectations de rôles contextualisées. Le scheduler généré traite les invitations expirées, et le flux d'e-mails anglais/français est déjà
-relié au module d'invitation.
+L'acceptation crée ensemble les liens utilisateur et les affectations de rôles contextualisées ; d'ici là, une invitation en attente compte comme un endroit où ses rôles `ENTITY` servent (voir « Qui
+peut modifier un rôle »). Le scheduler généré traite les invitations expirées, et le flux d'e-mails anglais/français est déjà relié au module d'invitation.
 
 ## Défense en profondeur
 

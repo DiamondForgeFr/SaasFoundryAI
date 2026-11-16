@@ -993,6 +993,74 @@ describe('Accounts Module (e2e)', () => {
         expect(await grantsOf(siblingRole.id)).toMatchObject({ name: 'scope-probe-sibling', isActive: true })
       })
 
+      describe('a pending invitation that carries an ENTITY role counts like an assignment (#1222)', () => {
+        const invitationIds: string[] = []
+
+        /** A pending (SENT) invitation into one entity, carrying one role: on acceptance it assigns the role there. */
+        const inviteWithRole = async (email: string, roleId: number, invitedEntityId: string) => {
+          const invitation = await prismaService.invitation.create({
+            data: {
+              inviterUserId: testUser.id,
+              inviteeUserEmail: email,
+              status: 'SENT',
+              entitiesLinked: { create: { entityId: invitedEntityId } },
+              rolesLinked: { create: { roleId } }
+            }
+          })
+          invitationIds.push(invitation.id)
+          return invitation
+        }
+
+        afterAll(async () => {
+          await prismaService.invitation.deleteMany({ where: { id: { in: invitationIds } } })
+        })
+
+        it('a seeded entity-admin cannot edit, toggle or delete an ENTITY role only promised to an invitee of a sibling entity (403, nothing changes)', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-invited-sibling', scope: 'ENTITY', permissionIds: [] })
+          await inviteWithRole('scope-invited-sibling@saasfoundryai.test', promisedRole.id, siblingEntityId)
+          const before = await grantsOf(promisedRole.id)
+          const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+
+          await entityAdminAgent.patch(`/api/accounts/roles/${promisedRole.id}`).send({ name: 'hijacked', permissionIds: [allocation] }).expect(403)
+          await entityAdminAgent.patch(`/api/accounts/roles/${promisedRole.id}/status`).send({ isActive: false }).expect(403)
+          await entityAdminAgent.delete(`/api/accounts/roles/${promisedRole.id}`).expect(403)
+
+          expect(await grantsOf(promisedRole.id)).toEqual(before)
+        })
+
+        it('a seeded entity-admin still manages an ENTITY role promised to an invitee of its own entity, with what it holds', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-invited-own', scope: 'ENTITY', permissionIds: [] })
+          await inviteWithRole('scope-invited-own@saasfoundryai.test', promisedRole.id, entityId)
+          const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+
+          await entityAdminAgent
+            .patch(`/api/accounts/roles/${promisedRole.id}`)
+            .send({ name: 'scope-probe-invited-own-2', permissionIds: [allocation] })
+            .expect(200)
+          expect(await grantsOf(promisedRole.id)).toMatchObject({ name: 'scope-probe-invited-own-2', permissionIds: [allocation] })
+        })
+
+        it('an invitation that can no longer be accepted promises nothing: the role is used nowhere again', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-invited-canceled', scope: 'ENTITY', permissionIds: [] })
+          const invitation = await inviteWithRole('scope-invited-canceled@saasfoundryai.test', promisedRole.id, siblingEntityId)
+          await prismaService.invitation.update({ where: { id: invitation.id }, data: { status: 'CANCELED' } })
+
+          await entityAdminAgent.patch(`/api/accounts/roles/${promisedRole.id}`).send({ name: 'scope-probe-invited-canceled-2' }).expect(200)
+        })
+
+        it('the account admin still manages an ENTITY role promised anywhere in its account', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-invited-admin', scope: 'ENTITY', permissionIds: [] })
+          await inviteWithRole('scope-invited-admin@saasfoundryai.test', promisedRole.id, siblingEntityId)
+          const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+
+          await agent
+            .patch(`/api/accounts/roles/${promisedRole.id}`)
+            .send({ name: 'scope-probe-invited-admin-2', permissionIds: [allocation] })
+            .expect(200)
+          expect(await grantsOf(promisedRole.id)).toMatchObject({ name: 'scope-probe-invited-admin-2', permissionIds: [allocation] })
+        })
+      })
+
       it('nobody adds a permission it does not hold: the holder of a custom role cannot extend it, nor mint one (403)', async () => {
         const roleManagement = await permissionIdOf('ROLE_CUSTOM_MANAGEMENT')
         const entityCreation = await permissionIdOf('ENTITY_CREATION')

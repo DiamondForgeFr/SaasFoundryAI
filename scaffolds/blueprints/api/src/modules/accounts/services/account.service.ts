@@ -43,7 +43,7 @@ const PLATFORM_ADMINISTRATION_MODULE = 'PLATFORM_ADMINISTRATION'
  * What a caller may do to one role: read once per request (see `loadRoleAuthority`).
  *   - `platform`: ROLE_CUSTOM_MANAGEMENT through a PLATFORM role, authority over every role;
  *   - `targets`: where the role applies, each of which the caller must administer;
- *   - `entityTypeGrants`: for an ENTITY role assigned nowhere yet, authored by an administrator of its
+ *   - `entityTypeGrants`: for an ENTITY role used nowhere yet, authored by an administrator of its
  *     account, what the entity type allows (the grants of its system roles), which that author may grant
  *     on top of what it holds (#1230). Null otherwise.
  */
@@ -1349,9 +1349,10 @@ export class AccountService {
    *   name, description, scope and existence are immutable so the platform identity remains stable.
    * - Custom roles (isSystem = false) can edit name / description / grants. Caller must have
    *   access to the role's owning account and hold ROLE_CUSTOM_MANAGEMENT wherever the role
-   *   applies: its account for an ACCOUNT role, every entity it is assigned in for an ENTITY role.
+   *   applies: its account for an ACCOUNT role, every entity it is used in for an ENTITY role
+   *   (assigned there, or targeted by a pending invitation that carries it, #1222).
    * - Every permission or section the update ADDS must be held by the caller there too, and no
-   *   account or entity role carries a PLATFORM_ADMINISTRATION section. On an ENTITY role assigned
+   *   account or entity role carries a PLATFORM_ADMINISTRATION section. On an ENTITY role used
    *   nowhere yet, an administrator of the account may also add what the entity type allows (#1230).
    */
   public async updateCustomRole(
@@ -1496,7 +1497,8 @@ export class AccountService {
    *     global templates AND account-owned custom roles.
    *   - Otherwise (`assertRoleAuthority`) only an account-owned custom role, with
    *     ROLE_CUSTOM_MANAGEMENT wherever it applies: its account for an ACCOUNT role, every entity
-   *     it is assigned in for an ENTITY role. Never a system template.
+   *     it is used in for an ENTITY role (assigned, or promised by a pending invitation). Never a
+   *     system template.
    */
   public async toggleRoleStatus(userId: string, roleId: number, isActive: boolean): Promise<{ id: number; isActive: boolean }> {
     this.logger.debug(`Toggling role ${roleId} → isActive=${isActive}`, 'toggleRoleStatus')
@@ -2166,46 +2168,64 @@ export class AccountService {
 
   /**
    * The caller's authority over one role, read once per request: the caller's assignments (with the
-   * sections they hold) and the entities the role is assigned in, resolved in bulk. The route guard
+   * sections they hold) and the entities the role is used in, resolved in bulk. The route guard
    * cannot do this (the role routes carry a role id, not an account or entity id).
    *
    * Where the role applies (`targets`):
    *   - an ACCOUNT role: its account (ENTITY assignments do not count);
-   *   - an ENTITY role: every entity it is assigned in, so an entity administrator reaches it only when
-   *     each of them lies in the subtree it administers; a role assigned nowhere yet applies to the
-   *     account, its entity assignments included (an administrator of one of its entities may shape it);
+   *   - an ENTITY role: every entity it is used in, so an entity administrator reaches it only when each
+   *     of them lies in the subtree it administers; a role used nowhere yet applies to the account, its
+   *     entity assignments included (an administrator of one of its entities may shape it);
    *   - a system role or a global template: nowhere but the platform (no target).
    *
-   * An ENTITY role assigned nowhere yet is shaped for its entity type, not for the account: sections that
-   * exist only on an entity are never held on the account. When the caller administers the account itself
+   * An ENTITY role is used in an entity when it is assigned there, or when a pending invitation that
+   * carries it targets that entity: accepting the invitation assigns the role in each of its entities, so
+   * a change made before acceptance applies to the invitee as well (#1222). Only a SENT invitation can
+   * still be accepted; an expired, canceled or accepted one promises nothing more.
+   *
+   * An ENTITY role used nowhere yet is shaped for its entity type, not for the account: sections that exist
+   * only on an entity are never held on the account. When the caller administers the account itself
    * (ROLE_CUSTOM_MANAGEMENT through an ACCOUNT role, not through one of its entities), it may also grant
    * what the entity type allows (`entityTypeGrants`, see `loadEntityTypeGrants`), since it may already
    * allocate the type's system roles in any entity of the account (#1230). An administrator of one entity
-   * only grants what it holds.
+   * only grants what it holds. A role promised by a pending invitation is not used nowhere: it is checked in
+   * the invited entities, without the entity type, like an assigned one.
    */
   private async loadRoleAuthority(userId: string, role: { id?: number; scope: string; accountId: string | null; isSystem: boolean }): Promise<RoleAuthority> {
     const accountId = role.isSystem ? null : role.accountId
-    const assignedEntityIds =
-      accountId !== null && role.scope === 'ENTITY' && role.id !== undefined
-        ? (await this.prisma.userRoleAssignment.findMany({ where: { roleId: role.id, entityId: { not: null } }, select: { entityId: true }, distinct: ['entityId'] })).flatMap((assignment) =>
-            assignment.entityId ? [assignment.entityId] : []
-          )
-        : []
+    const usedInEntityIds = accountId !== null && role.scope === 'ENTITY' && role.id !== undefined ? await this.loadEntitiesUsingRole(role.id) : []
 
-    const checker = await this.accountAccessService.getPermissionChecker(userId, assignedEntityIds, { withSubModules: true })
+    const checker = await this.accountAccessService.getPermissionChecker(userId, usedInEntityIds, { withSubModules: true })
 
     let targets: ScopeRequest[] = []
     if (accountId !== null) {
       if (role.scope !== 'ENTITY') targets = [{ kind: 'ACCOUNT', accountId }]
-      else if (assignedEntityIds.length > 0) targets = assignedEntityIds.map((entityId) => ({ kind: 'ENTITY', entityId }))
+      else if (usedInEntityIds.length > 0) targets = usedInEntityIds.map((entityId) => ({ kind: 'ENTITY', entityId }))
       else targets = [{ kind: 'ACCOUNT', accountId, includeEntityAssignments: true }]
     }
 
     const platform = checker.hasOnPlatform(ROLE_CUSTOM_MANAGEMENT)
-    const shapedForEntityType = !platform && accountId !== null && role.scope === 'ENTITY' && assignedEntityIds.length === 0
+    const shapedForEntityType = !platform && accountId !== null && role.scope === 'ENTITY' && usedInEntityIds.length === 0
     const entityTypeGrants = shapedForEntityType && checker.has(ROLE_CUSTOM_MANAGEMENT, { kind: 'ACCOUNT', accountId }) ? await this.loadEntityTypeGrants() : null
 
     return { checker, platform, targets, entityTypeGrants }
+  }
+
+  /**
+   * The entities an ENTITY role is used in, each once: those it is assigned in, then those a pending (SENT)
+   * invitation carrying it targets, which will assign it there on acceptance (#1222).
+   */
+  private async loadEntitiesUsingRole(roleId: number): Promise<string[]> {
+    const [assignments, invitedEntities] = await Promise.all([
+      this.prisma.userRoleAssignment.findMany({ where: { roleId, entityId: { not: null } }, select: { entityId: true }, distinct: ['entityId'] }),
+      this.prisma.invitationEntityLink.findMany({
+        where: { invitation: { status: 'SENT', rolesLinked: { some: { roleId } } } },
+        select: { entityId: true },
+        distinct: ['entityId']
+      })
+    ])
+    const assignedEntityIds = assignments.flatMap((assignment) => (assignment.entityId ? [assignment.entityId] : []))
+    return [...new Set([...assignedEntityIds, ...invitedEntities.map((link) => link.entityId)])]
   }
 
   /**
@@ -2238,7 +2258,7 @@ export class AccountService {
    *     must hold ROLE_CUSTOM_MANAGEMENT in each place the role applies, and each permission or section
    *     it adds must be held there too: nobody grants what they do not hold, so no role can be used to
    *     climb above its editor;
-   *   - on an ENTITY role assigned nowhere yet, an administrator of its account may also grant what the
+   *   - on an ENTITY role used nowhere yet, an administrator of its account may also grant what the
    *     entity type allows (`entityTypeGrants`), never more.
    */
   private assertRoleAuthority(authority: RoleAuthority, role: { isSystem: boolean; accountId: string | null }, added: AddedGrants = { permissions: [], subModules: [] }): void {
