@@ -200,9 +200,9 @@ comportement :
 
 En 1.2.0, supprimer un rôle personnalisé encore attribué répondait `400 Failed to delete custom role` : la clé étrangère de l'attribution refusait la suppression, et la confirmation du panneau des
 rôles annonçait à tort que les attributions seraient retirées. Un rôle porté seulement par une invitation en attente était supprimé, et l'invitation le perdait sans bruit. La 1.2.1 refuse les deux
-avec `409 ROLE_IN_USE` (voir « Supprimer un rôle encore utilisé » ci-dessus). Le correctif touche `account.service.ts`, la page web `account-roles.tsx`, le nouveau `role-delete-refusal.tsx` à côté
-d'elle et les traductions `account`, fusionnés par `sf update` comme les correctifs ci-dessus ; aucune migration de module n'est nécessaire. Un client qui lisait le `400` d'un rôle utilisé reçoit
-désormais `409`.
+avec `409 ROLE_IN_USE` (voir « Supprimer un rôle encore utilisé » ci-dessus). Le correctif touche `account.service.ts`, la page web `account-roles.tsx`, les nouveaux `role-delete-refusal.ts` et
+`role-delete-refusal-notice.tsx` à côté d'elle, et les traductions `account`, fusionnés par `sf update` comme les correctifs ci-dessus ; aucune migration de module n'est nécessaire. Un client qui
+lisait le `400` d'un rôle utilisé reçoit désormais `409`.
 
 :::
 

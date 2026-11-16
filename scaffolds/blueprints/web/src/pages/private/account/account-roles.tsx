@@ -22,7 +22,8 @@ import { Skeleton } from '@/components/ui/shadcn/skeleton'
 import { Input } from '@/components/ui/shadcn/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/shadcn/sheet'
 import { Switch } from '@/components/ui/shadcn/switch'
-import { RoleDeleteRefusalNotice, roleDeleteRefusalOf, type RoleDeleteRefusal } from '@/pages/private/account/role-delete-refusal'
+import { roleDeleteRefusalOf, type RoleDeleteRefusal } from '@/pages/private/account/role-delete-refusal'
+import { RoleDeleteRefusalNotice } from '@/pages/private/account/role-delete-refusal-notice'
 
 import type { RoleScope } from '@/hooks/api/auth'
 

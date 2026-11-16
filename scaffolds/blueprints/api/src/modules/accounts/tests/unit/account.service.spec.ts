@@ -1474,7 +1474,10 @@ class AccountServiceScopeTest extends AccountServiceTest {
           const { prisma } = given({
             actor: accountAdminOfA,
             assignedIn: [E1],
-            heldBy: [{ email: 'alice@acme.test', entityName: 'Acme Lyon' }, { email: 'bob@acme.test', entityName: null }]
+            heldBy: [
+              { email: 'alice@acme.test', entityName: 'Acme Lyon' },
+              { email: 'bob@acme.test', entityName: null }
+            ]
           })
 
           const error = await TestAssertions.assertThrows(remove, ConflictException)

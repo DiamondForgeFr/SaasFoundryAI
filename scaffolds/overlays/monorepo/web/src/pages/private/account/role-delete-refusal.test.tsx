@@ -7,7 +7,8 @@ import { describe, expect, it, vi } from 'vitest'
 /**
  * Dependencies
  */
-import { RoleDeleteRefusalNotice, roleDeleteRefusalOf } from '@/pages/private/account/role-delete-refusal'
+import { roleDeleteRefusalOf } from '@/pages/private/account/role-delete-refusal'
+import { RoleDeleteRefusalNotice } from '@/pages/private/account/role-delete-refusal-notice'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 
