@@ -1094,7 +1094,8 @@ describe('Accounts Module (e2e)', () => {
           .expect(200)
         expect(await grantsOf(ownRole.id)).toMatchObject({ name: 'scope-probe-mine-2', permissionIds: [allocation] })
         await entityAdminAgent.patch(`/api/accounts/roles/${ownRole.id}/status`).send({ isActive: false }).expect(200)
-        // A role still assigned cannot be deleted (the assignment's foreign key): detach the holder first.
+        // A role still assigned is not deleted (409 ROLE_IN_USE, #1221): unassign the holder first.
+        await entityAdminAgent.delete(`/api/accounts/roles/${ownRole.id}`).expect(409)
         await prismaService.userRoleAssignment.deleteMany({ where: { roleId: ownRole.id } })
         await entityAdminAgent.delete(`/api/accounts/roles/${ownRole.id}`).expect(200)
         expect(await prismaService.role.count({ where: { id: ownRole.id } })).toBe(0)
@@ -1110,9 +1111,79 @@ describe('Accounts Module (e2e)', () => {
           .send({ name: 'scope-probe-admin-2', permissionIds: [allocation] })
           .expect(200)
         await agent.patch(`/api/accounts/roles/${siblingRole.id}/status`).send({ isActive: false }).expect(200)
+        await agent.delete(`/api/accounts/roles/${siblingRole.id}`).expect(409)
         await prismaService.userRoleAssignment.deleteMany({ where: { roleId: siblingRole.id } })
         await agent.delete(`/api/accounts/roles/${siblingRole.id}`).expect(200)
         expect(await prismaService.role.count({ where: { id: siblingRole.id } })).toBe(0)
+      })
+
+      /**
+       * Deleting a role still in use (#1221): the delete is refused with a 409 that names who holds the role, and
+       * nothing changes. A pending invitation carrying the role counts (accepting it would assign the role), as it does
+       * for the authority check (#1222). Before #1221 the assignment's foreign key refused the delete with a bare 400.
+       */
+      describe('a role still in use is not deleted (#1221)', () => {
+        const invitationIds: string[] = []
+
+        afterAll(async () => {
+          await prismaService.invitation.deleteMany({ where: { id: { in: invitationIds } } })
+        })
+
+        const roleState = async (roleId: number) => ({
+          exists: (await prismaService.role.count({ where: { id: roleId } })) === 1,
+          assignments: await prismaService.userRoleAssignment.count({ where: { roleId } }),
+          invitationLinks: await prismaService.invitationRoleLink.count({ where: { roleId } })
+        })
+
+        it('answers 409 ROLE_IN_USE naming the users who hold the role, and keeps the role and its assignments', async () => {
+          const heldRole = await createRoleAsAccountAdmin({ name: 'scope-probe-held', scope: 'ENTITY', permissionIds: [] })
+          await createProbeUser('scope-held-own@saasfoundryai.test', { roleId: heldRole.id, entityId }, { entityId })
+          await createProbeUser('scope-held-sibling@saasfoundryai.test', { roleId: heldRole.id, entityId: siblingEntityId }, { entityId: siblingEntityId })
+
+          const res = await agent.delete(`/api/accounts/roles/${heldRole.id}`).expect(409)
+
+          expect(res.body.message).toMatch(/^ROLE_IN_USE: the role "scope-probe-held" is still assigned to /)
+          expect(res.body.message).toContain('scope-held-own@saasfoundryai.test (Test Entity)')
+          expect(res.body.message).toContain(`scope-held-sibling@saasfoundryai.test (entity ${siblingEntityId})`)
+          expect(res.body.message).toContain('first unassign it')
+          expect(await roleState(heldRole.id)).toEqual({ exists: true, assignments: 2, invitationLinks: 0 })
+        })
+
+        it('answers 409 naming the invitee when only a pending invitation carries the role, and keeps the invitation whole', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-promised', scope: 'ENTITY', permissionIds: [] })
+          const invitation = await prismaService.invitation.create({
+            data: {
+              inviterUserId: testUser.id,
+              inviteeUserEmail: 'scope-promised@saasfoundryai.test',
+              status: 'SENT',
+              entitiesLinked: { create: { entityId } },
+              rolesLinked: { create: { roleId: promisedRole.id } }
+            }
+          })
+          invitationIds.push(invitation.id)
+
+          const res = await agent.delete(`/api/accounts/roles/${promisedRole.id}`).expect(409)
+
+          expect(res.body.message).toBe(
+            'ROLE_IN_USE: the role "scope-probe-promised" is still carried by the pending invitation to scope-promised@saasfoundryai.test (Test Entity). To delete it, first cancel the invitations.'
+          )
+          expect(await roleState(promisedRole.id)).toEqual({ exists: true, assignments: 0, invitationLinks: 1 })
+
+          // Once the invitation can no longer be accepted, it promises nothing: the role goes, and its link with it.
+          await prismaService.invitation.update({ where: { id: invitation.id }, data: { status: 'CANCELED' } })
+          await agent.delete(`/api/accounts/roles/${promisedRole.id}`).expect(200)
+          expect(await roleState(promisedRole.id)).toEqual({ exists: false, assignments: 0, invitationLinks: 0 })
+        })
+
+        it('still deletes a role nobody holds, with its grants', async () => {
+          const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+          const unusedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-unused', scope: 'ACCOUNT', permissionIds: [allocation] })
+
+          await agent.delete(`/api/accounts/roles/${unusedRole.id}`).expect(200)
+
+          expect(await roleState(unusedRole.id)).toEqual({ exists: false, assignments: 0, invitationLinks: 0 })
+          expect(await prismaService.rolePermissionLink.count({ where: { roleId: unusedRole.id } })).toBe(0)
+        })
       })
     })
   })

@@ -305,7 +305,9 @@ roles:
   tk_no-account-selected_: Select an account in the header to browse its roles.
   tk_system_: System
   tk_delete_: Delete role
-  tk_delete-confirm_: Delete this custom role? Existing assignments will be removed.
+  tk_delete-confirm_: Delete this custom role? A role still assigned, or carried by a pending invitation, is not deleted.
+  tk_delete-in-use_: This role is still in use and was not deleted.
+  tk_delete-failed_: The role could not be deleted.
   tk_edit_: Edit role
   tk_modules_: Modules
   tk_modules-empty_: No modules attached.

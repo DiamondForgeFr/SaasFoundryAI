@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { Prisma } from '@/generated/prisma/client'
 
 /**
@@ -38,6 +38,10 @@ import type { ScopeRequest } from '@common/services/account-access/scope-filter'
 const ROLE_CUSTOM_MANAGEMENT = 'ROLE_CUSTOM_MANAGEMENT'
 /** Its sections give platform reach: they belong on a PLATFORM role only (the guard counts PLATFORM roles only on its routes). */
 const PLATFORM_ADMINISTRATION_MODULE = 'PLATFORM_ADMINISTRATION'
+/** Prefix of the 409 a role still in use answers to a delete (#1221): the web role panel reads it. */
+const ROLE_IN_USE = 'ROLE_IN_USE'
+/** How many holders the ROLE_IN_USE message names before it counts the rest. */
+const ROLE_HOLDERS_NAMED = 5
 
 /**
  * What a caller may do to one role: read once per request (see `loadRoleAuthority`).
@@ -1465,6 +1469,13 @@ export class AccountService {
    * Delete a custom role. System roles and global templates cannot be deleted here. The caller must
    * hold ROLE_CUSTOM_MANAGEMENT wherever the role applies (`assertRoleAuthority`); a caller without
    * platform authority gets a 403 on a system role before learning it cannot be deleted at all.
+   *
+   * A role still in use is never deleted, and its assignments are never removed on the way (#1221):
+   * deleting it would silently take access away from its holders. While a user holds the role, or a
+   * pending (SENT) invitation carries it (accepting would assign it), the answer is a 409
+   * `ROLE_IN_USE` that names those users and invitations, and nothing changes. Unassign the role and
+   * cancel those invitations first. The role's grants (module, section and permission links) and the
+   * links of invitations that can no longer be accepted go with the role.
    */
   public async deleteCustomRole(userId: string, roleId: number): Promise<{ id: number }> {
     this.logger.debug(`Deleting custom role ${roleId}`, 'deleteCustomRole')
@@ -1478,13 +1489,60 @@ export class AccountService {
       if (role.isSystem) throw new UnauthorizedException('System roles cannot be deleted')
       if (!role.accountId) throw new UnauthorizedException('Cannot delete a global role from this endpoint')
 
+      const holders = await this.loadRoleHolders(roleId)
+      if (holders.users.length > 0 || holders.invitations.length > 0) throw new ConflictException(this.roleInUseMessage(role.name, holders))
+
       await this.prisma.role.delete({ where: { id: roleId } })
       return { id: roleId }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException) throw error
+      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof ConflictException) throw error
+      // An assignment written between the check and the delete: the assignment's foreign key refuses the delete.
+      if ((error as { code?: string }).code === 'P2003') throw new ConflictException(`${ROLE_IN_USE}: the role was assigned while it was being deleted. Unassign it first.`)
       this.logger.error(`Failed to delete custom role: ${error.message}`, 'deleteCustomRole')
       throw new BadRequestException('Failed to delete custom role')
     }
+  }
+
+  /**
+   * Who still holds a role: the users it is assigned to (with the entity, for an ENTITY assignment)
+   * and the invitees of the pending (SENT) invitations that carry it (with the entities they invite
+   * into). Each label is read by a person: an email, and the entity's profile name when it has one.
+   */
+  private async loadRoleHolders(roleId: number): Promise<{ users: string[]; invitations: string[] }> {
+    const entityLabel = (entity: { id: string; organization: { name: string } | null }) => entity.organization?.name || `entity ${entity.id}`
+    const entitySelect = { select: { id: true, organization: { select: { name: true } } } } as const
+    const [assignments, invitations] = await Promise.all([
+      this.prisma.userRoleAssignment.findMany({
+        where: { roleId },
+        select: { user: { select: { email: true } }, entity: entitySelect },
+        orderBy: { createdAt: 'asc' }
+      }),
+      this.prisma.invitation.findMany({
+        where: { status: 'SENT', rolesLinked: { some: { roleId } } },
+        select: { inviteeUserEmail: true, entitiesLinked: { select: { entity: entitySelect } } },
+        orderBy: { invitedAt: 'asc' }
+      })
+    ])
+    return {
+      users: assignments.map((assignment) => (assignment.entity ? `${assignment.user.email} (${entityLabel(assignment.entity)})` : assignment.user.email)),
+      invitations: invitations.map((invitation) => {
+        const entities = invitation.entitiesLinked.map((link) => entityLabel(link.entity))
+        return entities.length > 0 ? `${invitation.inviteeUserEmail} (${entities.join(', ')})` : invitation.inviteeUserEmail
+      })
+    }
+  }
+
+  /** The 409 of a role still in use: who holds it, then what to do. Long lists name the first few and count the rest. */
+  private roleInUseMessage(roleName: string, holders: { users: string[]; invitations: string[] }): string {
+    const list = (labels: string[]) => {
+      const named = labels.slice(0, ROLE_HOLDERS_NAMED).join(', ')
+      return labels.length > ROLE_HOLDERS_NAMED ? `${named} and ${labels.length - ROLE_HOLDERS_NAMED} more` : named
+    }
+    const parts: string[] = []
+    if (holders.users.length > 0) parts.push(`assigned to ${list(holders.users)}`)
+    if (holders.invitations.length > 0) parts.push(`carried by the pending invitation${holders.invitations.length > 1 ? 's' : ''} to ${list(holders.invitations)}`)
+    const steps = [holders.users.length > 0 ? 'unassign it' : null, holders.invitations.length > 0 ? 'cancel the invitations' : null].filter((step): step is string => step !== null)
+    return `${ROLE_IN_USE}: the role "${roleName}" is still ${parts.join(' and ')}. To delete it, first ${steps.join(' and ')}.`
   }
 
   /**

@@ -117,6 +117,20 @@ Two more rules hold for everyone below the platform:
 
 System roles stay renamable by nobody and deletable by nobody; a platform administrator maintains their grants.
 
+### Deleting a role still in use
+
+A custom role is deleted only when nobody holds it. While the role is assigned to a user, or carried by a pending (`SENT`) invitation (accepting it would assign the role),
+`DELETE /accounts/roles/:roleId` answers `409` and changes nothing: no assignment is removed, no invitation loses the role. The message starts with `ROLE_IN_USE:` and names the holders, each user by
+email (with the entity, for an `ENTITY` assignment) and each invitation by its invitee (with the entities it invites into); a long list names the first five and counts the rest:
+
+```text
+ROLE_IN_USE: the role "support" is still assigned to alice@acme.test (Acme Lyon) and carried by the pending invitation to bob@acme.test (Acme Paris). To delete it, first unassign it and cancel the invitations.
+```
+
+Unassign the role (from the user edit dialog) and cancel those invitations, then delete it again. An expired, canceled or accepted invitation holds nothing, and the role's grants go with it. The
+authority check comes first: a caller who may not manage the role gets the `403` above, never the list of holders. The role panel of the web app keeps the role sheet open and shows the refusal with
+the holders the API names.
+
 ::: warning Scope-less endpoints
 
 Endpoints without a scope use the union of the user's assignments, which is what lets a role held in one account act on another. Every route that takes an account or entity id must declare it with
@@ -176,6 +190,11 @@ same `account.service.ts`; the test mock `service-mocks.ts` gains `invitationEnt
   pending invitation carrying it targets an entity outside your subtree: `403 This role is used in an entity you do not administer` (`200` before).
 - **Adding grants to such a role** as the account administrator: it is used, so each grant is checked in the invited entities; the entity-type allowance above still applies to the account
   administrator.
+
+In 1.2.0 deleting a custom role that was still assigned answered `400 Failed to delete custom role`: the assignment's foreign key refused the delete, and the confirmation of the web role panel wrongly
+announced that the assignments would be removed. A role carried only by a pending invitation was deleted, and the invitation silently lost it. 1.2.1 refuses both with `409 ROLE_IN_USE` (see "Deleting
+a role still in use" above). The fix lives in `account.service.ts`, the web page `account-roles.tsx`, the new `role-delete-refusal.tsx` next to it and the `account` locales, merged by `sf update` like
+the fixes above; no module migration is needed. A client that read the `400` of a used role now gets `409`.
 
 :::
 

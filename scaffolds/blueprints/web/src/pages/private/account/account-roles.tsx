@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/shadcn/skeleton'
 import { Input } from '@/components/ui/shadcn/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/shadcn/sheet'
 import { Switch } from '@/components/ui/shadcn/switch'
+import { RoleDeleteRefusalNotice, roleDeleteRefusalOf, type RoleDeleteRefusal } from '@/pages/private/account/role-delete-refusal'
 
 import type { RoleScope } from '@/hooks/api/auth'
 
@@ -240,13 +241,18 @@ function RoleDetailSheet({
   onOpenChange,
   onEdit,
   onDelete,
-  canManage
+  canManage,
+  isDeleting,
+  deleteRefusal
 }: {
   role: RoleListItem | null
   onOpenChange: (open: boolean) => void
   onEdit: (role: RoleListItem) => void
   onDelete: (role: RoleListItem) => void
   canManage: boolean
+  isDeleting: boolean
+  /** Why the API refused to delete this role (still in use: 409 ROLE_IN_USE), shown above the actions. */
+  deleteRefusal: RoleDeleteRefusal | null
 }) {
   const { t: tAccount } = useTranslation('account')
   const { t: tCommon } = useTranslation('common')
@@ -322,14 +328,18 @@ function RoleDetailSheet({
           </section>
         </div>
 
+        {deleteRefusal && <RoleDeleteRefusalNotice refusal={deleteRefusal} />}
+
         {/* Footer actions */}
         {canManage && (
           <div className="border-border bg-card/50 flex items-center justify-end gap-2 border-t px-6 py-3">
             {!role.isSystem && (
               <button
                 type="button"
+                data-testid="role-delete-button"
+                disabled={isDeleting}
                 onClick={() => onDelete(role)}
-                className="border-border bg-card text-muted-foreground hover:text-destructive hover:border-destructive/40 inline-flex cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1.5 text-[11px] font-bold tracking-wider uppercase transition-colors"
+                className="disabled:cursor-wait disabled:opacity-60 border-border bg-card text-muted-foreground hover:text-destructive hover:border-destructive/40 inline-flex cursor-pointer items-center gap-1.5 rounded-[2px] border px-2.5 py-1.5 text-[11px] font-bold tracking-wider uppercase transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 {tCommon('actions.tk_delete_')}
@@ -385,6 +395,8 @@ export function AccountRoles() {
   // Store the open role's id, NOT the full object — refetches return new object refs
   // and would otherwise trigger a setState/useEffect infinite loop.
   const [openRoleId, setOpenRoleId] = useState<number | null>(null)
+  // The last refused delete, kept with its role so it never shows on another role's sheet.
+  const [deleteRefusal, setDeleteRefusal] = useState<{ roleId: number; refusal: RoleDeleteRefusal } | null>(null)
 
   const canManageCustomRoles = hasPermission('ROLE_CUSTOM_MANAGEMENT')
   const deleteRoleMutation = useDeleteCustomRole()
@@ -488,11 +500,26 @@ export function AccountRoles() {
     setOpenRoleId(null)
   }
 
-  const handleDelete = (role: RoleListItem) => {
+  /**
+   * The sheet stays open until the API answers: a role still assigned, or carried by a pending
+   * invitation, is not deleted (409 ROLE_IN_USE, account.service.ts:deleteCustomRole), and the sheet
+   * shows who holds it. On success the role leaves the list and the sheet closes.
+   */
+  const handleDelete = async (role: RoleListItem) => {
     if (!accountId || role.isSystem) return
     if (!confirm(tAccount('roles.tk_delete-confirm_'))) return
-    deleteRoleMutation.mutate({ roleId: role.id, accountId })
-    setOpenRoleId(null)
+    setDeleteRefusal(null)
+    try {
+      await deleteRoleMutation.mutateAsync({ roleId: role.id, accountId })
+      setOpenRoleId(null)
+    } catch (e) {
+      setDeleteRefusal({ roleId: role.id, refusal: roleDeleteRefusalOf(e) })
+    }
+  }
+
+  const openRoleSheet = (roleId: number | null) => {
+    setDeleteRefusal(null)
+    setOpenRoleId(roleId)
   }
 
   return (
@@ -540,7 +567,7 @@ export function AccountRoles() {
             <RoleCard
               key={role.id}
               role={role}
-              onOpen={() => setOpenRoleId(role.id)}
+              onOpen={() => openRoleSheet(role.id)}
               canToggle={canToggleRole(role)}
               isToggling={togglingRoleId === role.id}
               onToggle={(next) => handleToggle(role, next)}
@@ -549,7 +576,15 @@ export function AccountRoles() {
         </div>
       )}
 
-      <RoleDetailSheet role={openRole} onOpenChange={(open) => !open && setOpenRoleId(null)} onEdit={handleEdit} onDelete={handleDelete} canManage={canManageRole(openRole)} />
+      <RoleDetailSheet
+        role={openRole}
+        onOpenChange={(open) => !open && openRoleSheet(null)}
+        onEdit={handleEdit}
+        onDelete={(role) => void handleDelete(role)}
+        canManage={canManageRole(openRole)}
+        isDeleting={deleteRoleMutation.isPending}
+        deleteRefusal={openRole && deleteRefusal?.roleId === openRole.id ? deleteRefusal.refusal : null}
+      />
 
       {editorTarget && <CreateRoleDialog isOpen={editorTarget !== null} onOpenChange={(open) => !open && setEditorTarget(null)} target={editorTarget} />}
     </div>
