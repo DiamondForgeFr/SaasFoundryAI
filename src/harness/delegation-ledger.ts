@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'crypto'
 import { createReadStream } from 'fs'
-import { lstat, mkdir, open, readdir, readFile, stat, unlink, writeFile } from 'fs/promises'
+import { lstat, mkdir, open, readdir, readFile, rename, stat, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { createInterface } from 'readline'
 
@@ -884,7 +884,11 @@ function parseLines(text: string | undefined): { entries: LedgerEntry[]; skipped
   return { entries, skipped }
 }
 
-/** The lines a writer left in the spool because the lock stayed taken: read by everyone, appended by the next lock holder. */
+/**
+ * The lines a writer left in the spool because the lock stayed taken: read by everyone, appended by the next lock holder.
+ * `files` names only the spool files that were read whole, the ones a drain may delete: a file it could not parse is
+ * left where it is (#1240), so a line a writer of an older CLI is still writing in place is never deleted half-read.
+ */
 async function spooled(dir: string): Promise<{ entries: LedgerEntry[]; files: string[] }> {
   const spool = join(dir, SPOOL_DIR)
   const names = await readdir(spool).catch(() => [] as string[])
@@ -892,16 +896,30 @@ async function spooled(dir: string): Promise<{ entries: LedgerEntry[]; files: st
   const files: string[] = []
   for (const name of names.filter((entry) => entry.endsWith('.json')).sort()) {
     const entry = parseEntry(await readFile(join(spool, name), 'utf8').catch(() => ''))
+    if (!entry) continue
     files.push(join(spool, name))
-    if (entry) entries.push(entry)
+    entries.push(entry)
   }
   return { entries, files }
 }
 
+/**
+ * The spool is read before the file (#1240). A drain appends a spooled line to the file before it deletes it from the
+ * spool, so a line missing from this spool snapshot was already in the file when the file is read. Read the other
+ * way round, a drain between the two reads hid its lines from the reader. A non-run line read in both places counts
+ * once; two sightings of a run are merged by the fold anyway.
+ */
+async function snapshot(dir: string): Promise<{ entries: LedgerEntry[]; skipped: number }> {
+  const spool = (await spooled(dir)).entries
+  const { entries, skipped } = parseLines(await regularFileText(join(dir, LEDGER_FILE)))
+  const inFile = new Set(entries.map(keyOf))
+  return { entries: [...entries, ...spool.filter((entry) => entry.type === 'run' || !inFile.has(keyOf(entry)))], skipped }
+}
+
 /** The folded history of the ledger in `dir`; an absent ledger is an empty one. */
 export async function readLedger(dir: string): Promise<LedgerState> {
-  const { entries, skipped } = parseLines(await regularFileText(join(dir, LEDGER_FILE)))
-  return foldLedger([...entries, ...(await spooled(dir)).entries], skipped)
+  const { entries, skipped } = await snapshot(dir)
+  return foldLedger(entries, skipped)
 }
 
 async function appendLines(file: string, entries: readonly LedgerEntry[]): Promise<void> {
@@ -940,8 +958,23 @@ export async function transact<T>(dir: string, action: (transaction: LedgerTrans
       const drained = await spooled(dir)
       const inFile = new Set(entries.map(keyOf))
       const known = new Set([...inFile, ...drained.entries.map(keyOf)])
-      // What the spool holds and the file does not is appended first; a spooled line is deleted only once it is.
-      const pending: LedgerEntry[] = drained.entries.filter((entry, index, all) => !inFile.has(keyOf(entry)) && all.findIndex((other) => keyOf(other) === keyOf(entry)) === index)
+      // What the spool holds and the file does not is appended first; a spooled line is deleted only once it is. A
+      // spooled run that repeats one already written is kept when it adds a fact, as `appendRun` would have done
+      // under the lock: dropping it on its id lost what a second sighting knew (#1240).
+      const runs = new Map<string, DelegationRunRecord>()
+      for (const entry of entries) if (entry.type === 'run') runs.set(entry.id, runs.has(entry.id) ? mergeRuns(runs.get(entry.id)!, entry) : entry)
+      const pending: LedgerEntry[] = []
+      for (const entry of drained.entries) {
+        if (entry.type === 'run') {
+          const previous = runs.get(entry.id)
+          if (previous && !addsInformation(previous, entry)) continue
+          runs.set(entry.id, previous ? mergeRuns(previous, entry) : entry)
+        } else {
+          if (inFile.has(keyOf(entry))) continue
+          inFile.add(keyOf(entry))
+        }
+        pending.push(entry)
+      }
       const transaction: LedgerTransaction = {
         state: foldLedger([...entries, ...drained.entries], skipped),
         entries: [...entries, ...drained.entries],
@@ -961,13 +994,18 @@ export async function transact<T>(dir: string, action: (transaction: LedgerTrans
   )
 }
 
-/** Leave a line in the spool when the lock stayed taken: it is merged by the next writer and read by everyone meanwhile. */
+/**
+ * Leave a line in the spool when the lock stayed taken: it is merged by the next writer and read by everyone meanwhile.
+ * The line is written under a name readers ignore, then renamed into place (#1240): written in place, a lock holder
+ * draining the spool could read it empty, between the creation of the file and its write, and delete it.
+ */
 async function spool(dir: string, entry: LedgerEntry): Promise<void> {
   const spoolDir = join(dir, SPOOL_DIR)
   await mkdir(spoolDir, { recursive: true, mode: 0o700 })
-  await writeFile(join(spoolDir, `${Date.now()}-${entry.type}-${entry.id}.json`), JSON.stringify(entry), { mode: 0o600, flag: 'wx' }).catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== 'EEXIST') throw error
-  })
+  const name = `${Date.now()}-${entry.type}-${entry.id}-${randomUUID().slice(0, 8)}`
+  const pending = join(spoolDir, `${name}.tmp`)
+  await writeFile(pending, JSON.stringify(entry), { mode: 0o600, flag: 'wx' })
+  await rename(pending, join(spoolDir, `${name}.json`))
 }
 
 async function appendOrSpool(dir: string, entry: LedgerEntry, write: () => Promise<void>): Promise<'written' | 'spooled'> {
@@ -1063,6 +1101,8 @@ function describeUnmatched(record: DelegationSignalRecord, state: LedgerState): 
 
 /** Stream the ledger, handing every line that contains `needle` to `visit`: a lookup by id does not parse the whole history. */
 async function scanLines(dir: string, needle: string, visit: (entry: LedgerEntry) => void): Promise<void> {
+  // The spool first, as in `snapshot`: a drain between the two reads cannot hide a line.
+  const spool = (await spooled(dir)).entries
   const file = join(dir, LEDGER_FILE)
   const info = await lstat(file).catch(() => undefined)
   if (info?.isFile() && !info.isSymbolicLink()) {
@@ -1073,7 +1113,7 @@ async function scanLines(dir: string, needle: string, visit: (entry: LedgerEntry
       if (entry) visit(entry)
     }
   }
-  for (const entry of (await spooled(dir)).entries) if (JSON.stringify(entry).includes(needle)) visit(entry)
+  for (const entry of spool) if (JSON.stringify(entry).includes(needle)) visit(entry)
 }
 
 /** The segments already recorded for one agent, oldest first: where the next stop of a resumed agent starts. */
