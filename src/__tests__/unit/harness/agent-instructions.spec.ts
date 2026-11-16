@@ -20,6 +20,7 @@ import {
   planAgentInstructions,
   resolveInstructionFile,
   STATUS_OUTPUT_INSTRUCTIONS,
+  TICKET_FIRST_INSTRUCTIONS,
   withGeneratedInstructions
 } from '../../../harness/agent-instructions'
 import { REGION_HEADINGS } from '../../../harness/claude-md-migration'
@@ -804,6 +805,24 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
     // The bridges and the common instructions are recognised by released bytes: the section is not added to them.
     expect(COMMON_INSTRUCTIONS).not.toContain('## Reading the project status')
     expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## Reading the project status')
+  })
+
+  // #1232 — an agent with an expired token committed `fix(#TBD)` work on unnumbered branches and pushed nothing.
+  it('puts the ticket before the code and an unreachable tool in the hands of the developer, in the generated region only', () => {
+    expect(GENERATED_INSTRUCTIONS).toContain(TICKET_FIRST_INSTRUCTIONS.trimEnd())
+    const flat = TICKET_FIRST_INSTRUCTIONS.replace(/\s+/g, ' ')
+    for (const rule of [
+      'The ticket exists before the first line of code',
+      'A placeholder such as `#TBD` or `#XXX`, or a branch without the ticket number, is no ticket',
+      'When the ticket tool or the remote is unreachable',
+      'Report the blocker to the developer first',
+      'propose temporary alternatives',
+      'Never pick a workaround alone'
+    ]) {
+      expect(flat).toContain(rule)
+    }
+    expect(COMMON_INSTRUCTIONS).not.toContain('## Ticket first, and an unreachable tool')
+    expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## Ticket first, and an unreachable tool')
   })
 
   // #1155 — a .molten/project.json with no job is no pipeline: AI Testing falls back to the npm suite.

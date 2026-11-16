@@ -1,1 +1,7 @@
+# The commit lands on a branch the workflow names after its ticket, a long-lived branch, a host-named
+# agent branch or a detached HEAD (#1232): see workflow-branch-guard.mjs. Checked first, before the tests.
+sf_branch_guard="$(dirname "$0")/workflow-branch-guard.mjs"
+if [ -f "$sf_branch_guard" ]; then
+  node "$sf_branch_guard" commit
+fi
 npm run test:staged

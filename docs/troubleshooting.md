@@ -203,15 +203,20 @@ Code style issues found in the above file(s). Run Prettier with --write to fix.
 
 **Cause** — Three Husky hooks gate every commit:
 
-| Hook         | What it checks                                                                                  |
-| ------------ | ----------------------------------------------------------------------------------------------- |
-| `commit-msg` | `commitlint` — `<type>(#<ticket>): <description>` shape                                         |
-| `pre-commit` | `npm run test:staged` — impact-selected, read-only staged validation                            |
-| `pre-push`   | RC version/tag availability validation and WIP checks; Docker runs explicitly during AI Testing |
+| Hook         | What it checks                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commit-msg` | `commitlint` — `<type>(#<ticket>): <description>` shape, the ticket a number                                                                      |
+| `pre-commit` | the workflow branch guard, then `npm run test:staged` — impact-selected, read-only staged validation                                              |
+| `pre-push`   | the workflow branch guard on every pushed branch, RC version/tag availability validation and WIP checks; Docker runs explicitly during AI Testing |
 
 **Fix**
 
-- **commitlint failure** — Rewrite the commit message with the right shape: `feat(#317): SRS calibration` etc. The ticket scope is required.
+- **commitlint failure** — Rewrite the commit message with the right shape: `feat(#317): SRS calibration` etc. The ticket scope is required, and it is a number: `fix(#TBD): …` fails the
+  `ticket-reference` rule. Create the ticket first.
+- **`Workflow branch guard (#1232): commit refused on "…"`** (or `push refused`) — The branch is not one the workflow names: `.saasfoundry.json` → `workflow.branchNaming` (`feature/{N}-…`,
+  `fix/{N}-…`, `rc-{version}`), the main, working and release branches. Rename it after its ticket, `git branch -m fix/<N>-<description>`. A detached HEAD and a `worktree-agent-<id>` branch commit
+  freely and are checked at push: push them to the ticket branch, `git push origin HEAD:fix/<N>-<description>`. For a deliberate one-off branch, the developer sets `SF_WORKFLOW_BYPASS_BRANCH_GUARD=1`
+  for one command (see the escape hatches of the [workflow system](guide/workflow-system.md#escape-hatches)).
 - **Prettier check failed** — Run `npm run format`, inspect the changes, stage them, and create the commit again. The hook itself never rewrites files.
 - **ESLint / TS error** — Read the output, fix the reported line, re-stage, re-commit. `--no-verify` exists but every reviewer will ask why.
 

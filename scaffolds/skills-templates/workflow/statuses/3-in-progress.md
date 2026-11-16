@@ -39,6 +39,12 @@ These stay in the `In progress` board column but flow through a **separate lifec
 
 ## Action checklist — Story / Task / Issue
 
+- [ ] **The ticket exists first** — no line of code before the ticket exists in the configured ticket tool. Its number names the branch (`workflow.branchNaming`) and every commit (`<type>(#<N>): …`).
+      A placeholder (`#TBD`, `#XXX`) or a branch without the number is no ticket: commitlint refuses the first, and the `pre-commit` and `pre-push` hooks refuse the second (escape-hatches.md → Branch
+      guard)
+- [ ] **An unreachable ticket tool or remote** — when `gh`, the board, `git fetch` or `git push` fails (an expired token, no network): stop instead of working around it. Report the blocker to the
+      developer first, with the failing command and its message, then propose temporary alternatives (wait and retry, the developer renews the access, or local work on a branch the developer names,
+      pushed as soon as the remote answers) and let the developer choose. Never pick a workaround alone
 - [ ] **Who builds it** — read the `delegation:` line of `sf status --agent-friendly --no-network` (or `sf agents delegation status`): the shared answer is the team's default, a clone may override it
       locally, and the line reports the effective value. `allowed`: the session hands the ticket, from here to the end of AI Testing, to one background agent in its own worktree, on the task kind of
       the profile's `steps.execute.taskKind`, and keeps talking with the developer. A trivial change (one known file, about 20 lines or fewer: a typo, a configuration value, a documentation line)
@@ -66,13 +72,15 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - [ ] **Test strategy** — while you work, run the tests the change affects: the related tests of the touched files (the runner's related-tests option, or the project's own selection when it declares
       one), not the full suites, and not after every iteration. The full suites run once, at the end of AI Testing. After a rebase, rerun the affected tests, not everything, unless the rebase brought
       changes to shared files (build, configuration, test helpers). The ready pull request's CI stays the final check.
-- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build`, then `npm run lint` → the tests the change affects → commit and push. Child tickets may continue
-      through their own lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have,
-      and names the command to run (a bundled child is checked on its delivery parent's branch)
+- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build`, then `npm run lint` → the tests the change affects → commit and push. Child tickets may
+      continue through their own lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does
+      not have, and names the command to run (a bundled child is checked on its delivery parent's branch)
 
 ## Errors to avoid
 
 - Coding without creating a branch first
+- Coding before the ticket exists: committing under a placeholder (`#TBD`) or on a branch without the ticket number, or leaving commits that are on no remote, under no ticket and in no pull request
+  without telling the developer
 - Mixing multiple tickets in the same branch
 - Moving to AI Testing with lint/build errors
 - Forgetting to commit or push before AI Testing (the pushed-commits guard refuses the move)
@@ -81,5 +89,5 @@ These stay in the `In progress` board column but flow through a **separate lifec
   one first (unless the developer explicitly asks to pause)
 - The session building a ticket itself while delegation is `allowed`, a trivial change excepted
 - A delegated agent recording the delegation consent: only the developer's own reply does
-- A shell call that is not one plain command (a `&&`, `;` or `||` chain, a `$(…)` substitution, a loop, an inline script such as `node -e`, a file written through a heredoc): the guard hook refuses
-  it and names the split to make, so run each command in its own call, and write long text to a file (`git commit -F <file>`, `--body-file <file>`)
+- A shell call that is not one plain command (a `&&`, `;` or `||` chain, a `$(…)` substitution, a loop, an inline script such as `node -e`, a file written through a heredoc): the guard hook refuses it
+  and names the split to make, so run each command in its own call, and write long text to a file (`git commit -F <file>`, `--body-file <file>`)

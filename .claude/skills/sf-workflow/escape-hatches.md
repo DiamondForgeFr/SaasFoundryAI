@@ -45,6 +45,7 @@ with code `2`.
 | `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`         | Ticket work committed and pushed to origin                          | `update-status` to AI testing                                                              |
 | `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`   | Matching open PR (draft or ready) required                          | `update-status` to Human testing or In review                                              |
 | `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`      | Verified merged PR required                                         | `update-status` to Done                                                                    |
+| `SF_WORKFLOW_BYPASS_BRANCH_GUARD=1`         | A branch the workflow does not name                                 | the `pre-commit` and `pre-push` git hooks                                                  |
 | `--bypass-srs <reason>`                     | Rule 8: SRS-enabled projects spawn tickets from drafted SRS pages   | `create-ticket`, `create-subtask`, `create-epic`                                           |
 | `--bypass-reason <text>`                    | Sets the `--bypass-srs` reason the SRS spawner passes (not a guard) | `srs-cli.sh spawn`, `transition-drafting <t> spawning`                                     |
 | `--skip-local-ci "<reason>"`                | Local CI statuses green on the head commit                          | `create-pr` (not draft), `ready-pr`, `local-ci-gate`, and `update-status` to Human testing |
@@ -265,6 +266,32 @@ The hook is a guardrail against the ordinary path the refusals used to teach, no
 - **Illegitimate:** "the diff is small", "a narrower check passed" (`lint`, `check`), "CI is slow". Run the local CI on the exact head commit instead.
 - **Record:** automatic. The CLI prints a warning, then writes `Local CI gate skipped: <reason>` in the PR body (`create-pr`) or as a PR comment (`ready-pr`, `local-ci-gate`, the move to Human
   testing; on the ticket when the PR existence guard was bypassed and no pull request can carry it). Add the evidence of the alternative check to the PR test plan.
+
+## Git hooks
+
+A project generated with its application stack carries git hooks (`.husky/`). Two of their rules keep work on the board (#1232): an agent that could not reach GitHub once committed 19 fixes as
+`fix(#TBD): …` on 19 local `fix/audit-<slug>` branches and pushed nothing, and nobody saw the work for two days. A project installed with the harness alone has no such hooks: the instructions carry
+the rule there.
+
+### Ticket reference: no hatch
+
+- **Protects:** every commit names the number of a ticket that exists, `<type>(#<N>): <description>`. commitlint refuses a placeholder (`#TBD`, `#XXX`, `#12a`) with the `ticket-reference` rule, and it
+  already refused any header without a numbered scope.
+- **No hatch:** a subject can always be reworded once the ticket exists, so nothing legitimate needs a placeholder. When the ticket tool is unreachable, stop and report it
+  (`statuses/*-in-progress.md`, "An unreachable ticket tool or remote"); the developer decides what happens meanwhile.
+
+### Branch guard: `SF_WORKFLOW_BYPASS_BRANCH_GUARD`
+
+- **Protects:** work lands on a branch the workflow names. `.husky/workflow-branch-guard.mjs` accepts the main, working, pull-request target and release branches of `.saasfoundry.json`, `rc-*`, and
+  the `workflow.branchNaming` patterns (`{N}` is the ticket number). A project with no `workflow` block is not checked.
+- **Applies to:** `pre-commit`, on the branch the commit lands on, and `pre-push`, on every branch the push updates (tags and deletions pass). Two cases pass at commit and are checked at push instead:
+  a detached HEAD (every rebase step) and a branch the host named (`worktree-agent-<id>`, Claude Code's isolated worktree). Such an agent pushes to the ticket branch with
+  `git push origin HEAD:<ticket branch>`, and that name is what the guard checks.
+- **Legitimate:** a one-off branch the developer names for a reason the workflow does not cover (a spike pushed for a colleague, a recovery branch), stated in `SF_WORKFLOW_BYPASS_REASON`.
+- **Illegitimate:** any branch an agent invented because the ticket tool or the remote did not answer; a branch kept off the convention "to rename later". Rename it after the ticket:
+  `git branch -m fix/<N>-<description>`.
+- **Who:** the developer, for one command, from the primary checkout. The guard ignores the variable in the worktree of a delegated agent, and the guard hook refuses an agent's Bash call that sets it.
+- **Record:** the hook prints the branch and the reason. Add a comment on the ticket naming the branch and why it is off the convention.
 
 ## Not guard bypasses
 

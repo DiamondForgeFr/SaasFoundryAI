@@ -1,3 +1,10 @@
+# Every branch the push updates is one the workflow names (#1232), whatever the local branch is:
+# a host-named agent branch or a detached HEAD pushes with HEAD:<ticket branch>, and that name is checked.
+sf_branch_guard="$(dirname "$0")/workflow-branch-guard.mjs"
+if [ -f "$sf_branch_guard" ]; then
+  node "$sf_branch_guard" push
+fi
+
 # Get the current branch name
 # A detached HEAD (a push from a rebase or `git push origin HEAD:<branch>`) is no rc-* branch: nothing to check.
 current_branch=$(git symbolic-ref --short -q HEAD) || exit 0

@@ -230,6 +230,21 @@ on it:
   code comments, commit messages. The language of the conversation is not the signal: a session held in
   French still produces English artefacts when the project says `en`.
 
+## Ticket first, and an unreachable tool
+
+The ticket exists before the first line of code: create it in the configured ticket tool, or
+ask the developer for it, then name its branch and every commit after its number
+(`.saasfoundry.json` → `workflow.branchNaming` and `workflow.commitFormat`). A placeholder such
+as `#TBD` or `#XXX`, or a branch without the ticket number, is no ticket; the project's commit
+hooks refuse both where it has them.
+
+When the ticket tool or the remote is unreachable (an expired token, no network, a refused
+fetch or push), stop instead of working around it. Report the blocker to the developer first,
+with the command that failed and its message, then propose temporary alternatives (wait and
+retry, the developer renews the access, or local work on a branch the developer names, pushed as
+soon as the remote answers) and let the developer choose. Never pick a workaround alone, and never
+leave commits that are on no remote, under no ticket and in no pull request without saying so.
+
 ## Coding-agent identity and onboarding
 
 At session initialization, use the coding-agent identity explicitly supplied by the current
