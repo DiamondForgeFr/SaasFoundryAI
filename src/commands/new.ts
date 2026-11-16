@@ -5,6 +5,7 @@ import ora from 'ora'
 import { execSync } from 'child_process'
 import terminalLink from 'terminal-link'
 
+import { commitBootstrap, describeBootstrapCommit } from '../builders/bootstrap-commit'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../installers/harness.installer'
@@ -223,6 +224,17 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     await writeFile('.saasfoundry.json', JSON.stringify(manifest, null, 2))
     await writeMultirepoAgentManifests(manifest, startProjectAnswers.projectName)
     await installSelectedAgentInstructions(manifest, startProjectAnswers.projectName, selectedAgents)
+
+    // The first commit, now that everything this command writes is on disk: the repositories are born
+    // clean instead of with the harness and the manifest left over (#969). A workflow's own `bootstrap`
+    // makes it instead when the project has one.
+    spinner.text = 'Committing the generated project...'
+    const gitRoots = startProjectAnswers.isMonorepo ? [{ dir: '.', label: 'The monorepo' }] : [apiPath, webPath].map((dir) => ({ dir, label: dir }))
+    provisioning.push(
+      ...commitBootstrap({ repositories: gitRoots, mainBranch: startProjectAnswers.mainBranch, workflow: manifest.workflow })
+        .map(describeBootstrapCommit)
+        .map((note) => (note.ok ? chalk.green(`✓ ${note.message}`) : chalk.yellow(`⚠️  ${note.message}`)))
+    )
 
     // The guard labels, on the repository each git root pushes to: the monorepo, or each multirepo app (#973)
     spinner.text = 'Provisioning workflow labels...'

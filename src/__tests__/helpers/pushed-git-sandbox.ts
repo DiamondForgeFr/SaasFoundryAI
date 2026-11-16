@@ -24,6 +24,29 @@ export function sandboxGitEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.Pro
   }
 }
 
+/**
+ * `sandboxGitEnv()` applied to this process, for code under test that runs `git` itself (`sf new` does,
+ * through `spawnSync`, with the environment it inherits). Returns the function that puts the previous
+ * `GIT_*` variables back: call it in `afterAll`.
+ */
+export function applySandboxGitEnv(): () => void {
+  const previous: Record<string, string | undefined> = {}
+  for (const key of Object.keys(process.env)) {
+    if (!key.startsWith('GIT_')) continue
+    previous[key] = process.env[key]
+    delete process.env[key]
+  }
+  for (const [key, value] of Object.entries(sandboxGitEnv())) {
+    if (!key.startsWith('GIT_')) continue
+    if (!(key in previous)) previous[key] = undefined
+    process.env[key] = value
+  }
+  return () => {
+    for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) delete process.env[key]
+    for (const [key, value] of Object.entries(previous)) if (value !== undefined) process.env[key] = value
+  }
+}
+
 export interface PushedRepo {
   /** The working checkout: on the ticket branch, clean and pushed. */
   dir: string

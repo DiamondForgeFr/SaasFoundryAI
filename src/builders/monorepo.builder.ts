@@ -135,19 +135,21 @@ export async function renderMonorepoRoot({
   return true
 }
 
-/** Apply the external effects required to make a rendered monorepo ready to use. */
+/**
+ * Apply the external effects required to make a rendered monorepo ready to use.
+ *
+ * The repository is initialised on its main branch with its remote, and left without a commit: the
+ * harness, the agent instructions and the manifest are written after this, so the first commit is made
+ * once they are on disk (`commitBootstrap`, #969).
+ */
 export async function provisionMonorepoRoot({ targetDir = '.', monorepoUrl, mainBranch, workflow }: CreateMonorepoRootParams): Promise<void> {
   const nvm = getNvmPrefix(targetDir)
   runRequired('npm install (monorepo root)', `${nvm}npm install`, { cwd: targetDir })
   runRequired('prisma generate (api)', `${nvm}npx prisma generate`, { cwd: join(targetDir, 'apps/api') })
 
-  const workingBranch = workflow?.workingBranch
   assertGitBranchName(mainBranch)
-  if (workingBranch) assertGitBranchName(workingBranch)
+  if (workflow?.workingBranch) assertGitBranchName(workflow.workingBranch)
   runBestEffortArgv('git init', 'git', ['init'], { cwd: targetDir, onSkipped: warn })
   runBestEffortArgv('git checkout', 'git', ['checkout', '-b', mainBranch], { cwd: targetDir, onSkipped: warn })
   if (monorepoUrl) runBestEffortArgv('git remote add', 'git', ['remote', 'add', 'origin', monorepoUrl], { cwd: targetDir, onSkipped: warn })
-  runBestEffortArgv('git add', 'git', ['add', '.'], { cwd: targetDir, onSkipped: warn })
-  runBestEffortArgv('git commit', 'git', ['commit', '-m', 'Initial commit'], { cwd: targetDir, onSkipped: warn })
-  if (workingBranch && workingBranch !== mainBranch) runBestEffortArgv('git working branch', 'git', ['checkout', '-b', workingBranch], { cwd: targetDir, onSkipped: warn })
 }
