@@ -7,8 +7,13 @@ echo "Preparing to push branch: $current_branch"
 remote="$1"
 url="$2"
 
-# Check if we're pushing a RC branch
-if [[ "$current_branch" =~ ^rc- ]]; then
+# Check if we're pushing a RC branch. Husky runs hooks with sh (dash on most Linux images):
+# match the branch with a POSIX case, no bash-only test.
+is_rc_branch=false
+case "$current_branch" in
+  rc-*) is_rc_branch=true ;;
+esac
+if [ "$is_rc_branch" = true ]; then
   echo "Release candidate branch detected: $current_branch"
   echo "Running version management script..."
 
