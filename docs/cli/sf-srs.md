@@ -116,7 +116,9 @@ edit its body by hand.
 
 ### Spawning tickets
 
-`--milestone` on `spawn` **declares the release these tickets ship in**: the milestone is created or reused, the version page is linked to it, and every ticket spawned joins it.
+`--milestone` on `spawn` **declares the release these tickets ship in**: the milestone is created or reused, the version page is linked to it, and the Stories of the run, created or reused, join it.
+An Epic the run creates joins it too. An Epic that already exists, given with `--ticket` or found from an earlier run, keeps its milestone: an Epic may span several releases, and only its Stories
+carry one. The dry run says so, and since 1.3.0 `spawn` no longer moves the Epic ([#1119](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1119)).
 
 `--complexity <level>` on `spawn` labels every created Story whose FR page states no complexity (`bug`, `low`, `medium` or `complex`); an FR page's own Complexity wins. The summary lists any Story
 left without one, which the workflow refuses to move out of Backlog.
