@@ -35,6 +35,9 @@ export const mockPrismaService = {
     count: jest.fn() as MockedFunction<PrismaClientMethod>,
     findMany: jest.fn() as MockedFunction<PrismaClientMethod>
   },
+  invitationEntityLink: {
+    findMany: jest.fn().mockResolvedValue([]) as MockedFunction<PrismaClientMethod>
+  },
   organization: {
     findUnique: jest.fn() as MockedFunction<PrismaClientMethod>,
     create: jest.fn() as MockedFunction<PrismaClientMethod>,
