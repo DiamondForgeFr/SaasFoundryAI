@@ -657,22 +657,23 @@ describe('runSpawn', () => {
 
       const out = io.stdoutBuffer.join('')
       expect(out).toContain('existing tickets:')
-      expect(out).toContain('    FR-AUTH-001: reuse #77\n')
-      expect(out).toContain('    FR-AUTH-002: reuse #78 (closed)\n')
-      expect(out).toContain('    FR-AUTH-003: create\n')
+      expect(out).toContain('3 FR page(s): 1 new, 2 already ticketed')
+      expect(out).toContain('    FR-AUTH-001: exists #77, skipped\n')
+      expect(out).toContain('    FR-AUTH-002: exists #78 (closed), skipped\n')
+      expect(out).toContain('    FR-AUTH-003: new\n')
       expect(out).toContain('[dry-run]')
       for (const write of [io.createSubtask, io.createEpic, io.linkSubtask, io.addToProject, io.ensureMilestone, io.assignMilestone]) expect(write).not.toHaveBeenCalled()
     })
 
-    it('previews a version nothing exists for as all create', async () => {
+    it('previews a version nothing exists for as all new', async () => {
       const io = makeIO()
 
       await expect(runSpawn(baseOptions({ dryRun: true }), io)).resolves.toBe(0)
 
       const out = io.stdoutBuffer.join('')
-      expect(out).toContain('    FR-AUTH-001: create\n')
-      expect(out).toContain('    FR-AUTH-002: create\n')
-      expect(out).toContain('    FR-AUTH-003: create\n')
+      expect(out).toContain('    FR-AUTH-001: new\n')
+      expect(out).toContain('    FR-AUTH-002: new\n')
+      expect(out).toContain('    FR-AUTH-003: new\n')
     })
 
     it('stops before any mutation when two tickets carry one canonical page', async () => {
@@ -705,7 +706,10 @@ describe('runSpawn', () => {
       const out = io.stdoutBuffer.join('')
       expect(out).toMatch(/FR-AUTH-001: blocked — FR-AUTH-001 already belongs to parent #9/)
       expect(out).toMatch(/FR-AUTH-002: blocked — FR-AUTH-002 is ambiguous: canonical SRS page matches tickets #78, #79/)
-      expect(out).toContain('FR-AUTH-003: create')
+      expect(out).toContain('FR-AUTH-003: new')
+      // A blocked FR is neither counted nor listed as a Story to create
+      expect(out).toContain('3 FR page(s): 1 new, 0 already ticketed')
+      expect(out).not.toMatch(/• FR-AUTH-00[12] →/)
       expect(out).not.toContain('[dry-run]')
       expect(io.stderrBuffer.join('')).toMatch(/blocked — FR-AUTH-001 already belongs to parent #9/)
     })
@@ -746,8 +750,8 @@ describe('runSpawn', () => {
         await expect(runSpawn(baseOptions({ dryRun: true }), io)).resolves.toBe(0)
 
         const out = io.stdoutBuffer.join('')
-        expect(out).toContain('    FR-AUTH-001: reuse #77; ignored #88 (closed as not planned)\n')
-        expect(out).toContain('    FR-AUTH-002: create\n')
+        expect(out).toContain('    FR-AUTH-001: exists #77, skipped; ignored #88 (closed as not planned)\n')
+        expect(out).toContain('    FR-AUTH-002: new\n')
       })
 
       it('is ignored under a reconciliation plan as well', async () => {
@@ -841,7 +845,7 @@ describe('runSpawn', () => {
 
         expect(io.inspectTickets.mock.calls[0][0]).toBeNull()
         expect(io.stdoutBuffer.join('')).toContain(`under a new Epic « ${holder} »`)
-        expect(io.stdoutBuffer.join('')).toContain('    FR-LIVE-007: create\n')
+        expect(io.stdoutBuffer.join('')).toContain('    FR-LIVE-007: new\n')
       })
 
       it('adopts the Epic a previous run created, and reuses its Story instead of a second one', async () => {
@@ -862,7 +866,7 @@ describe('runSpawn', () => {
 
         const out = io.stdoutBuffer.join('')
         expect(out).toContain(`the existing Epic #50 « ${holder} »`)
-        expect(out).toContain('    FR-LIVE-007: reuse #77 (closed)\n')
+        expect(out).toContain('    FR-LIVE-007: exists #77 (closed), skipped\n')
         expect(io.createEpic).not.toHaveBeenCalled()
       })
 
@@ -873,6 +877,46 @@ describe('runSpawn', () => {
 
         expect(io.linkSubtask).toHaveBeenCalledWith(io.createEpic.mock.results[0].value.epicNumber, '77')
         expect(io.createSubtask).not.toHaveBeenCalled()
+        expect(io.stdoutBuffer.join('')).toContain('    FR-LIVE-007: exists #77, skipped (linked under the delivery parent)\n')
+      })
+
+      // #986 — the Epic body links the version page it was spawned from; a renamed page keeps it
+      describe('recognising the version Epic by its page link', () => {
+        const versionLink = 'https://example.test/v2'
+
+        it('adopts an Epic whose title no longer matches but whose body links the version page', async () => {
+          const renamed = { ...epic, title: 'Réunion live - v2 (old title)', srsLinks: [versionLink] }
+          const io = makeIO({ inspectTickets: jest.fn(() => [renamed, story({ parentNumber: '50' })]) })
+
+          await expect(runSpawn(options(), io)).resolves.toBe(0)
+
+          expect(io.createEpic).not.toHaveBeenCalled()
+          expect(io.stdoutBuffer.join('')).toContain('the existing Epic #50')
+        })
+
+        it('prefers the titled Epic when an aggregate Epic links the version page as well', async () => {
+          const aggregate = { ...epic, number: '40', title: 'Réunion live', srsLinks: [versionLink, 'https://example.test/v1'] }
+          const own = { ...epic, srsLinks: [versionLink] }
+          const io = makeIO({ inspectTickets: jest.fn(() => [aggregate, own, story({ parentNumber: '50' })]) })
+
+          await expect(runSpawn(options(), io)).resolves.toBe(0)
+
+          expect(io.stdoutBuffer.join('')).toContain('the existing Epic #50')
+        })
+
+        it('refuses to choose between two Epics that both link the version page under other titles', async () => {
+          const io = makeIO({
+            inspectTickets: jest.fn(() => [
+              { ...epic, title: 'A', srsLinks: [versionLink] },
+              { ...epic, number: '51', title: 'B', srsLinks: [versionLink] }
+            ])
+          })
+
+          await expect(runSpawn(options(), io)).resolves.toBe(10)
+
+          expect(io.stderrBuffer.join('')).toContain('several open Epics (#50, #51)')
+          expect(io.createEpic).not.toHaveBeenCalled()
+        })
       })
 
       it('blocks before creating the Epic when a match belongs to another parent', async () => {

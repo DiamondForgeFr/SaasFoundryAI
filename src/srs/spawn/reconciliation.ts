@@ -228,7 +228,10 @@ function unsafeReuseReason(requirement: ReconciliationRequirement, frId: string,
   }
   const ticket = exact[0]
   if (ticket?.parentNumber && ticket.parentNumber !== parentTicket) {
-    return `${frId} already belongs to parent #${ticket.parentNumber} through ticket #${ticket.number}; it will not be reparented implicitly`
+    // No delivery parent yet means no Epic was recognised: the Story's own parent may well be the
+    // version's Epic, and naming it is how the user says so
+    const hint = parentTicket === null ? `; pass --ticket ${ticket.parentNumber} if that is this version's Epic` : ''
+    return `${frId} already belongs to parent #${ticket.parentNumber} through ticket #${ticket.number}; it will not be reparented implicitly${hint}`
   }
   return undefined
 }
