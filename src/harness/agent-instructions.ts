@@ -256,6 +256,28 @@ on it:
 `
 
 /**
+ * The ticket comes before the code, and an unreachable tool is the developer's call (#1232): an
+ * agent whose GitHub token had expired committed 19 fixes as `fix(#TBD)` on unnumbered local
+ * branches and pushed nothing, so nobody saw the work for two days. In the generated region only,
+ * like the status rules: the bridges are recognised by released bytes.
+ */
+export const TICKET_FIRST_INSTRUCTIONS = `## Ticket first, and an unreachable tool
+
+The ticket exists before the first line of code: create it in the configured ticket tool, or
+ask the developer for it, then name its branch and every commit after its number
+(\`.saasfoundry.json\` → \`workflow.branchNaming\` and \`workflow.commitFormat\`). A placeholder such
+as \`#TBD\` or \`#XXX\`, or a branch without the ticket number, is no ticket; the project's commit
+hooks refuse both where it has them.
+
+When the ticket tool or the remote is unreachable (an expired token, no network, a refused
+fetch or push), stop instead of working around it. Report the blocker to the developer first,
+with the command that failed and its message, then propose temporary alternatives (wait and
+retry, the developer renews the access, or local work on a branch the developer names, pushed as
+soon as the remote answers) and let the developer choose. Never pick a workaround alone, and never
+leave commits that are on no remote, under no ticket and in no pull request without saying so.
+`
+
+/**
  * How to touch files and the shell so the host can check each call (#947). An interpreter
  * heredoc that writes files cannot be analysed and asks the developer every time, even in
  * bypass mode; sub-agents see no memory of that, only these instructions.
@@ -303,6 +325,7 @@ export const GENERATED_INSTRUCTIONS = `${GENERATED_REGION_START}
 ${AGENT_TOOLING_HYGIENE}
 ${PROFILE_TRANSITION_INSTRUCTIONS.replace('--claude-friendly', '--agent-friendly')}
 ${STATUS_OUTPUT_INSTRUCTIONS}
+${TICKET_FIRST_INSTRUCTIONS}
 ${SELF_ONBOARDING_INSTRUCTIONS}
 ${CAPABILITIES.trimEnd().replaceAll('--claude-friendly', '--agent-friendly')}
 ${GENERATED_REGION_END}`

@@ -185,15 +185,19 @@ ou la vérification de formatage en lecture seule échoue sur l'index Git.
 
 **Contrôles**
 
-| Hook         | Contrôle                                                                                                 |
-| ------------ | -------------------------------------------------------------------------------------------------------- |
-| `commit-msg` | `commitlint` : `<type>(#<ticket>): <description>`                                                        |
-| `pre-commit` | `npm run test:staged`, validation ciblée et en lecture seule de l'index Git                              |
-| `pre-push`   | cohérence RC/tag et vérifications WIP ; les cycles Docker sont lancés explicitement pendant `AI testing` |
+| Hook         | Contrôle                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `commit-msg` | `commitlint` : `<type>(#<ticket>): <description>`, le ticket étant un numéro                                                                                 |
+| `pre-commit` | le garde-fou de branche du workflow, puis `npm run test:staged`, validation ciblée et en lecture seule de l'index Git                                        |
+| `pre-push`   | le garde-fou de branche sur chaque branche poussée, cohérence RC/tag et vérifications WIP ; les cycles Docker sont lancés explicitement pendant `AI testing` |
 
 **Correction**
 
-- Utilisez un message comme `feat(#317): calibrate SRS intent detector`.
+- Utilisez un message comme `feat(#317): calibrate SRS intent detector`. Le ticket est un numéro : `fix(#TBD): …` échoue sur la règle `ticket-reference`. Créez d'abord le ticket.
+- **`Workflow branch guard (#1232): commit refused on "…"`** (ou `push refused`) : la branche n'est pas l'une de celles que nomme le workflow, à savoir `.saasfoundry.json` → `workflow.branchNaming`
+  (`feature/{N}-…`, `fix/{N}-…`, `rc-{version}`) et les branches principale, de travail et de release. Renommez-la d'après son ticket : `git branch -m fix/<N>-<description>`. Un HEAD détaché et une
+  branche `worktree-agent-<id>` committent librement et sont contrôlés au push : poussez-les vers la branche du ticket, `git push origin HEAD:fix/<N>-<description>`. Pour une branche ponctuelle et
+  voulue, le développeur pose `SF_WORKFLOW_BYPASS_BRANCH_GUARD=1` le temps d'une commande (voir les échappatoires du [système de workflow](guide/workflow-system.md#echappatoires)).
 - Si Prettier signale un écart, exécutez `npm run format`, inspectez et indexez les modifications, puis relancez le commit. Le hook ne réécrit pas les fichiers.
 - Corrigez les erreurs ESLint ou TypeScript, puis recommencez.
 - N'utilisez pas `--no-verify` pour contourner une erreur ordinaire.

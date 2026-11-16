@@ -160,6 +160,22 @@ Le garde-fou de Done accepte ce ticket parce que l'unique commit racine du dép�
 Un projet que `sf new` vient de générer avec un workflow est dans cet état : `sf new` ne fait pas de commit racine à votre place, pour que `bootstrap` puisse faire le sien. Voir
 [Ce que `sf new` versionne](/fr/cli/sf-new#ce-que-sf-new-versionne).
 
+## Le ticket d'abord
+
+Aucune ligne de code n'est écrite avant que son ticket existe : le numéro du ticket nomme la branche (`workflow.branchNaming`) et chaque commit (`<type>(#<N>): …`). Quand l'outil de tickets ou le
+dépôt distant est injoignable (un jeton `gh` expiré, pas de réseau), l'agent s'arrête, vous signale le blocage avec la commande en échec, et vous propose des solutions temporaires parmi lesquelles
+vous choisissez. Il ne choisit pas seul un contournement : un agent qui l'a fait a committé 19 correctifs en `fix(#TBD): …` sur des branches locales sans numéro, sans rien pousser, et personne n'a vu
+ce travail pendant deux jours (#1232). La région générée d'`AGENTS.md` et le document du statut In progress le disent.
+
+Un projet généré avec sa pile applicative l'impose aussi dans ses hooks git :
+
+- `commit-msg` : commitlint refuse une référence de ticket qui n'est pas un numéro (`#TBD`, `#XXX`). Il n'y a pas d'échappatoire : reformulez le sujet une fois le ticket créé.
+- `pre-commit` et `pre-push` : `.husky/workflow-branch-guard.mjs` refuse une branche que le workflow ne nomme pas. Il accepte les motifs de `workflow.branchNaming`, `rc-*`, et les branches principale,
+  de travail, cible des pull requests et de release. Un HEAD détaché (chaque étape d'un rebase) et une branche nommée par l'hôte (`worktree-agent-<id>`, le worktree isolé de Claude Code) committent
+  librement ; c'est le push qui est contrôlé, et un tel agent pousse vers la branche de son ticket avec `git push origin HEAD:<branche du ticket>`. Un projet sans bloc `workflow` n'est pas contrôlé.
+
+Un projet installé avec le seul harness n'a pas de hooks git de SaaSFoundryAI : ce sont les instructions qui portent la règle.
+
 ## Commandes de statut et de configuration
 
 ```bash
@@ -234,21 +250,22 @@ quelques échappatoires explicites. Elles sont à vous, pas à l’agent : posit
 avec les preuves. Un refus n’indique pas à un agent de développement comment contourner le garde-fou : il nomme la prochaine commande légitime et renvoie l’agent vers vous, et un hook refuse l’agent
 qui active tout de même une échappatoire ([plus bas](#qui-applique-une-echappatoire)).
 
-| Échappatoire                                                                                | Ce qu’elle désactive                                                                     |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                            | Garde les tickets `srs:*` hors des statuts du parcours de code                           |
-| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                     | Exige un label `complexity:` pour quitter Backlog                                        |
-| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                         | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)               |
-| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                       | Exige que chaque enfant natif soit Done avant le parent                                  |
-| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                 | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR        |
-| `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                         | Exige que le travail du ticket soit commité et poussé avant AI testing                   |
-| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                                   | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review |
-| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                                      | Exige une PR fusionnée vérifiée avant Done                                               |
-| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic`                | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                       |
-| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                                            | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle            |
-| `--skip-local-ci "<raison>"` sur `create-pr`, `ready-pr`, `update-status … "Human testing"` | Exige que les statuts de CI locale requis soient verts sur le commit de tête             |
-| `SF_CACHE_BUST=1`                                                                           | Pas un garde-fou : recharge le schéma du board mis en cache                              |
-| `SF_DISABLE_SRS_HOOK=1`                                                                     | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                          |
+| Échappatoire                                                                                | Ce qu’elle désactive                                                                             |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                            | Garde les tickets `srs:*` hors des statuts du parcours de code                                   |
+| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                     | Exige un label `complexity:` pour quitter Backlog                                                |
+| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                         | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)                       |
+| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                       | Exige que chaque enfant natif soit Done avant le parent                                          |
+| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                 | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR                |
+| `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                         | Exige que le travail du ticket soit commité et poussé avant AI testing                           |
+| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                                   | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review         |
+| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                                      | Exige une PR fusionnée vérifiée avant Done                                                       |
+| `SF_WORKFLOW_BYPASS_BRANCH_GUARD=1` sur `git commit` ou `git push`                          | Le garde-fou de branche des hooks git : le travail se fait sur une branche que nomme le workflow |
+| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic`                | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                               |
+| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                                            | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle                    |
+| `--skip-local-ci "<raison>"` sur `create-pr`, `ready-pr`, `update-status … "Human testing"` | Exige que les statuts de CI locale requis soient verts sur le commit de tête                     |
+| `SF_CACHE_BUST=1`                                                                           | Pas un garde-fou : recharge le schéma du board mis en cache                                      |
+| `SF_DISABLE_SRS_HOOK=1`                                                                     | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                                  |
 
 `--bypass-srs` et `--skip-local-ci` exigent une raison. La raison est la trace : choisissez un jeton facile à retrouver avec `grep`, comme `meta-srs-tooling`. `--bypass-srs` la publie sur le ticket
 créé et `--skip-local-ci` l’écrit sur la pull request (ou sur le ticket quand aucune pull request ne peut le porter). Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à

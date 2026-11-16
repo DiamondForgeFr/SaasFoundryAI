@@ -38,6 +38,12 @@ These stay in the `In progress` board column but flow through a **separate lifec
 
 ## Action checklist — Story / Task / Issue
 
+- [ ] **The ticket exists first** — no line of code before the ticket exists in the configured ticket tool. Its number names the branch (`workflow.branchNaming`) and every commit (`<type>(#<N>): …`).
+      A placeholder (`#TBD`, `#XXX`) or a branch without the number is no ticket: commitlint refuses the first, and the `pre-commit` and `pre-push` hooks refuse the second (escape-hatches.md → Branch
+      guard)
+- [ ] **An unreachable ticket tool or remote** — when `gh`, the board, `git fetch` or `git push` fails (an expired token, no network): stop instead of working around it. Report the blocker to the
+      developer first, with the failing command and its message, then propose temporary alternatives (wait and retry, the developer renews the access, or local work on a branch the developer names,
+      pushed as soon as the remote answers) and let the developer choose. Never pick a workaround alone
 - [ ] **Who builds it** — read the `delegation:` line of `sf status --agent-friendly --no-network` (or `sf agents delegation status`): the shared answer is the team's default, a clone may override it
       locally, and the line reports the effective value. `allowed`: the session hands the ticket, from here to the end of AI Testing, to one background agent in its own worktree, on the task kind of
       the profile's `steps.execute.taskKind`, and keeps talking with the developer. A trivial change (one known file, about 20 lines or fewer: a typo, a configuration value, a documentation line)
@@ -68,6 +74,8 @@ These stay in the `In progress` board column but flow through a **separate lifec
 ## Errors to avoid
 
 - Coding without creating a branch first
+- Coding before the ticket exists: committing under a placeholder (`#TBD`) or on a branch without the ticket number, or leaving commits that are on no remote, under no ticket and in no pull request
+  without telling the developer
 - Mixing multiple tickets in the same branch
 - Moving to AI Testing with lint/build errors
 - Forgetting to commit or push before AI Testing (the pushed-commits guard refuses the move)

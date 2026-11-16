@@ -155,6 +155,22 @@ The Done guard accepts that ticket because the repository's single root commit n
 A project that `sf new` has just generated with a workflow is in this state: `sf new` makes no root commit of its own, so that `bootstrap` can make its own. See
 [What `sf new` commits](/cli/sf-new#what-sf-new-commits).
 
+## The ticket comes first
+
+No line of code is written before its ticket exists: the ticket number names the branch (`workflow.branchNaming`) and every commit (`<type>(#<N>): …`). When the ticket tool or the remote is
+unreachable (an expired `gh` token, no network), the agent stops, reports the blocker to you with the failing command, and proposes temporary alternatives for you to choose from. It does not pick a
+workaround on its own: an agent that once did committed 19 fixes as `fix(#TBD): …` on unnumbered local branches and pushed nothing, and nobody saw the work for two days (#1232). The generated
+`AGENTS.md` region and the In progress status document say so.
+
+A project generated with its application stack also enforces it in its git hooks:
+
+- `commit-msg`: commitlint refuses a ticket reference that is not a number (`#TBD`, `#XXX`). There is no hatch: reword the subject once the ticket exists.
+- `pre-commit` and `pre-push`: `.husky/workflow-branch-guard.mjs` refuses a branch the workflow does not name. It accepts the `workflow.branchNaming` patterns, `rc-*`, and the main, working,
+  pull-request target and release branches. A detached HEAD (every rebase step) and a branch the host named (`worktree-agent-<id>`, Claude Code's isolated worktree) commit freely; the push is checked
+  instead, so such an agent pushes to its ticket branch with `git push origin HEAD:<ticket branch>`. A project with no `workflow` block is not checked.
+
+A project installed with the harness alone has no git hooks of SaaSFoundryAI: the instructions carry the rule there.
+
 ## Status and configuration commands
 
 ```bash
@@ -237,6 +253,7 @@ legitimate command and sends the agent back to you, and a hook refuses the agent
 | `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                        | Requires the ticket work to be committed and pushed before AI testing        |
 | `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                                  | Requires a matching open PR (draft or ready) for Human testing and In review |
 | `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                                     | Requires a verified merged PR before Done                                    |
+| `SF_WORKFLOW_BYPASS_BRANCH_GUARD=1` on `git commit` or `git push`                          | The git hooks' branch guard: work lands on a branch the workflow names       |
 | `--bypass-srs <reason>` on `create-ticket`, `create-subtask`, `create-epic`                | Rule 8: tickets of an SRS-enabled project come from the SRS spawner          |
 | `--bypass-reason <text>` on `srs-cli.sh spawn`                                             | Sets the `--bypass-srs` reason of spawned tickets; disables no check         |
 | `--skip-local-ci "<reason>"` on `create-pr`, `ready-pr`, `update-status … "Human testing"` | Requires the local CI statuses to be green on the head commit                |
