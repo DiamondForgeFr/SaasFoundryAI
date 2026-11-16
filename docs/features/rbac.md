@@ -193,8 +193,8 @@ same `account.service.ts`; the test mock `service-mocks.ts` gains `invitationEnt
 
 In 1.2.0 deleting a custom role that was still assigned answered `400 Failed to delete custom role`: the assignment's foreign key refused the delete, and the confirmation of the web role panel wrongly
 announced that the assignments would be removed. A role carried only by a pending invitation was deleted, and the invitation silently lost it. 1.2.1 refuses both with `409 ROLE_IN_USE` (see "Deleting
-a role still in use" above). The fix lives in `account.service.ts`, the web page `account-roles.tsx`, the new `role-delete-refusal.tsx` next to it and the `account` locales, merged by `sf update` like
-the fixes above; no module migration is needed. A client that read the `400` of a used role now gets `409`.
+a role still in use" above). The fix lives in `account.service.ts`, the web page `account-roles.tsx`, the new `role-delete-refusal.ts` and `role-delete-refusal-notice.tsx` next to it, and the
+`account` locales, merged by `sf update` like the fixes above; no module migration is needed. A client that read the `400` of a used role now gets `409`.
 
 :::
 
