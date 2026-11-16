@@ -139,6 +139,12 @@ code déclaré, après l'état de la capture, et `--json` le porte sous `routing
 | `missing`               | `guard hook missing (run sf agents refresh --scope shared)`                                                                                                              |
 | `not-enforced`          | `guard not enforced` : un hôte sans hook de garde ; son agent a pour consigne de demander au développeur, rien ne l'arrête                                               |
 
+Le texte du garde se termine par ce que fait le hook d'une ligne de shell qui n'est pas une commande simple (voir
+[une ligne de shell qui n'est pas une commande simple](./sf-agents.md#une-ligne-de-shell-qui-n-est-pas-une-commande-simple)) : `; shell shape: refuse` par défaut (l'absence dans `.saasfoundry.json`
+vaut `refuse`), ou `; shell shape: warn (…)` et `; shell shape: off (…)` quand `modules.harness.guard.shellShape` le dit, avec la commande qui rétablit le refus (`sf agents shell-guard refuse`).
+`--json` le porte dans `routing.shellShape` (`"refuse" | "warn" | "off"`, additif, après `routing.guard`), et une valeur que le CLI ne connaît pas se lit `refuse`. La précondition `guardHook` nomme un
+mode autre que le défaut dans ses détails (`claude-code enforced; shell shape warn`).
+
 La précondition `guardHook`, « Guard hook stops an agent from bypassing a guard », est un **`fail`** quand le hook d'un agent atteint un CLI qui ne sait pas exécuter `agents guard`
 (`declared-not-runnable`) : le garde paraît déclaré et chaque appel passe sans contrôle. Elle est un `warn` quand ce CLI exécute le garde mais est antérieur à la version qui a mis le projet à jour en
 dernier (`declared-outdated-cli`) : il applique un jeu de règles plus ancien. Ce `warn` est voulu, pour qu'une version corrective ne fasse pas passer en `fail` tous les projets qui utilisent un CLI

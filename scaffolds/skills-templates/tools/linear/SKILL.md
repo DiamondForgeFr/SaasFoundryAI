@@ -156,17 +156,13 @@ This skill uses Linear's GraphQL API.
 
 The workflow skill (`sf-workflow`) delegates to this tool skill when the project uses Linear:
 
-```bash
-# workflow-cli.sh reads .saasfoundry.json
-TOOL=$(jq -r '.workflow.tool' .saasfoundry.json)
+`workflow-cli.sh` reads the tool from the manifest:
 
-# If tool is "linear", delegate to this CLI
-case "$TOOL" in
-  linear)
-    sf-tool-linear/linear-cli.sh "$@"
-    ;;
-esac
+```bash
+jq -r '.workflow.tool' .saasfoundry.json
 ```
+
+When it prints `linear`, `workflow-cli.sh` delegates the call to this tool's CLI, `sf-tool-linear/linear-cli.sh`, with the same arguments.
 
 ## Requirements
 

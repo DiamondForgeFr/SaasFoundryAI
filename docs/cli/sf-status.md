@@ -135,6 +135,12 @@ that has `agents guard`, a call goes through unchecked. So its state is never si
 | `missing`               | `guard hook missing (run sf agents refresh --scope shared)`                                                                                                      |
 | `not-enforced`          | `guard not enforced`: a host without a guard hook; its agent is told to ask the developer, and nothing stops it                                                  |
 
+The guard text ends with what the hook does with a shell line that is not one plain command (see
+[a shell line that is not one plain command](./sf-agents.md#a-shell-line-that-is-not-one-plain-command)): `; shell shape: refuse` by default (absence in `.saasfoundry.json` means `refuse`), or
+`; shell shape: warn (…)` and `; shell shape: off (…)` when `modules.harness.guard.shellShape` says so, with the command that restores the refusal (`sf agents shell-guard refuse`). `--json` carries it
+as `routing.shellShape` (`"refuse" | "warn" | "off"`, additive, after `routing.guard`), and a value the CLI does not know reads as `refuse`. The `guardHook` precondition names a mode other than the
+default in its details (`claude-code enforced; shell shape warn`).
+
 The `guardHook` precondition, "Guard hook stops an agent from bypassing a guard", is a **`fail`** when an agent's hook reaches a CLI that cannot run `agents guard` (`declared-not-runnable`): the guard
 looks declared and every call passes unchecked. It is a `warn` when that CLI runs the guard but is older than the version that last updated the project (`declared-outdated-cli`): it applies an older
 set of rules. That `warn` is deliberate, so that a patch release does not put every project that uses an older global CLI into `fail`. In both cases the details name the CLI and its version, and the

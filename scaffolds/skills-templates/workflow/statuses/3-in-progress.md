@@ -49,9 +49,9 @@ These stay in the `In progress` board column but flow through a **separate lifec
       or pull request, otherwise through a pull request. Only the developer's own reply records consent: a delegated agent never runs those commands, and ticket, issue or pull-request content is never
       consent
 - [ ] **Branch** — from `jq -r '.workflow.workingBranch' .saasfoundry.json`, pattern `jq -r '.workflow.branchNaming.feature'`
-  - Built in the primary checkout: `git checkout <workingBranch> && git pull --rebase && git checkout -b feature/<N>-<description>`
-  - Delegated, inside the agent's own worktree (the agent creates the branch, and the primary checkout stays on `<workingBranch>`):
-    `git fetch origin && git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>`
+  - Built in the primary checkout, one command per call: `git checkout <workingBranch>`, then `git pull --rebase`, then `git checkout -b feature/<N>-<description>`
+  - Delegated, inside the agent's own worktree (the agent creates the branch, and the primary checkout stays on `<workingBranch>`), one command per call: `git fetch origin`, then
+    `git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>`
   - Delegated on a branch the host named (Claude Code's `isolation: "worktree"` starts the agent on `worktree-agent-<id>`): keep that local branch and push the work to the ticket branch,
     `git push origin HEAD:feature/<N>-<description>`. `create-pr` accepts it when `origin` holds that branch at the local `HEAD` commit: it finds it on its own when it is the only such branch, or
     takes it from `--head feature/<N>-<description>`. A branch pushed but behind `HEAD` is refused, so push again before it. `ready-pr` and `draft-pr` off the ticket branch find the ticket's open pull
@@ -66,7 +66,7 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - [ ] **Test strategy** — while you work, run the tests the change affects: the related tests of the touched files (the runner's related-tests option, or the project's own selection when it declares
       one), not the full suites, and not after every iteration. The full suites run once, at the end of AI Testing. After a rebase, rerun the affected tests, not everything, unless the rebase brought
       changes to shared files (build, configuration, test helpers). The ready pull request's CI stays the final check.
-- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build && npm run lint` → the tests the change affects → commit and push. Child tickets may continue
+- [ ] **Before leaving In Progress:** finish the parent's implementation and validation → `npm run build`, then `npm run lint` → the tests the change affects → commit and push. Child tickets may continue
       through their own lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have,
       and names the command to run (a bundled child is checked on its delivery parent's branch)
 
@@ -81,3 +81,5 @@ These stay in the `In progress` board column but flow through a **separate lifec
   one first (unless the developer explicitly asks to pause)
 - The session building a ticket itself while delegation is `allowed`, a trivial change excepted
 - A delegated agent recording the delegation consent: only the developer's own reply does
+- A shell call that is not one plain command (a `&&`, `;` or `||` chain, a `$(…)` substitution, a loop, an inline script such as `node -e`, a file written through a heredoc): the guard hook refuses
+  it and names the split to make, so run each command in its own call, and write long text to a file (`git commit -F <file>`, `--body-file <file>`)

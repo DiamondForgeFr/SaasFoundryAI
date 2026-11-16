@@ -275,6 +275,16 @@ Vous appliquez une échappatoire depuis le checkout principal, de l’une de ces
 
 Les labels de nature, c’est vous qui les ajoutez sur GitHub, ou avec `!` dans Claude Code.
 
+Le même hook tient aussi l’agent à **une commande simple par appel de shell**, ce que lui demande `AGENTS.md`. Un hôte ne peut pas analyser une ligne qui enchaîne des commandes (`&&`, `;`, `||`, un
+saut de ligne), substitue la sortie de l’une dans une autre (`$(…)`, accents graves), boucle, lance un script en ligne (`node -e`, `python3 -c`, `bash -c`, `eval`) ou écrit un fichier par heredoc : il
+vous demande donc une permission à chaque appel de ce genre, même quand chaque commande qu’il contient est permise. Le hook refuse la ligne et nomme le découpage à faire, si bien que l’agent réécrit
+son appel au lieu de vous solliciter. Ce n’est pas une échappatoire : rien ne reste à appliquer de votre côté. C’est actif par défaut (`modules.harness.guard.shellShape` vaut `refuse` quand rien n’est
+enregistré, et `sf update` n’écrit rien), et le mode qu’utilise un projet est votre décision : `sf agents shell-guard warn` fait avertir l’agent sans refuser (la demande de permission propre à l’hôte
+s’applique toujours), et `sf agents shell-guard off` cesse de lire la forme d’une ligne. Le refus d’une échappatoire, d’un label de nature et d’une fusion déléguée vaut dans tous les modes. Claude
+Code ne demande rien pour `git commit -m "$(cat <<'EOF' … EOF)"` ni pour `gh pr create --body "$(cat <<'EOF' … EOF)"` avec un délimiteur entre apostrophes (mesuré sur 2.1.325) : le hook laisse donc
+ces deux formes tranquilles sur Claude Code ; sur Codex, et pour toute autre commande, le texte passe par un fichier (`git commit -F <fichier>`, `--body-file <fichier>`). Le détail, le tableau des
+constructions et la mesure sont dans [`sf agents guard`](/fr/cli/sf-agents#une-ligne-de-shell-qui-n-est-pas-une-commande-simple).
+
 Le hook est un garde-corps contre le chemin ordinaire que les refus enseignaient, pas une frontière de sécurité : il lit la commande que l’agent a écrite, ne couvre que l’outil Bash, et laisse passer
 en cas d’échec (pas de CLI, un CLI ancien ou une charge qu’il ne sait pas lire laisse l’appel passer). `sf status` le dit sur sa ligne `routing:` (`guard enforced`, `guard declared`,
 `guard hook missing`…) et avertit quand le hook ne peut pas fonctionner. Claude Code lit ses réglages au démarrage d’une session : une session en cours garde ses anciens hooks jusqu’à son redémarrage.

@@ -68,6 +68,7 @@ des identifiants d'agent. Les commandes n'installent pas les runtimes et ne test
 | `outcome <record\|mark\|capture\|status-event>`                      | Enregistre ce qu'une délégation routée a coûté et si elle a fait le travail, lui rattache un signal ultérieur, chronomètre un ticket. |
 | `routing <adjust\|promote\|report\|reset>`                           | Ajuste le routage d'après ces résultats, partage un déplacement, les rapporte, annule un déplacement.                                 |
 | `guard --host <claude-code\|codex>`                                  | Lancée par le hook `PreToolUse` : refuse les appels d'outil qu'un agent ne doit pas faire de lui-même.                                |
+| `shell-guard <refuse\|warn\|off\|status>`                            | Enregistre ou lit ce que fait le garde d'une ligne de shell qui n'est pas une commande simple.                                        |
 
 Toutes les commandes acceptent `--json`. `list` est en lecture seule et indique `not-checked` pour la découverte du runtime.
 
@@ -742,8 +743,9 @@ d'outil sur l'entrée standard et affiche la décision de refus de l'hôte, ou r
 }
 ```
 
-Se taire laisse le flux de permissions normal de l'hôte en place : le hook ne fait que refuser. Elle sort toujours avec 0 et laisse passer en cas d'échec. Une charge qu'elle ne sait pas lire (pas du
-JSON, plus de 1 Mio) laisse l'appel passer et est écrite dans le [journal des erreurs de capture](#capture-et-signaux), que `sf status` compte. Ne la lancez à la main que pour tester un hook.
+Se taire laisse le flux de permissions normal de l'hôte en place : le hook n'autorise jamais un appel, il en refuse un, ou, en mode `warn`, [ajoute du contexte](#les-modes) et laisse le flux en place.
+Elle sort toujours avec 0 et laisse passer en cas d'échec. Une charge qu'elle ne sait pas lire (pas du JSON, plus de 1 Mio) laisse l'appel passer et est écrite dans le
+[journal des erreurs de capture](#capture-et-signaux), que `sf status` compte. Ne la lancez à la main que pour tester un hook.
 
 **Ce qu'elle refuse.** Pour tout le monde, la session principale comprise :
 
@@ -766,14 +768,87 @@ travail, le `cd` ou la cible de `git -C` est sous `.claude/worktrees/` ou `.code
 Les mêmes appels depuis le checkout principal sont permis : la session et le développeur les lancent. La commande est lue comme un shell la lit : guillemets, `;` `&&` `|` et sauts de ligne,
 `bash -c '…'`, `eval`, `env`, heredocs et here-strings sont examinés, sur trois niveaux. Elle ne développe ni `$(…)` dans une chaîne, ni une variable.
 
+### Une ligne de shell qui n'est pas une commande simple
+
+`AGENTS.md` demande à un agent de s'en tenir à une commande simple par appel de shell. Un hôte ne peut pas analyser une ligne qui enchaîne des commandes, en substitue une dans une autre ou lance un
+script en ligne avant son exécution : il demande donc une permission à chaque appel de ce genre, même quand chaque commande qu'il contient est permise, et le développeur est sollicité pour ce que
+l'agent aurait pu découper. Après les règles ci-dessus, le hook lit la **forme** de la ligne et refuse ce qui n'est pas une commande simple. Ce n'est pas une échappatoire : le refus demande à l'agent
+de réécrire son appel, et il nomme la construction et le découpage à faire (`1. cd apps/site 2. npm install`). Sur Claude Code, il ne lit que l'outil Bash, car une ligne PowerShell se cite autrement ;
+sur Codex, il lit les mêmes constructions, et un vecteur d'arguments Codex `bash -lc '<ligne>'` vaut pour sa ligne.
+
+| Construction                 | Refusé                                                                                                                                                | À la place                                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Un enchaînement              | `a && b`, `a; b`, `a \|\| b`, deux lignes dans un appel (`cd dir && cmd` compris)                                                                     | Une commande par appel, dans l'ordre ; donnez le répertoire à la commande (`git -C <dir>`, `npm --prefix <dir>`) |
+| Une substitution             | `$(…)`, accents graves, `<(…)` et `>(…)`, au premier niveau, entre guillemets doubles (où le shell les exécute) et dans un heredoc non cité           | Lancez la commande interne dans son propre appel, puis servez-vous de sa sortie dans le suivant                  |
+| Une boucle, un groupe        | `for`, `while`, `until`, `if`, `case`, `select`, `{ …; }`, `( … )`, une définition de fonction, en position de commande                               | Un appel par élément, ou une commande qui prend tous les éléments                                                |
+| Une tâche en arrière-plan    | un `&` qui ne fait pas partie d'une redirection                                                                                                       | L'option d'arrière-plan de l'hôte (`run_in_background` sur Claude Code)                                          |
+| Un script en ligne           | `node -e`, `python3 -c`, `python3 - <<EOF`, `bash -c`, `eval`, un script envoyé dans un shell par un tube, aussi derrière `env`, `timeout` ou `xargs` | Écrivez le script dans un fichier avec l'outil de fichiers, puis lancez le fichier                               |
+| Un fichier écrit par heredoc | `cat <<EOF > chemin`, `tee chemin <<EOF`                                                                                                              | Les outils de fichiers (Write, Edit)                                                                             |
+
+Seul ce qui est en position de commande compte : `rg for src`, `git log --grep "if this; then"`, un `;` ou un `&&` entre guillemets, `find … -exec … \;`, `node script.js -e x` et
+`python3 -m pytest -c conf` sont des commandes simples. Un tube, une redirection (`2>&1`, `&>`, `> fichier`), un commentaire, un test `[[ a && b ]]` et un heredoc donné à un programme qui ne fait que
+le lire (`cat <<'EOF' | wc -l`, `git commit -F - <<'EOF'`) ne sont pas refusés non plus. Une substitution jamais refermée est refusée comme les autres, de même qu'un texte imbriqué sur plus de 24
+niveaux, que l'analyseur ne lit pas plus loin.
+
+**L'exception du message de commit, et ce qui a été mesuré.** L'idiome `git commit -m "$(cat <<'EOF' … EOF)"` est une substitution : par défaut il est refusé, avec la consigne d'écrire le texte dans
+un fichier et de le passer par `git commit -F <fichier>`. Savoir si Claude Code demande une permission pour lui a été mesuré, sur Claude Code 2.1.325 lancé avec `--permission-prompts none` et la seule
+commande autorisée :
+
+| Règle autorisée        | L'appel                                                                              | Résultat                |
+| ---------------------- | ------------------------------------------------------------------------------------ | ----------------------- |
+| `Bash(git commit:*)`   | `git commit -m "$(cat <<'EOF' … EOF)"`, délimiteur entre apostrophes                 | exécuté, sans demande   |
+| `Bash(git commit:*)`   | la même chose avec un `<<EOF` non cité                                               | refusé (aurait demandé) |
+| `Bash(gh pr create:*)` | `gh pr create --title … --body "$(cat <<'EOF' … EOF)"`, délimiteur entre apostrophes | exécuté, sans demande   |
+
+Sur Claude Code, le garde laisse donc exactement cette forme tranquille, pour `git commit` et pour `gh pr create` : un mot entre guillemets doubles qui est une substitution et rien d'autre, ne
+contenant que `cat <<'DELIM' … DELIM` avec un délimiteur entre apostrophes. Tout ce qui l'entoure, une autre commande dans la substitution, une redirection, un délimiteur non cité ou entre guillemets
+doubles, ou un autre programme est refusé. Le cas `gh pr create` va un pas au-delà de la décision consignée sur #1251, qui nomme `git commit` : c'est une entrée de `takesQuotedHeredocArgument` dans
+`src/harness/shell-shape.ts`, et la retirer fait refuser aussi cette forme. Codex n'a pas été mesuré : sur Codex la forme est refusée comme toute autre substitution.
+
+#### Les modes
+
+Ce que fait le hook d'une telle ligne est un réglage du projet, `modules.harness.guard.shellShape` dans `.saasfoundry.json` :
+
+| Mode     | Le hook                                                                                                                                                                                                                                                                                       |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `refuse` | Refuse l'appel et nomme le découpage. C'est le défaut : **l'absence vaut `refuse`**, dans un projet neuf comme dans un projet mis à jour depuis une version antérieure. `sf update` n'écrit rien ; il affiche une ligne qui dit ce que fait désormais le garde.                               |
+| `warn`   | Ne refuse pas : il affiche le même texte en `additionalContext`, que l'agent lit, et le flux de permissions propre à l'hôte continue, donc un hôte qui demande pour cette ligne demande toujours. Claude Code le prend en compte sur `PreToolUse` (vérifié sur 2.1.325) ; Codex le documente. |
+| `off`    | Ne lit pas la forme d'une ligne.                                                                                                                                                                                                                                                              |
+
+Les règles ci-dessus (une variable de contournement, `--skip-local-ci`, un label de nature et, pour un agent délégué, une fusion) s'appliquent dans tous les modes. Le hook lit le manifeste le plus
+proche du répertoire de travail de l'appel (le worktree d'un agent a sa propre copie), puis `CLAUDE_PROJECT_DIR`, à chaque appel : un changement vaut donc dès l'appel suivant ; un manifeste illisible
+ou une valeur inconnue valent `refuse`.
+
+#### `sf agents shell-guard`
+
+```bash
+sf agents shell-guard status
+sf agents shell-guard warn
+sf agents shell-guard refuse
+sf agents shell-guard off
+```
+
+`status` affiche le mode et son origine (`recorded in .saasfoundry.json`, ou le défaut) ; `refuse`, `warn` et `off` l'enregistrent comme défaut partagé de l'équipe, dans
+`modules.harness.guard.shellShape`. C'est le seul qui l'écrit : il passe par le même remplacement atomique, qui détecte les modifications concurrentes, que `sf agents delegation`, conserve toutes les
+autres clés du bloc harness et du bloc guard, n'écrit rien pour le mode déjà enregistré, et dit où commiter le changement (jamais directement sur une branche de travail protégée). Il échoue sur un
+projet sans bloc `modules.harness`. `--json` affiche `{ "shellGuardVersion": 1, "shellShape": "warn", "source": "manifest", "changed": true }` (`changed` seulement quand un mode a été enregistré ;
+`source` vaut `default` tant que rien ne l'est). Le schéma déclare le bloc et le laisse ouvert à une clé qu'une version ultérieure ajouterait ; un manifeste plus ancien reste valide, sans hausse de
+`manifestVersion` ni migration. Le mode qu'utilise un projet est la décision du développeur : un agent ne le change jamais.
+
 **Comment le développeur applique une échappatoire.** Dans Claude Code, `! <commande>` tapé dans la session s'exécute sans passer par l'outil Bash, donc le hook ne se déclenche pas ; sur n'importe
 quel hôte, le terminal du développeur fait la même chose. Lancez l'un ou l'autre depuis le checkout principal.
 
 **La ligne du hook.** C'est une ligne de shell, pas un `sf` nu, pour les raisons qui valent pour [le hook de capture](#capture-et-signaux). Elle lit la charge et sort avant que Node ne démarre, sauf
-si la charge mentionne `SF_WORKFLOW_BYPASS_`, `skip-local-ci`, `nature` (quelle que soit la casse), `addLabels`, `delegation`, `ready` ou `merge` : presque aucun appel Bash ne paie un processus. Puis
-elle lance le CLI que le projet résout : `node_modules/.bin/saasfoundryai`, puis le `bin/sf.js` de ce dépôt quand `dist/` est construit, puis `saasfoundryai` dans le PATH. Sans CLI, ou avec un CLI qui
-n'a pas `agents guard`, l'appel passe ; un CLI qui ne l'a pas sort avec un code non nul, et le hook écrit une ligne sur stderr et une entrée d'étape `cli` dans le journal des erreurs de capture, que
-`sf status` compte.
+si le JSON brut de la charge mentionne `SF_WORKFLOW_BYPASS_`, `skip-local-ci`, `nature` (quelle que soit la casse), `addLabels`, `delegation`, `ready` ou `merge`, ou l'un des caractères et options
+dont une ligne qui n'est pas une commande simple a besoin : `;`, `&&`, `||`, un saut de ligne (`\n` dans le JSON), `$(`, un accent grave, `<<`, `<(`, un `&` d'arrière-plan, une option d'interpréteur
+(`node -`, `python … -`, `sh -`, `eval `, `deno eval`) ou un script envoyé dans un shell (`| bash`). Le filtre est volontairement un sur-ensemble : une commande simple, un tube et une redirection ne
+paient aucun processus, une charge qui le franchit ne coûte qu'un démarrage rapide de Node, et aucun mot-clé n'est cherché (`for`, `if`), car la description d'un appel est de la prose. Puis elle lance
+le CLI que le projet résout : `node_modules/.bin/saasfoundryai`, puis le `bin/sf.js` de ce dépôt quand `dist/` est construit, puis `saasfoundryai` dans le PATH. `bin/sf.js` répond à
+`agents guard --host <claude-code|codex>` par une entrée dédiée qui ne charge que le garde (ni commander, ni une autre commande, ni le registre) : un appel refusé coûte un démarrage de Node, quelques
+dizaines de millisecondes, là où le CLI complet prend une demi-seconde à une seconde ; toute autre forme (`--help`, un hôte inconnu) est le CLI complet. Sans CLI, ou avec un CLI qui n'a pas
+`agents guard`, l'appel passe ; un CLI qui ne l'a pas sort avec un code non nul, et le hook écrit une ligne sur stderr et une entrée d'étape `cli` dans le journal des erreurs de capture, que
+`sf status` compte. Un projet mis à jour vers cette version mais qui atteint un CLI plus ancien n'est pas contrôlé sur la forme d'une ligne, et chaque appel qui atteint ce CLI coûte le CLI complet :
+mettez-le à jour (`sf status` le dit).
 
 **Les limites, dites franchement.** Le hook est un garde-corps contre le chemin ordinaire que les refus enseignaient, pas une frontière de sécurité.
 
@@ -784,9 +859,12 @@ n'a pas `agents guard`, l'appel passe ; un CLI qui ne l'a pas sort avec un code 
 - Claude Code lit ses réglages au démarrage d'une session : une session déjà en cours garde ses anciens hooks. Un développeur peut désactiver les hooks (`disableAllHooks`).
 - Codex n'exécute un hook de projet que lorsque la couche `.codex/` et le texte du hook sont approuvés. `sf update` dit quand il a ajouté le hook : relisez-le et approuvez-le avec `/hooks`. Un
   sous-agent Codex ne porte pas d'identifiant d'agent : les règles réservées aux agents délégués s'y appliquent à un appel dans un chemin de worktree reconnu.
+- Il lit le texte de l'appel, pas ce qu'un script fait une fois lancé : `node script.js` est une commande simple quel que soit le contenu du script, et un programme qui en enveloppe un autre que
+  l'analyseur ne connaît pas (`find … -exec sh -c '…' \;`, `ssh hôte 'a && b'`) n'est pas examiné.
 - `sf status` rapporte l'état sur la ligne `routing:` pour chaque agent déclaré, en nommant le CLI qu'atteint le hook quand celui-ci ne sait pas l'exécuter (`guard enforced`, `guard declared`,
-  `guard hook declared but the CLI it reaches (…) cannot run sf agents guard`, `guard hook missing`, `guard not enforced`), et la précondition `guardHook` **échoue** quand ce CLI ne sait pas exécuter
-  le hook, et avertit quand il est antérieur au projet ou quand le hook manque ou est périmé (voir [`sf status`](./sf-status.md#le-hook-de-garde)).
+  `guard hook declared but the CLI it reaches (…) cannot run sf agents guard`, `guard hook missing`, `guard not enforced`) et en finissant par le mode (`shell shape: refuse`, ou `warn`, ou `off`), et
+  la précondition `guardHook` **échoue** quand ce CLI ne sait pas exécuter le hook, et avertit quand il est antérieur au projet ou quand le hook manque ou est périmé (voir
+  [`sf status`](./sf-status.md#le-hook-de-garde)).
 
 ## Notes de plateforme
 

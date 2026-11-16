@@ -60,8 +60,8 @@ for an escape hatch, and the hatch is the developer's to apply (`escape-hatches.
 > [!note] Convention sanity check
 >
 > This guard — and the `→ Done` PR-merged guard — only match when branches carry the ticket number, exactly the convention declared in `.saasfoundry.json` → `workflow.branchNaming`
-> (`feature/{N}-{description}`, `fix/{N}-{description}`). The two must stay in lock-step. Quick check (should print `ok`):
-> `echo "fix/32-detection-dropdown" | grep -Eq '^(feature|fix)/32(-|$)' && echo ok`. A branch missing the `{N}` ticket prefix (e.g. `fix/some-name`) silently fails the guard and forces an escape hatch
-> on every ticket — realign `branchNaming`, never "fix" the regex. A non-regression test locks both sides together: `src/__tests__/unit/skill/branch-naming-pr-regex.spec.ts`.
+> (`feature/{N}-{description}`, `fix/{N}-{description}`). The two must stay in lock-step. Quick check (the exit code should be 0):
+> `echo "fix/32-detection-dropdown" | grep -Eq '^(feature|fix)/32(-|$)'`. A branch missing the `{N}` ticket prefix (e.g. `fix/some-name`) silently fails the guard and forces an escape hatch on every
+> ticket — realign `branchNaming`, never "fix" the regex. A non-regression test locks both sides together: `src/__tests__/unit/skill/branch-naming-pr-regex.spec.ts`.
 
 If a draft already exists, use `workflow-cli.sh ready-pr <ticket>` before entering In Review. Draft-skipped CI checks do not count as validation.

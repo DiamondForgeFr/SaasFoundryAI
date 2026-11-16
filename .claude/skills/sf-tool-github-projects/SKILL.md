@@ -124,7 +124,7 @@ The following labels must exist in the repo (create them once):
 | `complexity: medium`  | `#FFD700` | Structured plan + validation                    |
 | `complexity: complex` | `#FF1493` | Full adversarial review (security, logic, perf) |
 
-Create them with:
+Create them with one call per line (never the four in one call):
 
 ```bash
 gh label create "complexity: bug"     --color FF5555 --description "🐛 Bug fix"
@@ -144,17 +144,20 @@ leaves the ticket alone.
 | `srs:update`   | `#F97316` | Existing SRS page must be updated to match code drift.         |
 | `srs:new`      | `#3B82F6` | New Epic / FR spec to be created from scratch.                 |
 
-Create them with (idempotent — `|| true` swallows the exit code when the label already exists) :
+Create them with one call per line (never the three in one call). A label that already exists makes `gh` print `already exists` and exit non-zero: that is harmless, leave the label as it is and go on
+with the next one:
 
 ```bash
-gh label create "srs:drafting" --color 8B5CF6 --description "sf-srs: ticket needs spec drafting / refinement" || true
-gh label create "srs:update"   --color F97316 --description "sf-srs: existing SRS page must be updated"        || true
-gh label create "srs:new"      --color 3B82F6 --description "sf-srs: create a new Epic / FR spec from scratch" || true
+gh label create "srs:drafting" --color 8B5CF6 --description "sf-srs: ticket needs spec drafting / refinement"
+gh label create "srs:update"   --color F97316 --description "sf-srs: existing SRS page must be updated"
+gh label create "srs:new"      --color 3B82F6 --description "sf-srs: create a new Epic / FR spec from scratch"
 ```
 
 See `.claude/skills/sf-srs/SKILL.md` for the end-to-end contract and `.claude/docs/github-labels.md` for the full label catalogue.
 
 ## Example — full ticket lifecycle
+
+Each command below is a call of its own, in order. `$CLI` stands for the script path: a variable does not carry over from one call to the next, so write the path out in every call.
 
 ```bash
 CLI=.claude/skills/sf-tool-github-projects/github-projects-cli.sh

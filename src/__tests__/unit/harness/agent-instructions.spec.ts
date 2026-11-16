@@ -225,6 +225,30 @@ describe('shared agent instructions', () => {
     }
   })
 
+  // #1251 — the instructions say what the guard hook enforces, so that an agent writes plain commands before it is refused
+  it('says each shell call is one plain command, names what is not, and says the guard hook refuses it', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      const hygiene = instructions
+        .slice(instructions.indexOf('## File edits and shell calls'), instructions.indexOf('## ', instructions.indexOf('## File edits and shell calls') + 3))
+        .replace(/\s+/g, ' ')
+      expect(hygiene).toContain('one plain command')
+      expect(hygiene).toContain(
+        'no `&&`, `;` or `||` chain, no `$(...)` substitution, no loop, no inline script (`node -e`, `python3 -c`, `bash -c`), no file written through a heredoc, no trailing `&`'
+      )
+      expect(hygiene).toContain('instead of `cd <dir> &&`')
+      expect(hygiene).toContain('`git commit -F <file>`, `--body-file <file>`')
+      expect(hygiene).toContain('A pipe and a redirection are fine')
+      expect(hygiene).toContain('guard hook')
+      expect(hygiene).toContain('names the split to make')
+    }
+  })
+
+  it('says, in the region every agent reads, that only Claude Code and Codex have the hook and that another agent follows the rule itself', () => {
+    expect(GENERATED_INSTRUCTIONS.replace(/\s+/g, ' ')).toContain(
+      'The guard hook of Claude Code and Codex refuses such a line and names the split to make; for any other agent nothing stops it, so follow the rule yourself'
+    )
+  })
+
   // The adversarial review of #1026 found six places where the first wording was too loose. Each
   // finding is pinned where the text lives, so a rewording cannot quietly drop it.
   it('has the receiving agent build the ticket itself (Examine 3), in the always-loaded instructions', () => {
