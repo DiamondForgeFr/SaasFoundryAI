@@ -145,7 +145,8 @@ n'est pas touché, car son bundler résout le CommonJS. Les projets générés a
    ```
 
 Vite lit alors le source TypeScript du paquet, et l'API continue de lire `dist/`. Ne contournez pas avec `optimizeDeps.include` dans `apps/web/vite.config.ts` : le serveur de dev garderait une copie
-pré-regroupée des constantes et ignorerait vos modifications jusqu'à un redémarrage avec `--force`.
+pré-regroupée des constantes et ignorerait vos modifications jusqu'à un redémarrage avec `--force`. Si vous avez déjà ajouté ce contournement, il continue de fonctionner après la mise à jour, mais
+vous pouvez le retirer.
 
 ## Port déjà utilisé — 3000, 5173 ou 5435
 

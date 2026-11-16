@@ -149,7 +149,7 @@ affected, because its bundler resolves CommonJS. Projects generated before 1.3.0
    ```
 
 Vite then reads the TypeScript source of the package, and the API keeps reading `dist/`. Do not work around it with `optimizeDeps.include` in `apps/web/vite.config.ts`: the dev server would keep a
-pre-bundled copy of the constants and ignore your edits until it restarts with `--force`.
+pre-bundled copy of the constants and ignore your edits until it restarts with `--force`. If you already added that workaround, it keeps working after the update, but you can remove it.
 
 ## Port already in use (3000 / 5173 / 5435)
 
