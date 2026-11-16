@@ -58,6 +58,11 @@ This provides two practical guarantees:
 
 The generated package names are scoped to the project, for example `@acme-portal/shared-validation`. The builder replaces the project placeholder before the scaffold is delivered.
 
+`shared-config` is compiled to CommonJS because the API requires it, so its `package.json` carries an `exports` map that tells each consumer which file to read: the web app's Vite dev server and build
+read `src/index.ts` (the `browser` condition), the type-checker reads `dist/index.d.ts`, and the API reads `dist/index.js`. A named import such as `STORAGE_LOGO_MAX_BYTES` therefore works in the dev
+server, and an edit to the package reaches the browser without a rebuild. If a project generated before 1.3.0 shows `does not provide an export named …` in the browser, see
+[Troubleshooting](../troubleshooting.md).
+
 ### Why types and validation also have app mirrors
 
 The generated applications keep `apps/api/src/shared-*` and `apps/web/src/shared-*` mirrors even in the monorepo. The stable `@shared-types/*` and `@shared-validation/*` aliases therefore work in both
