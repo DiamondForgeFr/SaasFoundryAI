@@ -6,7 +6,7 @@ import { join } from 'path'
 import { ADOPTION_COMMON_INSTRUCTIONS, GENERATED_REGION_END, GENERATED_REGION_START, installAgentInstructions } from '../../../harness/agent-instructions'
 import { listTierAssignments, type RoutingOverrides } from '../../../harness/routing-grid'
 import { parseDelegationLine } from '../../../harness/delegation-capture'
-import { DELEGATION_REPORT_LINE, TIER_AGENT_PATH, WHOLE_TICKET_LINE, renderTierAgents } from '../../../harness/tier-agents'
+import { BACKGROUND_WORK_LINE, DELEGATION_REPORT_LINE, TIER_AGENT_PATH, WHOLE_TICKET_LINE, renderTierAgents } from '../../../harness/tier-agents'
 import { CHECKS } from '../../../execution/calibration'
 import { hashFileContent } from '../../../utils'
 
@@ -84,6 +84,21 @@ describe('tier agent rendering (#929)', () => {
     expect(parseDelegationLine(`Done.\n${filled}`)).toEqual({ verdict: 'pass', route: '0123456789abcdef0123', checks: ['type-check', 'automated-tests'], ignored: [] })
     // every check the line offers is a code the ledger knows: a delegate that is not told the codes writes free text, and a pass without a code is unknown
     for (const code of CHECKS) expect(DELEGATION_REPORT_LINE).toContain(code)
+  })
+
+  // A delegate that ended its turn while its own job ran wrote `fail` about unfinished work (#1241)
+  it.each(['claude-code', 'codex'] as const)('tells every %s tier agent to wait for its own background jobs, and how to end a turn that does not', (host) => {
+    for (const file of renderTierAgents([host])) {
+      const body = host === 'codex' ? toml(file.content).developer_instructions : file.content
+      expect(body).toContain(BACKGROUND_WORK_LINE)
+    }
+    expect(BACKGROUND_WORK_LINE).toContain('Never write your final message while a background job you started')
+    expect(BACKGROUND_WORK_LINE).toContain('Monitor tool with an until-loop')
+    expect(BACKGROUND_WORK_LINE).toContain('never with a foreground sleep')
+    const pending = /`(SF-DELEGATION: pending [^`]+)`/.exec(BACKGROUND_WORK_LINE)![1]
+    expect(parseDelegationLine(`Waiting.\n${pending.replace('<id>', '0123456789abcdef0123')}`)).toMatchObject({ verdict: 'pending', route: '0123456789abcdef0123' })
+    expect(BACKGROUND_WORK_LINE).not.toContain('"""')
+    expect(BACKGROUND_WORK_LINE.length).toBeLessThan(420)
   })
 
   it('stays short: the line is paid on every delegation', () => {

@@ -109,7 +109,10 @@ Le harness ne se fie pas au récit qu'un délégué fait de son travail. Il mesu
   aussi tout essai qu'il délivre, et une route que personne ne rappelle pendant sept jours expire.
 - **La ligne de verdict.** Chaque agent de palier termine son dernier message par `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`. `pass` signifie que la vérification demandée par le brief a
   été exécutée et satisfaite. Un délégué qui termine sans cette ligne la reçoit en réclamation une fois, pendant qu'il tourne encore : le hook de capture répond à son arrêt par un blocage qui porte la
-  ligne exacte à écrire, et la réponse est l'arrêt suivant de la même délégation. Un message qui n'a toujours pas la ligne donne un résultat inconnu.
+  ligne exacte à écrire, et la réponse est l'arrêt suivant de la même délégation. Un message qui n'a toujours pas la ligne donne un résultat inconnu. Un délégué attend les tâches d'arrière-plan qu'il
+  a lancées avant son dernier message ; un tour qui se termine pendant que l'une d'elles tourne encore (Claude Code liste les tâches en cours dans l'arrêt, ou le délégué écrit
+  `SF-DELEGATION: pending route=<id>`) est un arrêt intermédiaire : il garde son coût, n'enregistre aucun résultat et ne réclame rien, et seul le verdict de l'arrêt final atteint le routage (voir
+  [`sf agents`](../cli/sf-agents.md#arrets-intermediaires)).
 - **Le registre.** `<git-common-dir>/saasfoundry/delegations.jsonl` est un fichier en ajout seul qui contient les exécutions (jetons, coût, temps actif, résultat, vérifications, palier et candidat),
   les enregistrements de route et les signaux. Sur Claude Code, les hooks `SubagentStop` et `PostToolUse` capturent chaque exécution automatiquement. Les autres hôtes enregistrent à la main avec
   `sf agents outcome record`. Un coût n'est jamais deviné : un modèle sans prix publié conserve sa fiabilité mais n'a pas de coût tant que le projet n'en déclare pas un. Une capture qui échoue n'est

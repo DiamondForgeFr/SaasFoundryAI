@@ -497,6 +497,27 @@ prompt les liste, car un délégué à qui on ne les donne pas écrit du texte l
 aussi longue, et rien après), quelle que soit la longueur du message : un exemple cité plus haut ou un long bloc de code ne peut pas décider du verdict. Toute autre clé de la ligne (`kind=`,
 `ticket=`, `trial=`) est ignorée. Un message sans cette ligne est un résultat inconnu, et le délégué la réclame une fois (section suivante).
 
+### Arrêts intermédiaires
+
+Un délégué qui termine un tour pendant qu'une tâche qu'il a lancée en arrière-plan tourne encore (une suite de tests, un hook de commit, `molten ci run`) n'a pas fini : l'hôte le réveille quand la
+tâche rend compte, et la délégation se termine à un arrêt ultérieur. Chaque agent de palier a pour consigne d'attendre ses propres tâches (sur Claude Code, l'outil Monitor avec une boucle `until`) et
+de ne jamais écrire son dernier message pendant que l'une d'elles tourne. Un tour qui se termine malgré tout est un **arrêt intermédiaire**, et la capture l'enregistre sans résultat :
+
+- **Claude Code** liste les tâches d'arrière-plan de la session dans chaque payload `SubagentStop` (`background_tasks` : id, type, statut). Cette liste est celle de la session, avec les shells et les
+  moniteurs de tous les délégués qui tournent à côté de celui-ci et l'agent qui s'arrête lui-même : la capture ne garde que les tâches en cours que la transcription de l'agent a lancées (un shell
+  lancé en arrière-plan, un moniteur, un sous-agent lancé en arrière-plan). Quand l'une d'elles tourne encore, l'arrêt est intermédiaire.
+- **Sur tout hôte**, un délégué qui termine un tour par `SF-DELEGATION: pending route=<id>` dit la même chose. C'est le seul signal sur Codex, et sur une version de Claude Code dont le payload n'a pas
+  de liste de tâches.
+
+Un arrêt intermédiaire garde son coût et sa route, porte les références de preuve `interim-stop` (et `background-work-running` quand la liste des tâches l'a montré) et, quand le délégué a tout de même
+écrit un verdict, `interim-verdict-<pass|fail>` : un fait, jamais le résultat. La ligne ne lui est jamais réclamée. Tant qu'un arrêt intermédiaire est le dernier d'un agent, la délégation est
+censurée, y compris un verdict donné par un arrêt antérieur, et `sf agents routing report` la compte à part. Son arrêt final porte le verdict qui compte. Une CLI antérieure à ce changement lit une
+ligne `pending` comme une ligne manquante et la réclame une fois, comme avant.
+
+Le rapport de routage et l'ajustement lisent le même registre replié ; le 2026-11-13, ils ne divergeaient que dans le temps. L'ajustement tourne après chaque capture, et trois délégations venaient
+d'enregistrer un `fail` à un arrêt intermédiaire : `bug-fix` est monté d'un palier sur « 3 failures in the last 10 rated runs », et le `pass` final des mêmes délégations, enregistré plus tard, n'a pas
+défait ce mouvement. Un arrêt intermédiaire n'a désormais pas de résultat : ni l'un ni l'autre n'y lit d'échec.
+
 ### Réclamer la ligne manquante
 
 Un délégué qui oublie sa ligne de fin était enregistré comme un résultat inconnu puis écarté : personne ne le voyait, et le routage ne pouvait pas apprendre de l'exécution. La capture répond
@@ -514,6 +535,7 @@ Elle ne réclame que si toutes les conditions sont réunies, et jamais deux fois
 
 - l'événement est un `SubagentStop` d'un agent `sf-<tier>` routé dont le palier est déclaré pour l'hôte, avec un dernier message non vide qui n'a **aucune ligne** (un `pass` qui ne nomme qu'une
   auto-revue a une ligne, il n'est donc jamais réclamé : réclamer à nouveau ne changerait pas le contrôle) ;
+- l'arrêt n'est pas [intermédiaire](#arrets-intermediaires) : un délégué dont une tâche d'arrière-plan tourne encore, ou qui a écrit `SF-DELEGATION: pending`, donne sa ligne à son arrêt final ;
 - l'hôte ne dit pas qu'il continue déjà à cause d'un hook d'arrêt (`stop_hook_active`) ;
 - aucun segment antérieur du même agent ne porte la référence de preuve `asked-for-sf-delegation-line`. Cette garde est la nôtre : elle tient quand l'indicateur de boucle d'un hôte est faux ou absent.
 
