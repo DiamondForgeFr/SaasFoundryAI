@@ -3,6 +3,7 @@ import { isAbsolute } from 'path'
 
 import { appendCaptureError } from '../harness/capture-errors'
 import { resolveLedgerDir } from '../harness/delegation-ledger'
+import { SHELLS } from '../harness/shell-shape'
 import { evaluateToolCall, GUARDED_TOOLS, type GuardHost } from '../harness/tool-call-guard'
 
 export const GUARD_HOSTS: readonly GuardHost[] = ['claude-code', 'codex']
@@ -31,15 +32,30 @@ async function readStdin(limit = MAX_PAYLOAD_BYTES): Promise<string> {
 const record = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined)
 
 /**
+ * The line a shell tool runs when it is given as an argument vector `[shell, -c|-lc, line]`: the host's own
+ * wrapper (Codex runs `bash -lc '<line>'`), not something the agent wrote. The line is what the guard reads, so
+ * that every Codex call is not an inline script.
+ */
+function shellLineOf(words: string[]): string | undefined {
+  const [program, ...rest] = words
+  if (program === undefined || !SHELLS.has(program.slice(program.lastIndexOf('/') + 1)) || rest.length < 2) return undefined
+  const flags = rest.slice(0, -1)
+  return flags.every((word) => word.startsWith('-')) && flags.some((word) => /^-[A-Za-z]*c[A-Za-z]*$/.test(word)) ? rest[rest.length - 1] : undefined
+}
+
+/**
  * The command a host is about to run, from the shape of its tool event. Claude Code and Codex both put it in
- * `tool_input.command`; Codex `exec_command` calls it `cmd`, and a shell tool may pass an argument vector, which
- * is quoted word by word so that the tokeniser reads it as the shell would.
+ * `tool_input.command`; Codex `exec_command` calls it `cmd`, and a shell tool may pass an argument vector: a
+ * shell wrapper (`bash -lc '<line>'`) stands for its line, any other vector is quoted word by word so that the
+ * tokeniser reads it as the shell would.
  */
 function commandOf(toolInput: unknown): string {
   const input = record(toolInput)
   const value = input?.command ?? input?.cmd
   if (typeof value === 'string') return value
-  if (Array.isArray(value) && value.every((word) => typeof word === 'string')) return (value as string[]).map((word) => `'${word.replace(/'/g, `'\\''`)}'`).join(' ')
+  if (Array.isArray(value) && value.every((word) => typeof word === 'string')) {
+    return shellLineOf(value as string[]) ?? (value as string[]).map((word) => `'${word.replace(/'/g, `'\\''`)}'`).join(' ')
+  }
   return ''
 }
 
@@ -82,7 +98,8 @@ export async function agentsGuard(options: AgentsGuardOptions): Promise<void> {
       ...(cwd ? { cwd } : {}),
       ...(typeof event.agent_id === 'string' && event.agent_id ? { agentId: event.agent_id } : {})
     })
-    if (!decision) return
+    // The guard is run in its default mode here, which refuses: a warning is only produced when a mode says so.
+    if (decision?.decision !== 'deny') return
     process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: decision.reason } })}\n`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

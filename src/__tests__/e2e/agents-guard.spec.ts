@@ -76,6 +76,52 @@ describe('compiled sf agents guard', () => {
     expect(JSON.parse(exec.stdout).hookSpecificOutput.permissionDecision).toBe('deny')
   })
 
+  // #1251 — a line that is not one plain command is refused, with the split to make
+  describe('the shape of the line', () => {
+    it('refuses a chain on Claude Code, and names the commands to run one by one', () => {
+      const result = guard('claude-code', event('cd apps/site && npm install'))
+
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+      const reason = JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason as string
+      expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny')
+      expect(reason).toContain('chains commands with &&')
+      expect(reason).toContain('1. `cd apps/site` 2. `npm install`')
+    })
+
+    it.each([
+      ['a substitution', 'kill $(lsof -tiTCP:4325 -sTCP:LISTEN)', 'command substitution'],
+      ['a loop', 'for p in 1 2; do echo $p; done', 'loop'],
+      ['an inline script', 'python3 -c "print(1)"', 'inline script']
+    ])('refuses %s on Codex', (_name, command, said) => {
+      const result = guard('codex', event(command))
+
+      expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny')
+      expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason).toContain(said)
+    })
+
+    it('leaves a PowerShell line, a plain pipe and a quoted ; alone', () => {
+      expect(guard('claude-code', event('a; b && c', {}, 'PowerShell')).stdout).toBe('')
+      expect(guard('claude-code', event('npm test 2>&1 | tail -20')).stdout).toBe('')
+      expect(guard('claude-code', event('git commit -m "a; b && c"')).stdout).toBe('')
+    })
+
+    it('reads the line of a Codex argument vector `bash -lc`, not the wrapper', () => {
+      expect(guard('codex', event(['bash', '-lc', 'ls -la'])).stdout).toBe('')
+      expect(guard('codex', event(['bash', '-lc', 'git commit -m "a; b"'])).stdout).toBe('')
+      const chained = guard('codex', event(['bash', '-lc', 'cd x && ls']))
+      expect(JSON.parse(chained.stdout).hookSpecificOutput.permissionDecisionReason).toContain('chains commands with &&')
+      // any other vector is a command, each word quoted: a word with a ; in it is not a chain
+      expect(guard('codex', event(['git', 'commit', '-m', 'a; b && c'])).stdout).toBe('')
+    })
+
+    it('leaves a commit message written through a quoted heredoc to Claude Code, which does not ask about it', () => {
+      const message = 'git commit -m "$(cat <<\'EOF\'\nfix(#1): x\nEOF\n)"'
+      expect(guard('claude-code', event(message)).stdout).toBe('')
+      expect(JSON.parse(guard('codex', event(message)).stdout).hookSpecificOutput.permissionDecisionReason).toContain('git commit -F <file>')
+    })
+  })
+
   it.each([
     ['a file edit', () => event('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog', {}, 'Edit')],
     ['a tool event without a command', () => JSON.stringify({ hook_event_name: 'PreToolUse', cwd: project, tool_name: 'Bash', tool_input: {} })],

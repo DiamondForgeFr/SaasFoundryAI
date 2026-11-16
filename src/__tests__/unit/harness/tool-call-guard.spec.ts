@@ -2,11 +2,14 @@ import { evaluateToolCall, parseShell, type GuardRule, type ToolCall } from '../
 
 // #1106 — the guard hook refuses the calls that teach an agent to get past a guard: a bypass variable, a nature
 // label it puts on its own ticket, and, for a delegated agent, the consent, `ready-pr` and a merge.
+// #1251 — and, last, a line that is not one plain command (the `shell shape` describe at the end).
 
 const PRIMARY = '/work/project'
 const WORKTREE = '/work/project/.claude/worktrees/agent-a1'
 
-const call = (command: string, extra: Partial<ToolCall> = {}): ToolCall => ({ host: 'claude-code', toolName: 'Bash', command, cwd: PRIMARY, ...extra })
+// The rules of the escape hatches are read with the shell shape rule off: the shape rule is another one, and
+// these cases chain commands (`cd x && SF_WORKFLOW_BYPASS_…`) on purpose.
+const call = (command: string, extra: Partial<ToolCall> = {}): ToolCall => ({ host: 'claude-code', toolName: 'Bash', command, cwd: PRIMARY, shellShape: 'off', ...extra })
 const delegated = (command: string, extra: Partial<ToolCall> = {}): ToolCall => call(command, { agentId: 'agent-a1', cwd: WORKTREE, ...extra })
 const rule = (input: ToolCall): GuardRule | undefined => evaluateToolCall(input)?.rule
 
@@ -304,6 +307,217 @@ describe('evaluateToolCall', () => {
         expect(reason).not.toMatch(/=1\b/)
         expect(reason).not.toMatch(/--add-label/)
         expect(reason).not.toMatch(/unset|disableAllHooks|--no-verify/)
+      }
+    })
+  })
+})
+
+// #1251 — the guard hook also refuses a line that is not one plain command: a chain, a substitution, a loop, an
+// inline script, a file written through a heredoc. The other rules are read first and keep their reasons.
+describe('evaluateToolCall: the shell shape rule', () => {
+  const shaped = (command: string, extra: Partial<ToolCall> = {}): ToolCall => call(command, { shellShape: 'refuse', ...extra })
+  const decide = (command: string, extra: Partial<ToolCall> = {}) => evaluateToolCall(shaped(command, extra))
+  const codex = (command: string, toolName = 'Bash'): ToolCall => ({ host: 'codex', toolName, command, cwd: PRIMARY })
+  const COMMIT = 'git commit -m "$(cat <<\'EOF\'\nfix(#1): x\n\nbody\nEOF\n)"'
+
+  describe('refuses', () => {
+    it.each([
+      ['a substitution', 'kill $(lsof -tiTCP:4325 -sTCP:LISTEN)', 'shell-substitution'],
+      ['a backtick', 'echo `date`', 'shell-substitution'],
+      ['a double-quoted substitution in a pipe', 'grep "$(whoami)" f | head', 'shell-substitution'],
+      ['a process substitution', 'diff <(a) <(b)', 'shell-substitution'],
+      ['a for loop', 'for p in 4322 4323; do curl -s "localhost:$p"; done', 'shell-compound'],
+      ['a while loop', 'while read l; do echo "$l"; done < f', 'shell-compound'],
+      ['a conditional', 'if [ -f x ]; then echo y; fi', 'shell-compound'],
+      ['a group', '{ a; b; }', 'shell-compound'],
+      ['a subshell', '(cd x; ls)', 'shell-compound'],
+      ['&&', 'cd apps/site && npm install && ls', 'shell-chain'],
+      ['a semicolon', 'a; b; c', 'shell-chain'],
+      ['||', 'a || b', 'shell-chain'],
+      ['a newline', 'a\nb', 'shell-chain'],
+      ['a test and &&', '[[ -f x ]] && echo y', 'shell-chain'],
+      ['a trailing &', 'sleep 5 &', 'shell-background'],
+      ['an inline python script', "python3 - <<'E'\nprint(1)\nE", 'shell-inline-script'],
+      ['python -c', 'python3 -c "print(1)"', 'shell-inline-script'],
+      ['node -e', 'node -e "console.log(1)"', 'shell-inline-script'],
+      ['bash -c', 'bash -c "a && b"', 'shell-inline-script'],
+      ['env bash -c', 'env FOO=1 bash -c "a"', 'shell-inline-script'],
+      ['timeout node -e', 'timeout 5 node -e "x"', 'shell-inline-script'],
+      ['eval', 'eval "a"', 'shell-inline-script'],
+      ['cat <<EOF > path', 'cat <<EOF > notes.md\nx\nEOF', 'shell-heredoc-write'],
+      ['tee path <<EOF', 'tee notes.md <<EOF\nx\nEOF', 'shell-heredoc-write'],
+      ['the commit message idiom on Claude Code, written with an unquoted delimiter', 'git commit -m "$(cat <<EOF\nmsg\nEOF\n)"', 'shell-substitution']
+    ])('%s', (_name, command, expected) => {
+      const decision = decide(command)
+      expect(decision).toMatchObject({ decision: 'deny', rule: expected })
+      expect(decision?.reason).toContain('Refused by the SaaSFoundry guard hook')
+    })
+
+    it('on Codex too: the same constructs, whatever its shell tool is called', () => {
+      for (const toolName of ['Bash', 'exec_command', 'shell']) {
+        expect(evaluateToolCall(codex('cd x && ls', toolName))).toMatchObject({ decision: 'deny', rule: 'shell-chain' })
+        expect(evaluateToolCall(codex('kill $(pgrep x)', toolName))).toMatchObject({ rule: 'shell-substitution' })
+        expect(evaluateToolCall(codex('for x in a; do b; done', toolName))).toMatchObject({ rule: 'shell-compound' })
+        expect(evaluateToolCall(codex('python3 -c "x"', toolName))).toMatchObject({ rule: 'shell-inline-script' })
+      }
+    })
+
+    it('when the mode is not given: absence means refuse', () => {
+      const bare: ToolCall = { host: 'claude-code', toolName: 'Bash', command: 'a && b', cwd: PRIMARY }
+      expect(evaluateToolCall(bare)).toMatchObject({ decision: 'deny', rule: 'shell-chain' })
+    })
+
+    it('from a delegated agent as well', () => {
+      expect(evaluateToolCall(shaped('a && b', { agentId: 'agent-a1', cwd: WORKTREE }))).toMatchObject({ rule: 'shell-chain' })
+    })
+  })
+
+  describe('leaves alone', () => {
+    it.each([
+      ['a plain command', 'git status --short'],
+      ['a pipeline', 'npm test 2>&1 | tail -20'],
+      ['a quoted ;', 'git commit -m "a; b && c"'],
+      ['a heredoc fed to a filter', "cat <<'EOF' | wc -l\na; b\nEOF"],
+      ['a script file', 'node scripts/build.js -e x'],
+      ['an escaped ; of find', "find . -name '*.ts' -exec grep -l x {} \\;"],
+      ['the commit message from a file', 'git commit -F /tmp/1251-message.txt']
+    ])('%s', (_name, command) => {
+      expect(decide(command)).toBeUndefined()
+    })
+
+    it('a quoted-heredoc commit message on Claude Code, which does not ask about it; not on Codex', () => {
+      expect(decide(COMMIT)).toBeUndefined()
+      expect(evaluateToolCall(codex(COMMIT))).toMatchObject({ decision: 'deny', rule: 'shell-substitution' })
+    })
+
+    it('a PowerShell line, which the bash lexer would misread, while the other rules still apply', () => {
+      expect(decide('a; b && c $(x)', { toolName: 'PowerShell' })).toBeUndefined()
+      expect(decide('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog; b', { toolName: 'PowerShell' })).toMatchObject({ rule: 'bypass-variable' })
+    })
+
+    it('a tool that is not a shell', () => {
+      expect(decide('a && b', { toolName: 'Edit' })).toBeUndefined()
+      expect(evaluateToolCall(codex('a && b', 'apply_patch'))).toBeUndefined()
+    })
+
+    it('every line, when the mode is off', () => {
+      expect(evaluateToolCall(call('a && b; for x in y; do z; done'))).toBeUndefined()
+    })
+  })
+
+  describe('is read after the other rules', () => {
+    it('a bypass variable keeps its refusal and its reason', () => {
+      const decision = decide('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog && b')
+      expect(decision).toMatchObject({ rule: 'bypass-variable' })
+      expect(decision?.reason).toBe(evaluateToolCall(call('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog'))?.reason)
+    })
+
+    it('a nature label, --skip-local-ci and a delegated merge keep theirs', () => {
+      expect(decide('a && gh issue edit 1 --add-label nature:internal')).toMatchObject({ rule: 'nature-label' })
+      expect(decide(`a; ${WORKFLOW} update-status 1 X --skip-local-ci r`)).toMatchObject({ rule: 'skip-local-ci' })
+      expect(decide('cd x && gh pr merge 12', { agentId: 'agent-a1', cwd: WORKTREE })).toMatchObject({ rule: 'merge' })
+    })
+
+    it('the rules of the escape hatches that apply only to a delegated agent do not turn into shape refusals for the session', () => {
+      expect(decide('gh pr merge 12')).toBeUndefined()
+      expect(decide('cd x && gh pr merge 12')).toMatchObject({ rule: 'shell-chain' })
+    })
+  })
+
+  describe('the warn mode', () => {
+    it('flags the line with the same corrective text, and does not deny it', () => {
+      const warned = evaluateToolCall(shaped('cd apps/site && npm install', { shellShape: 'warn' }))
+      expect(warned).toMatchObject({ decision: 'warn', rule: 'shell-chain' })
+      expect(warned?.reason).toContain('guard hook warning')
+      expect(warned?.reason).not.toContain('Refused')
+      expect(warned?.reason).toContain('1. `cd apps/site` 2. `npm install`')
+      expect(warned?.reason).toContain('next time')
+    })
+
+    it('still denies a bypass: the escape hatches do not depend on the mode', () => {
+      expect(evaluateToolCall(shaped('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog', { shellShape: 'warn' }))).toMatchObject({ decision: 'deny', rule: 'bypass-variable' })
+    })
+  })
+
+  describe('the reasons', () => {
+    const reasonOf = (command: string, host: 'claude-code' | 'codex' = 'claude-code') => (host === 'codex' ? evaluateToolCall(codex(command)) : decide(command))?.reason ?? ''
+
+    it('quote the commands of a chain in order, and tell the agent to drop a cd', () => {
+      const reason = reasonOf('cd apps/site && npm install && ls')
+      expect(reason).toContain('chains commands with &&')
+      expect(reason).toContain('1. `cd apps/site` 2. `npm install` 3. `ls`')
+      expect(reason).toContain('Drop `cd <dir> &&`')
+      expect(reason).toContain('git -C <dir>')
+    })
+
+    it('say what to do with a ||, a semicolon and a newline', () => {
+      expect(reasonOf('a || b')).toContain('only if `a` failed')
+      expect(reasonOf('a; b')).toContain('chains commands with ;')
+      expect(reasonOf('a\nb')).toContain('chains commands with a newline')
+    })
+
+    it('name the command a substitution runs, and the line to run after it', () => {
+      const reason = reasonOf('kill $(lsof -tiTCP:4325 -sTCP:LISTEN)')
+      expect(reason).toContain('command substitution ($(…))')
+      expect(reason).toContain('`lsof -tiTCP:4325 -sTCP:LISTEN`')
+      expect(reason).toContain('`kill <output>`')
+    })
+
+    it('send a commit message written through a heredoc to a file', () => {
+      const reason = reasonOf('git commit -m "$(cat <<\'EOF\'\nmsg\nEOF\n)"', 'codex')
+      expect(reason).toContain('git commit -F <file>')
+      expect(reason).toContain('--body-file <file>')
+      expect(reason).toContain('your file-editing tool')
+    })
+
+    it('send an inline script to a file, and a file written by a heredoc to the file tools', () => {
+      expect(reasonOf('python3 -c "x"')).toContain('inline script (`python3 -c`)')
+      expect(reasonOf('python3 -c "x"')).toContain('Write the script to a scratch file with the Write tool')
+      expect(reasonOf('eval "x"')).toContain('without `eval`')
+      const written = reasonOf('cat <<EOF > notes.md\nx\nEOF')
+      expect(written).toContain('Create the file with the Write tool')
+      expect(written).toContain('the Edit tool')
+    })
+
+    it('name the loop, the conditional and the group', () => {
+      expect(reasonOf('for x in a; do b; done')).toContain('a `for` loop')
+      expect(reasonOf('if a; then b; fi')).toContain('an `if` conditional')
+      expect(reasonOf('{ a; }')).toContain('a `{ … }` group')
+      expect(reasonOf('(a)')).toContain('a `( … )` subshell')
+    })
+
+    it('send a background job to the background option of the host', () => {
+      expect(reasonOf('sleep 5 &')).toContain('`run_in_background` option of the Bash tool')
+      expect(reasonOf('sleep 5 &', 'codex')).toContain("shell tool's background option")
+      expect(reasonOf('sleep 5 &', 'codex')).not.toContain('run_in_background')
+    })
+
+    it('word the tools per host: Write on Claude Code, the file tool on Codex', () => {
+      expect(reasonOf('python3 -c x')).toContain('the Write tool')
+      expect(reasonOf('python3 -c x', 'codex')).toContain('your file-editing tool')
+      expect(reasonOf('python3 -c x', 'codex')).not.toContain('Write tool')
+    })
+
+    it('list what else the line holds', () => {
+      const reason = reasonOf('kill $(a) && b')
+      expect(reason).toContain('command substitution')
+      expect(reason).toContain('It also contains a chain of commands.')
+    })
+
+    it('quote at most six commands of a chain', () => {
+      const reason = reasonOf('a; b; c; d; e; f; g; h')
+      expect(reason).toContain('6. `f`')
+      expect(reason).not.toContain('7. ')
+      expect(reason).toContain('(2 more)')
+    })
+
+    it('never tell the agent a way around the guard', () => {
+      for (const command of ['a && b', 'kill $(a)', 'for x in a; do b; done', 'python3 -c x', 'sleep 5 &', 'cat <<EOF > f\nx\nEOF']) {
+        for (const host of ['claude-code', 'codex'] as const) {
+          const reason = reasonOf(command, host)
+          expect(reason).not.toMatch(/shell-guard|shellShape|--no-verify|unset|disableAllHooks|SF_WORKFLOW_BYPASS|escape hatch/i)
+          expect(reason).not.toMatch(/\boff\b/)
+        }
       }
     })
   })
