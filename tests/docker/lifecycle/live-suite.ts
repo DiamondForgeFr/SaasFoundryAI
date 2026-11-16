@@ -115,7 +115,8 @@ export async function runLiveSuite(context: ProductReadyContext, options: LiveSu
   return result!
 }
 
-function browserCacheRoot(executablePath: string): string {
+/** The browser directory the image carries, as `PLAYWRIGHT_BROWSERS_PATH` names it. */
+export function browserCacheRoot(executablePath: string): string {
   const segments = executablePath.split('/')
   const browserDirectory = segments.findIndex((segment) => /^chromium(?:_headless_shell)?-/.test(segment))
   if (browserDirectory > 0) return `/${segments.slice(1, browserDirectory).join('/')}`
