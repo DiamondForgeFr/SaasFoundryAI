@@ -229,7 +229,8 @@ joins the project board in Backlog — one already on the board keeps its status
 sf srs spawn --epic <feature-url> --version "v1 — MVP" --milestone "v1.0.0"
 ```
 
-The milestone is created or reused, the version page is linked to it, and the Epic plus every Story spawned in the run joins it. Re-running the same spawn does not produce a second release.
+The milestone is created or reused, the version page is linked to it, and every Story of the run, created or reused, joins it, with the Epic when the run creates it. An Epic that already exists
+(`--ticket`, or found from an earlier run) keeps its milestone: it may span several releases (#1119). Re-running the same spawn does not produce a second release.
 
 **The name is the release, not the version page.** `v1.0.0`, not `v1 — MVP`. A release may carry several features' versions — that is why the link is an association and not an equality (#542 R2), and
 why the CLI will not derive the name from the page it was handed. Ask the user for it; a version number is a decision.

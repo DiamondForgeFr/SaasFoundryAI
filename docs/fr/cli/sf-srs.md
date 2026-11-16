@@ -119,8 +119,10 @@ pour que vous mettiez son corps à jour à la main.
 
 ### Générer des tickets
 
-L'option `--milestone` de `spawn` **déclare la release dans laquelle ces tickets seront livrés** : le milestone est créé ou réutilisé, la page de version lui est associée et tous les tickets générés
-le rejoignent.
+L'option `--milestone` de `spawn` **déclare la release dans laquelle ces tickets seront livrés** : le milestone est créé ou réutilisé, la page de version lui est associée et les Stories de
+l'exécution, créées ou réutilisées, le rejoignent. Un Epic créé par l'exécution le rejoint aussi. Un Epic qui existe déjà, passé avec `--ticket` ou retrouvé d'une exécution précédente, garde son
+milestone : un Epic peut couvrir plusieurs releases, et seules ses Stories en portent une. Le dry run l'annonce, et depuis la 1.3.0 `spawn` ne déplace plus l'Epic
+([#1119](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1119)).
 
 L'option `--complexity <niveau>` de `spawn` étiquette chaque Story créée dont la page FR n'indique pas de complexité (`bug`, `low`, `medium` ou `complex`) ; la complexité de la page FR l'emporte. Le
 résumé liste les Stories restées sans complexité, que le workflow refuse de sortir du Backlog.

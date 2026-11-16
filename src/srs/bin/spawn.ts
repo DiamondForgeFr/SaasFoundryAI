@@ -569,8 +569,13 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     return 10
   }
 
+  // An Epic may span several releases, and only its delivery children carry one: an Epic that
+  // already exists keeps the milestone it has, and --milestone scopes this run's Stories (#1119)
+  const existingEpic = options.ticket ?? adoptedEpic
   if (options.milestone) {
-    io.stdout(`  release: « ${options.milestone} » — created or reused, and everything above joins it\n`)
+    const joining = existingEpic ? 'the Stories of this run join it' : 'the new Epic and the Stories of this run join it'
+    io.stdout(`  release: « ${options.milestone} » — created or reused; ${joining}\n`)
+    if (existingEpic) io.stdout(`  Epic #${existingEpic} keeps its milestone: an Epic may span several releases\n`)
   } else {
     // Said out loud rather than left to be discovered later. A version spawned
     // into no release is the state #542 exists to prevent, and the moment to
@@ -744,10 +749,11 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
 
   if (options.milestone) {
-    // The Epic joins too: a milestone read after the release should show the
-    // grouping that composed it, not a flat list of Stories. It closes on its
-    // own when its children do, so it never holds the percentage back.
-    const toAssign = [...new Set([parentTicket, ...reused, ...created])]
+    // An Epic this run creates joins too: a milestone read after the release should show the
+    // grouping that composed it, not a flat list of Stories. It closes on its own when its
+    // children do, so it never holds the percentage back. An Epic that already existed keeps
+    // its milestone: its earlier Stories stay in their own release (#1119).
+    const toAssign = [...new Set([...(existingEpic ? [] : [parentTicket]), ...reused, ...created])]
     const assigned: string[] = []
     for (const ticket of toAssign) {
       try {
@@ -762,6 +768,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       }
     }
     io.stdout(`spawn: ${assigned.length} ticket(s) joined « ${options.milestone} ».\n`)
+    if (existingEpic) io.stdout(`spawn: Epic #${existingEpic} keeps its milestone.\n`)
 
     // Last because it is the only step that is idempotent on its own, so it is
     // the safe one to be retried by a re-run.
