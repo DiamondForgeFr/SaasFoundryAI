@@ -236,10 +236,11 @@ role needs it wherever the role applies (its account, or every entity an ENTITY 
 hold); and a `PLATFORM_ADMINISTRATION` section never goes on an ACCOUNT or ENTITY role.
 
 An ENTITY role is **used** in an entity when it is assigned there, or when a pending (`SENT`) invitation that carries it targets that entity: acceptance assigns the invitation's ENTITY roles in each
-of its entities, so `loadRoleAuthority` reads both (`loadEntitiesUsingRole`). An ENTITY role used nowhere applies to the account and is shaped for its entity type: an administrator of the account
-itself (through an ACCOUNT role) may also grant what the type's active ENTITY system roles grant (`loadEntityTypeGrants`), since it may already allocate them in any entity of the account; an entity
-administrator grants only what it holds. Once the role is assigned or promised by a pending invitation, each grant is checked in every entity it is used in, without that allowance. A new place where a
-role takes effect later (a scheduled assignment, a template applied on creation) counts the same way: add it to `loadEntitiesUsingRole`.
+of its entities, so `loadRoleAuthority` reads both (`loadEntitiesUsingRole`). An ENTITY role used nowhere applies to the account; a used one applies in every entity it is used in. Either way it is
+shaped for its entity type: an administrator of the account itself (through an ACCOUNT role of the role's account) may also grant what the type's active ENTITY system roles grant
+(`loadEntityTypeGrants`), whether the role is unassigned, assigned or promised by a pending invitation, since it acts only within its account and may already allocate those system roles in any entity
+of it. An entity administrator grants only what it holds, in every entity the role is used in. A new place where a role takes effect later (a scheduled assignment, a template applied on creation)
+counts the same way: add it to `loadEntitiesUsingRole`.
 
 Entities form a tree (`Entity.parentEntityId`, `prisma/schema/organizations.prisma`): an entity administrator sees the subtree under their entity, never its siblings. Pass the ids these methods return
 into the Prisma `where` (`{ id: { in: visibleIds } }`) — see `AccountService` for the pattern.

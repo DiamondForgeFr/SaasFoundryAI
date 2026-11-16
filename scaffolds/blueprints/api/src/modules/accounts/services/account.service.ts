@@ -43,9 +43,9 @@ const PLATFORM_ADMINISTRATION_MODULE = 'PLATFORM_ADMINISTRATION'
  * What a caller may do to one role: read once per request (see `loadRoleAuthority`).
  *   - `platform`: ROLE_CUSTOM_MANAGEMENT through a PLATFORM role, authority over every role;
  *   - `targets`: where the role applies, each of which the caller must administer;
- *   - `entityTypeGrants`: for an ENTITY role used nowhere yet, authored by an administrator of its
- *     account, what the entity type allows (the grants of its system roles), which that author may grant
- *     on top of what it holds (#1230). Null otherwise.
+ *   - `entityTypeGrants`: for an ENTITY role (used or not) edited by an administrator of its account,
+ *     what the entity type allows (the grants of its system roles), which that author may grant on top
+ *     of what it holds (#1230, #1245). Null otherwise.
  */
 interface RoleAuthority {
   checker: ScopedPermissionChecker
@@ -1252,10 +1252,9 @@ export class AccountService {
    * account for an ACCOUNT role, the account or one of its entities for an ENTITY role, the
    * platform for a global template — so an entity administrator creates ENTITY roles only. The
    * caller must also hold, there, every permission and section the role grants, and no account
-   * or entity role carries a PLATFORM_ADMINISTRATION section. A new ENTITY role is assigned
-   * nowhere yet: an administrator of the account may also grant it what its entity type allows
-   * (the grants of the type's system roles), so the sections that exist only on an entity can be
-   * granted (#1230).
+   * or entity role carries a PLATFORM_ADMINISTRATION section. On an ENTITY role, an administrator
+   * of the account may also grant what its entity type allows (the grants of the type's system
+   * roles), so the sections that exist only on an entity can be granted (#1230).
    *
    * Always created with isSystem=false.
    */
@@ -1352,8 +1351,10 @@ export class AccountService {
    *   applies: its account for an ACCOUNT role, every entity it is used in for an ENTITY role
    *   (assigned there, or targeted by a pending invitation that carries it, #1222).
    * - Every permission or section the update ADDS must be held by the caller there too, and no
-   *   account or entity role carries a PLATFORM_ADMINISTRATION section. On an ENTITY role used
-   *   nowhere yet, an administrator of the account may also add what the entity type allows (#1230).
+   *   account or entity role carries a PLATFORM_ADMINISTRATION section. On an ENTITY role, whether
+   *   assigned nowhere yet, assigned, or promised by a pending invitation, an administrator of the
+   *   account may also add what the entity type allows (#1230, #1245); an entity administrator adds
+   *   only what it holds in every entity where the role is used.
    */
   public async updateCustomRole(
     userId: string,
@@ -2183,13 +2184,14 @@ export class AccountService {
    * a change made before acceptance applies to the invitee as well (#1222). Only a SENT invitation can
    * still be accepted; an expired, canceled or accepted one promises nothing more.
    *
-   * An ENTITY role used nowhere yet is shaped for its entity type, not for the account: sections that exist
-   * only on an entity are never held on the account. When the caller administers the account itself
+   * An ENTITY role is shaped for its entity type, not for the account: sections that exist only on an
+   * entity are never held on the account. When the caller administers the account itself
    * (ROLE_CUSTOM_MANAGEMENT through an ACCOUNT role, not through one of its entities), it may also grant
    * what the entity type allows (`entityTypeGrants`, see `loadEntityTypeGrants`), since it may already
-   * allocate the type's system roles in any entity of the account (#1230). An administrator of one entity
-   * only grants what it holds. A role promised by a pending invitation is not used nowhere: it is checked in
-   * the invited entities, without the entity type, like an assigned one.
+   * allocate the type's system roles in any entity of the account (#1230). That holds wherever the role
+   * is used: assigned nowhere yet, assigned in entities of the account, or promised by a pending
+   * invitation (#1245). An administrator of one entity only grants what it holds, in every entity where
+   * the role is used.
    */
   private async loadRoleAuthority(userId: string, role: { id?: number; scope: string; accountId: string | null; isSystem: boolean }): Promise<RoleAuthority> {
     const accountId = role.isSystem ? null : role.accountId
@@ -2205,7 +2207,7 @@ export class AccountService {
     }
 
     const platform = checker.hasOnPlatform(ROLE_CUSTOM_MANAGEMENT)
-    const shapedForEntityType = !platform && accountId !== null && role.scope === 'ENTITY' && usedInEntityIds.length === 0
+    const shapedForEntityType = !platform && accountId !== null && role.scope === 'ENTITY'
     const entityTypeGrants = shapedForEntityType && checker.has(ROLE_CUSTOM_MANAGEMENT, { kind: 'ACCOUNT', accountId }) ? await this.loadEntityTypeGrants() : null
 
     return { checker, platform, targets, entityTypeGrants }
@@ -2258,8 +2260,8 @@ export class AccountService {
    *     must hold ROLE_CUSTOM_MANAGEMENT in each place the role applies, and each permission or section
    *     it adds must be held there too: nobody grants what they do not hold, so no role can be used to
    *     climb above its editor;
-   *   - on an ENTITY role used nowhere yet, an administrator of its account may also grant what the
-   *     entity type allows (`entityTypeGrants`), never more.
+   *   - on an ENTITY role, wherever it is used, an administrator of its account may also grant what the
+   *     entity type allows (`entityTypeGrants`), never more (#1230, #1245).
    */
   private assertRoleAuthority(authority: RoleAuthority, role: { isSystem: boolean; accountId: string | null }, added: AddedGrants = { permissions: [], subModules: [] }): void {
     if (authority.platform) return
