@@ -97,9 +97,12 @@ describe('previous-release lifecycle diagnostics', () => {
         cliEntry,
         [
           "const { spawn } = require('node:child_process')",
-          "const { writeFileSync } = require('node:fs')",
+          "const { renameSync, writeFileSync } = require('node:fs')",
           "const child = spawn(process.execPath, ['-e', \"process.on('SIGTERM',()=>{});setInterval(()=>{},1000)\"], { stdio: 'ignore' })",
-          `writeFileSync(${JSON.stringify(pidFile)}, JSON.stringify([process.pid, child.pid]))`,
+          // The deadline can kill this process in the middle of the write: a pid file written in place was then read
+          // half-written (#1240). Renamed into place, it is either whole or absent, and absent means "try again".
+          `writeFileSync(${JSON.stringify(`${pidFile}.tmp`)}, JSON.stringify([process.pid, child.pid]))`,
+          `renameSync(${JSON.stringify(`${pidFile}.tmp`)}, ${JSON.stringify(pidFile)})`,
           "process.on('SIGTERM', () => {})",
           'setInterval(() => {}, 1000)',
           ''

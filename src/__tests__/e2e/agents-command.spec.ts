@@ -8,6 +8,12 @@ import { CLAUDE_CAPTURE_COMMAND, CODEX_CAPTURE_COMMAND } from '../../harness/del
 
 const ROOT = resolve(__dirname, '../../..')
 
+// Every test spawns the compiled CLI several times, and some run Git beside it (a clone, a linked worktree). On an idle
+// machine the file takes 34 s and its slowest test 6.4 s; on 2026-11-16, at a load average near 100 on 10 cores, the
+// file took 305 s (9 times longer) and that test went past the e2e project's 60 s (#1240). 120 s is twice what the
+// slowest test takes at the worst slowdown measured: a hang guard, not what the tests check.
+jest.setTimeout(120_000)
+
 describe('compiled sf agents commands', () => {
   let project: string
   beforeEach(async () => {
