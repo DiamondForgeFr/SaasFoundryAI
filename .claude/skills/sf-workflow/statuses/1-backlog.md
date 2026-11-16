@@ -1,7 +1,7 @@
 ---
 status: Backlog
 banner_ai: Detect + persist the complexity label, analyze and plan per complexity, challenge the specs
-banner_human: Validate specs + plan (→ Ready), then confirm pickup priority (→ In progress)
+banner_human: Validate specs + plan, then confirm pickup (→ In progress)
 complexity_profiles: [bug, low, medium, complex]
 entry_conditions:
   - Developer mentions a new idea / feature / bug
@@ -18,13 +18,14 @@ exit_conditions:
   - Complexity label present — `get-complexity <ticket>` prints one of `bug|low|medium|complex` (not `(none)`)
   - Analysis complete (if required by complexity)
   - Plan approved (if required by complexity)
-  - Developer validates specs are complete
-next_status: Ready
+  - Developer validates specs AND confirms pickup
+next_status: In progress
 ---
 
 # STATUS: Backlog
 
-Preparation phase — detect complexity, analyze context, plan implementation, validate specs.
+Preparation phase — detect complexity, analyze context, plan implementation, validate specs. In the solo workflow, spec validation and pickup confirmation usually happen in the same exchange: one
+developer "go" covers both.
 
 ## Action checklist
 
@@ -34,7 +35,7 @@ Preparation phase — detect complexity, analyze context, plan implementation, v
 - [ ] **Plan:** `.claude/skills/sf-workflow/scripts/plan.sh <ticket> <complexity>` — follow its guidance; post + await approval for medium/complex; a delegated plan is `planning`
 - [ ] **Challenge the specs** — ask questions, surface edge cases, propose alternatives
 - [ ] **Ticket completeness** — problem/need, acceptance criteria, technical context, complexity tag
-- [ ] **Wait for validation** — two approvals: (1) specs complete → Ready, (2) prioritization → In Progress
+- [ ] **Wait for validation** — the developer's approval of the plan doubles as pickup confirmation
 
 ## Complexity cheat sheet
 
@@ -48,8 +49,7 @@ Preparation phase — detect complexity, analyze context, plan implementation, v
 ## Errors to avoid
 
 - Creating a branch from Backlog
-- Starting to code before Ready
+- Starting to code before the developer validated the plan
 - Skipping complexity detection
 - Leaving Backlog without the `complexity: *` label (suggestion ≠ label; hard-gated)
 - Skipping analysis/planning when required
-- Moving to Ready without developer validation

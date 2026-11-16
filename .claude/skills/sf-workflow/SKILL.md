@@ -1,11 +1,11 @@
 ---
 name: sf-workflow
 description: >-
-  Development workflow of this project (SaaSFoundry AI): ticket statuses and their guards, complexity labels (bug, low, medium, complex), branches and pull requests, driven through workflow-cli.sh.
+  Development workflow of this project (SaaSFoundry Solo): ticket statuses and their guards, complexity labels (bug, low, medium, complex), branches and pull requests, driven through workflow-cli.sh.
   Read it before any ticket status change. Triggers on "workflow status", "check workflow", "what should I do", "next step", "workflow help", "current status", "complexity", "detect complexity".
 ---
 
-# Workflow SaaSFoundry AI
+# Workflow SaaSFoundry Solo
 
 Complexity-adaptive development workflow with GitHub Projects (GitHub Projects, Jira, Notion, Linear, etc.)
 
@@ -41,16 +41,21 @@ Orthogonal to complexity. Controls whether **Human Testing** and **In Review** a
 
 **Default** — if a ticket has no `nature:*` label, the workflow treats it as `user-facing` (safe default).
 
-**Why this exists** — Human Testing is theatrical on tickets with no user-visible surface (the docker tests + lint + tsc already cover the integration risk). And `In Review` on a bundled child is a
-board lie: there is no PR to review at child level — the delivery parent's PR carries the merge ceremony. Bundled children go AI Testing → Done directly.
+**Under the Solo preset** (this repository: `Backlog → In progress → AI testing → In review → Done`) the workflow declares no Human Testing status, so the axis has no testing step to skip:
+`AI Testing → In Review` needs no `nature:*` label, whatever the ticket is, and the human gate is the pull request review. The axis then matters for `nature:bundled-pr` only, which still goes
+`AI Testing → Done`. The rows above describe a workflow that declares Human Testing.
+
+**Why this exists** — Human Testing is theatrical on tickets with no user-visible surface (the existing tests + lint + typecheck already cover the integration risk). And `In Review` on a bundled child
+is a board lie: there is no PR to review at child level — the delivery parent's PR carries the merge ceremony. Bundled children go AI Testing → Done directly.
 
 **Delivery-parent Human Testing** — when a delivery parent contains `nature:bundled-pr` children, the meaningful manual validation happens on the delivery parent's PR after all children are validated.
 An Epic only groups delivery parents and never owns this PR.
 
 **Guards** (all enforced by `update-status`):
 
-- **Nature guard** on `→ In Review` from `AI Testing` — requires `nature:internal`. `nature:bundled-pr` is rejected here (must go to `Done` instead). Default (no label / `user-facing`) must go through
-  Human Testing first. Only the developer labels a ticket `nature:internal`. Escape hatch: the developer's (see [escape-hatches.md](escape-hatches.md)).
+- **Nature guard** on `→ In Review` from `AI Testing` — on a workflow that declares Human Testing, requires `nature:internal`; without that status (Solo) it asks for no label. `nature:bundled-pr` is
+  rejected here either way (must go to `Done` instead). With Human Testing, the default (no label / `user-facing`) must go through Human Testing first. Only the developer labels a ticket
+  `nature:internal`. Escape hatch: the developer's (see [escape-hatches.md](escape-hatches.md)).
 - **PR-state guard** — `→ Human Testing` requires an open draft PR; `→ In Review` requires an open non-draft PR. Unknown PR state blocks these transitions. Epic groupers without a PR keep their
   derived lifecycle. Escape hatch: the developer's.
 - **Pushed-commits guard** — `→ AI Testing` requires the ticket's work committed and pushed to `origin`, read from git in the checkout that holds it (the ticket branch, a bundled child's parent
@@ -58,7 +63,8 @@ An Epic only groups delivery parents and never owns this PR.
   to run; untracked files only warn. Escape hatch: the developer's.
 - **Local CI guard** — `→ Human Testing` requires the project's required local CI statuses green on the exact head commit of the draft PR: `workflow.localCi.requiredStatuses` when recorded
   (`sf workflow set-local-ci`), otherwise `local-<job>` for each job of `.molten/project.json` when it publishes to GitHub, otherwise the `AI testing / Local CI` status published with
-  `workflow-cli.sh ai-status <ticket> "Local CI" success`. The refusal names the source and the command to run. Escape hatch: the developer's, recorded on the PR.
+  `workflow-cli.sh ai-status <ticket> "Local CI" success`. The refusal names the source and the command to run. Escape hatch: the developer's, recorded on the PR. Without a Human Testing status (Solo)
+  there is no such move: `create-pr` (without `--draft`) and `ready-pr` apply the same gate to the pull request head, and `local-ci-gate <ticket>` runs it on its own.
 - **Nature guard** on `→ Done` from `AI Testing` — allowed **only** for `nature:bundled-pr` (everyone else must go through `In Review` first). Whether a ticket is bundled in its parent's PR is the
   developer's call. Escape hatch: the developer's.
 - **PR-merged guard** on `→ Done` — normal delivery tickets require a matching PR verified merged into the working branch. Aggregate Epics and verified `nature:bundled-pr` children are exempt because
@@ -71,8 +77,8 @@ terminal, at the primary checkout.
 
 ## 🧩 Ticket Hierarchy (Epic / Delivery parent / Child ticket)
 
-SaaSFoundryAI distinguishes an optional grouping Epic from a delivery parent. Every child created by `create-subtask` is a **native GitHub sub-issue**. A child is either a normal child with its own
-branch and PR, or a bundled child whose single atomic commit lands on its delivery parent's branch.
+SaaSFoundry Solo distinguishes an optional grouping Epic from a delivery parent. Every child created by `create-subtask` is a **native GitHub Projects sub-issue**. A child is either a normal child
+with its own branch and PR, or a bundled child whose single atomic commit lands on its delivery parent's branch.
 
 ```
 (Epic)                 optional grouper — no branch or PR
@@ -80,13 +86,13 @@ branch and PR, or a bundled child whose single atomic commit lands on its delive
      └─ Child ticket   native sub-issue: own branch/PR, or bundled commit on parent branch
 ```
 
-| Level            | Role                                                                                        | Deliverable                                                                        | GitHub artifact                                                                          | Status                                                                                |
-| ---------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **Epic**         | Optional grouper for related delivery parents (SRS feature, bug batch, transverse refactor) | **None directly** — no branch, no commit, no PR                                    | Issue with delivery-parent issues linked via `addSubIssue`                               | **Derived from children** (see rule below)                                            |
-| **Story**        | Delivers user-observable value                                                              | Branch + commits + PR                                                              | Regular issue, `story.tpl.ts` body — Acceptance Criteria section                         | Explicit, full 7-status lifecycle                                                     |
-| **Task**         | Delivers a technical action                                                                 | Branch + commits + PR                                                              | Regular issue, `task.tpl.ts` body — Completion Criteria section                          | Explicit, full 7-status lifecycle                                                     |
-| **Issue (bug)**  | Task variant for defects                                                                    | Branch + commits + PR                                                              | Regular issue, `issue.tpl.ts` body — Behavior/Expected/Repro/Environment/Impact/Evidence | Explicit, full 7-status lifecycle                                                     |
-| **Child ticket** | Deliverable under a delivery parent                                                         | Normal child: branch + PR. Bundled child: one atomic commit on the parent's branch | Native GitHub sub-issue created by `create-subtask`                                      | Normal child follows the full lifecycle; `nature:bundled-pr` may go AI Testing → Done |
+| Level            | Role                                                                                        | Deliverable                                                                        | Tracking artifact                                                                         | Status                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Epic**         | Optional grouper for related delivery parents (SRS feature, bug batch, transverse refactor) | **None directly** — no branch, no commit, no PR                                    | Ticket with native issue type `sf-epic` and delivery-parent tickets linked as sub-issues  | **Derived from children** (see rule below)                                            |
+| **Story**        | Delivers user-observable value                                                              | Branch + commits + PR                                                              | Regular ticket, `story.tpl.ts` body — Acceptance Criteria section                         | Explicit, full workflow lifecycle                                                     |
+| **Task**         | Delivers a technical action                                                                 | Branch + commits + PR                                                              | Regular ticket, `task.tpl.ts` body — Completion Criteria section                          | Explicit, full workflow lifecycle                                                     |
+| **Issue (bug)**  | Task variant for defects                                                                    | Branch + commits + PR                                                              | Regular ticket, `issue.tpl.ts` body — Behavior/Expected/Repro/Environment/Impact/Evidence | Explicit, full workflow lifecycle                                                     |
+| **Child ticket** | Deliverable under a delivery parent                                                         | Normal child: branch + PR. Bundled child: one atomic commit on the parent's branch | Native GitHub Projects sub-issue created by `create-subtask`                              | Normal child follows the full lifecycle; `nature:bundled-pr` may go AI Testing → Done |
 
 **Child execution modes** — use a normal child when the work needs independent review, a branch, or a PR. Use `nature:bundled-pr` only for one atomic, tightly coupled commit on the delivery parent's
 branch; it has no child PR and may move from AI Testing directly to Done after validation. “Subtask” is shorthand for this native child ticket, not a commit-only concept.
@@ -157,19 +163,19 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
 
 1. **Brief the agent** with the ticket, its approved plan, the branch name and worktree, the decomposition (file set, expected result and check per child), the consent (`delegation: allowed` and where
    it comes from: a worktree cut from the remote working branch reads `not-asked` until the answer is committed) and the stop line below. Resolve the tier with `sf agents route` as above, and never
-   name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (`statuses/3-in-progress.md`). When
+   name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (In progress status document). When
    the host names the worktree branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent pushes to it
    (`git push origin HEAD:<ticket branch>`): `create-pr` accepts that branch when `origin` holds it at the local `HEAD`, found on its own or passed as `--head <ticket branch>`.
-2. **The agent's line.** It follows `statuses/3-in-progress.md` and `statuses/4-ai-testing.md`, which hold the test strategy (the affected tests while it works, the full suites once at the end of AI
-   testing; the brief does not restate it): it delivers the children, posts the `## Test plan` comment, runs the automated and heavy checks, posts the `## Test report` comment and opens the draft PR,
-   then stops with the ticket still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human Testing route, the session on the other) and never
-   records the delegation consent. The session takes it from there: the Examine of a `complex` ticket, then the transition `statuses/4-ai-testing.md` names. The session runs `ready-pr <ticket>` and
-   `draft-pr <ticket>` from the primary checkout, on the working branch, and never enters the agent's worktree: off the ticket branch they find the ticket's one open pull request on GitHub and check
-   its head on origin (several candidates are listed: pick one with `--pr <number>`).
+2. **The agent's line.** It follows the In progress and AI Testing status documents, which hold the test strategy (the affected tests while it works, the full suites once at the end of AI testing; the
+   brief does not restate it): it delivers the children, posts the test plan, runs the automated and heavy checks, posts the `## Test report` comment and opens the draft PR, then stops with the ticket
+   still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human Testing route, the session on the other) and never records the delegation consent.
+   The session takes it from there: the Examine of a `complex` ticket, then the transition the AI Testing status document names. The session runs `ready-pr <ticket>` and `draft-pr <ticket>` from the
+   primary checkout, on the working branch, and never enters the agent's worktree: off the ticket branch they find the ticket's one open pull request on GitHub and check its head on origin (several
+   candidates are listed: pick one with `--pr <number>`).
 3. **One agent per ticket.** Several tickets may be in flight, each with its own agent and worktree. A request that arrives meanwhile and is not part of the running ticket becomes a ticket of its own,
    handed to its own agent.
-4. **Hand-backs.** A defect reported in Human Testing or in review, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree,
-   which returns the ticket to AI Testing when the change calls for retesting.
+4. **Hand-backs.** A defect reported in review or testing, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree, which
+   returns the ticket to AI Testing when the change calls for retesting.
 5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session delivers the tickets itself, one after the other, and says so explicitly.
 6. **Measured delegations.** Every routed delegation is recorded in the clone's ledger, and the routing adjusts itself from it (`sf agents routing report` shows what it did). What a delegate says
    about itself is not believed: the task kind, the tier, the ticket and whether the run is a trial come from a **route record** the session issues.
@@ -253,7 +259,8 @@ call `retag` to persist. The guard fails open if label fetch errors (offline / a
 
 ### Workflow Phase Commands (Complexity-Adaptive)
 
-**`/workflow prepare <ticket> <complexity>`** — adaptive analyze + plan phase (Backlog → Ready). **`/workflow test <ticket> [complexity]`** — validation + optional adversarial review (→ AI Testing).
+**`/workflow prepare <ticket> <complexity>`** — adaptive analyze + plan phase (in Backlog, before In progress). **`/workflow test <ticket> [complexity]`** — validation + optional adversarial review (→
+AI Testing).
 
 | Complexity  | `prepare` behavior                                | `test` behavior                                                    |
 | ----------- | ------------------------------------------------- | ------------------------------------------------------------------ |
@@ -296,7 +303,7 @@ See your tool-specific skill documentation for complete command reference:
 
 ## SRS Handoff (drafting / spawning tickets)
 
-When a ticket crosses into **Ready** and requires Software Requirements Specifications (US / UR / FR / DS / TC), stop and hand off to the agnostic SRS skill:
+When a ticket leaves **Backlog** and requires Software Requirements Specifications (US / UR / FR / DS / TC), stop and hand off to the agnostic SRS skill:
 
 - `.claude/skills/sf-srs/SKILL.md` — selects the configured SRS backend from `.saasfoundry.json → tools.srs.backend`
 - `.claude/skills/sf-srs/scripts/srs-cli.sh validate` — smoke-tests the backend adapter (init OK, exit 0)
@@ -309,7 +316,7 @@ Never bypass the skill to write SRS by hand — the backend dispatch is how new 
 SRS tickets don't flow through the code-path statuses — they have their own lifecycle inside the `In progress` board column:
 
 ```
-Ready → In progress (brainstorm)
+Backlog → In progress (brainstorm)
          → ai-draft        (agent drafts the spec; ai-draft --spec runs srs-cli.sh write)
          → human-review    (owner reviews the backend page)
          → spawning        (srs-cli.sh spawn — creates Backlog children)
@@ -330,12 +337,12 @@ Drive it with:
 
 Each phase is documented in detail:
 
-- `statuses/3a-ai-drafting.md` — AI drafter runs against the configured backend
-- `statuses/3b-human-review.md` — spec owner reviews and approves
-- `statuses/3c-spawning.md` — children land in Backlog, drafting ticket reaches Done
+- `statuses/2a-ai-drafting.md` — AI drafter runs against the configured backend
+- `statuses/2b-human-review.md` — spec owner reviews and approves
+- `statuses/2c-spawning.md` — children land in Backlog, drafting ticket reaches Done
 
-**Guard** — `update-status <ticket> "AI testing|Human testing|In review"` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch
-errors (offline / auth issues) so normal teams are not punished by infrastructure hiccups.
+**Guard** — `update-status <ticket> <any testing/review status>` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch errors
+(offline / auth issues) so normal teams are not punished by infrastructure hiccups.
 
 ### Rule 8 — spawning Stories from SRS
 
@@ -420,12 +427,10 @@ invalid workflow state produces an actionable failure instead of bypassing guard
 ## Workflow Statuses
 
 1. **Backlog** (GRAY) — Read `statuses/1-backlog.md` for full description
-2. **Ready** (YELLOW) — Read `statuses/2-ready.md` for full description
-3. **In progress** (BLUE) — Read `statuses/3-in-progress.md` for full description
-4. **AI testing** (PURPLE) — Read `statuses/4-ai-testing.md` for full description
-5. **Human testing** (ORANGE) — Read `statuses/5-human-testing.md` for full description
-6. **In review** (PINK) — Read `statuses/6-in-review.md` for full description
-7. **Done** (GREEN) — Read `statuses/7-done.md` for full description
+2. **In progress** (BLUE) — Read `statuses/2-in-progress.md` for full description
+3. **AI testing** (PURPLE) — Read `statuses/3-ai-testing.md` for full description
+4. **In review** (PINK) — Read `statuses/4-in-review.md` for full description
+5. **Done** (GREEN) — Read `statuses/5-done.md` for full description
 
 **⚠️ This skill is your SOURCE OF TRUTH for the workflow.**
 
@@ -435,20 +440,20 @@ invalid workflow state produces an actionable failure instead of bypassing guard
 2. **NEVER skip steps** described in a status
 3. **NEVER move to the next status** without meeting all exit conditions
 4. **ASK if uncertain** - don't assume or guess
-5. **CLOSE CHILD TICKETS AS THEY LAND** — every child is a native GitHub sub-issue. A normal child reaches `Done` only after its own PR is verified merged; a bundled child reaches `Done` after its
-   atomic commit is validated on the delivery parent's branch. Close each child immediately and verify `gh issue view <child> --json state` prints `CLOSED` before starting the next sibling. Never
-   batch closures.
+5. **CLOSE CHILD TICKETS AS THEY LAND** — every child is a native GitHub Projects sub-issue. A normal child reaches `Done` only after its own PR is verified merged; a bundled child reaches `Done`
+   after its atomic commit is validated on the delivery parent's branch. Close each child immediately and verify `gh issue view <child> --json state` prints `CLOSED` before starting the next sibling.
+   Never batch closures.
 6. **PARENT DONE IS GATED BY CHILDREN** — a delivery parent or Epic cannot enter `Done` until every native child ticket's project-board Status is exactly `Done`. Run
    `github-projects-cli.sh list-incomplete-children <N>`; any returned or unverifiable child blocks the transition. An Epic moves to In progress with its first active child and to Done with its last
    completed child.
-7. **ONE AGENT PER TICKET, NEVER A SWITCH MID-DELIVERY** — a ticket in `In Progress` / `AI Testing` / `Human Testing` / `In Review` stays with its one agent until `Done`, hand-backs from Human Testing
-   included. Several tickets may be in flight at once when each has its own agent and worktree (delegation `allowed`, see "Delegated ticket delivery"); the session itself never stops delivering one
-   ticket to start delivering another. With delegation `declined` or unavailable, drive the current ticket to `Done` before claiming or starting another. The only override is an explicit developer
-   request to pause.
+7. **ONE AGENT PER TICKET, NEVER A SWITCH MID-DELIVERY** — a ticket in any status between `In Progress` and `Done` (see the Workflow Statuses section above) stays with its one agent until `Done`,
+   hand-backs included. Several tickets may be in flight at once when each has its own agent and worktree (delegation `allowed`, see "Delegated ticket delivery"); the session itself never stops
+   delivering one ticket to start delivering another. With delegation `declined` or unavailable, drive the current ticket to `Done` before claiming or starting another. The only override is an
+   explicit developer request to pause.
 8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use the
    evidence-first `transition-drafting <parent> spawning --epic <feature> [--version <version>] [--milestone <release>] --reconciliation-plan <path>` flow. It renders each body from
    `renderStoryTicketBody` and reconciles exact canonical tickets before mutation. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS
-   Handoff" section below. The escape hatch exists for meta tickets (SRS refactors, tooling) but must never be used to duplicate an FR that already has a page.
+   Handoff" section above. The escape hatch exists for meta tickets (SRS refactors, tooling) but must never be used to duplicate an FR that already has a page.
 9. **MIGRATION FRAMEWORK ON BREAKING CHANGES** — when transitioning a ticket whose diff touches `src/types.ts`, `schemas/saasfoundry-manifest.schema.json`, any installer's deposited templates under
    `scaffolds/`, or any file under `src/migrations/`, verify the change ships a numbered migration (`src/migrations/manifest/NNN-*.ts` for manifest shape changes, a `ModuleMigration` on the
    installer's `migrations` array for module file-set changes). Inline manifest mutations and "let users fix it manually" shortcuts are forbidden by `AGENTS.md`'s "Migration framework — NEVER bypass"

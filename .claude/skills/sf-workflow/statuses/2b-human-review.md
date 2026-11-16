@@ -4,7 +4,7 @@ banner_ai: Waiting — apply your review feedback to the draft pages
 banner_human: Review the SRS pages and approve, or request changes on the ticket
 complexity_profiles: [srs-drafting, srs-update, srs-new]
 entry_conditions:
-  - `3a-ai-drafting.md` complete — the drafted spec is written (`ai-draft --spec <file>` exited 0)
+  - `2a-ai-drafting.md` complete — the drafted spec is written (`ai-draft --spec <file>` exited 0)
   - Backend page URL posted as ticket comment
   - Ticket still carries its `srs:*` label
 mandatory_actions:
@@ -15,7 +15,7 @@ exit_conditions:
   - Owner signalled approval (comment `/approve` or team-specific convention)
   - Backend page reflects the final agreed scope
   - `srs:*` label still in place (cleared by spawning, not here)
-next_status: Spawning (see `statuses/3c-spawning.md`)
+next_status: Spawning (see `statuses/2c-spawning.md`)
 ---
 
 # STATUS (drafting lifecycle): Human Review

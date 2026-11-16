@@ -18,8 +18,9 @@ describe('the AI Testing rule counts a Molten pipeline only when it declares a j
   it.each([
     ['team template', 'scaffolds/skills-templates/workflow/statuses/4-ai-testing.md'],
     ['solo template', 'scaffolds/skills-templates/workflow/statuses-solo/3-ai-testing.md'],
-    ['dogfood copy', '.claude/skills/sf-workflow/statuses/4-ai-testing.md'],
-    ['agents projection', '.agents/skills/sf-workflow/statuses/4-ai-testing.md']
+    // This repository runs the Solo preset (#1242): its own copies hold the Solo documents
+    ['dogfood copy', '.claude/skills/sf-workflow/statuses/3-ai-testing.md'],
+    ['agents projection', '.agents/skills/sf-workflow/statuses/3-ai-testing.md']
   ])('the AI Testing status (%s)', (_label, file) => {
     const text = read(file)
     expect(text).toContain('A Molten pipeline counts only when `.molten/project.json` declares at least one job in `ci.jobs` and `molten ci status` answers')

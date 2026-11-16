@@ -16,7 +16,7 @@ exit_conditions:
   - `transition-drafting <ticket> ai-draft --spec <file>` exited 0 (the spec is written)
   - Backend page URL posted as ticket comment
   - No backend error left unresolved
-next_status: Human review (see `statuses/3b-human-review.md`)
+next_status: Human review (see `statuses/2b-human-review.md`)
 ---
 
 # STATUS (drafting lifecycle): AI Drafting

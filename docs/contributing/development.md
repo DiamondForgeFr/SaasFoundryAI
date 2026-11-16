@@ -73,26 +73,26 @@ sf new --project-name local-test --structure monorepo
 
 ## Build, test, format, lint
 
-| Command                                               | What it does                                                                                          | When to run                                                           |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `npm run build`                                       | `tsc` — emits `dist/`                                                                                 | Before publishing or running the CLI standalone                       |
-| `npm run dev`                                         | `tsc -w` — incremental compile while editing                                                          | While developing                                                      |
-| `npm run format`                                      | Writes Prettier formatting for sources and documentation                                              | Before staging a formatting change                                    |
-| `npm run format:check`                                | Checks Prettier formatting without modifying files                                                    | Read-only formatting validation                                       |
-| `npm run lint`                                        | ESLint with the flat config in `eslint.config.mjs`                                                    | Before pushing                                                        |
-| `npm test`                                            | Jest across all four projects (`unit`, `integration`, `e2e`, `smoke`)                                 | While iterating                                                       |
-| `npm run test:unit`                                   | Just the unit project (fastest)                                                                       | Quick local feedback                                                  |
-| `npm run test:integration`                            | Just integration tests (filesystem builders, scaffolds, installers)                                   | When changing builders / installers                                   |
-| `npm run test:e2e`                                    | E2E tests (CLI command surface)                                                                       | When changing command wiring                                          |
-| `npm run test:staged`                                 | Classifies the staged snapshot and runs only its configured validation lanes                          | What Husky runs before every commit                                   |
-| `npm run test:impact -- --base <ref> --head <ref>`    | Classifies a Git range and executes its configured validation lanes                                   | Targeted local or CI-equivalent validation                            |
-| `npm run test:pre-commit`                             | Compatibility alias for `test:staged`                                                                 | Existing local tooling                                                |
-| `npm run test:pre-push`                               | Exact normal lifecycle lane: fresh monorepo full, fresh multirepo full, previous-release update smoke | Explicitly during AI Testing before Human Testing; record the results |
-| `npm run test:full`                                   | Format check, lint, build, package check, all Jest projects, and the full Docker lifecycle matrix     | Releases, classifier changes, and final deep validation               |
-| `npm run test:docker` / `npm run test:docker:full`    | Exhaustive four-check lane: fresh generation and update for both topologies                           | Release, scheduled, or deep local validation                          |
-| `npm run test:docker:normal`                          | The same three-check lane used by ordinary non-draft PRs                                              | Required AI Testing validation                                        |
-| `npm run test:docker:list -- --lane normal`           | Lists stable check name, scenario, browser depth, and outer budget                                    | Inspecting the CI contract                                            |
-| `npm run test:docker:scenario -- <name> --depth full` | Builds the shared image once and runs one lifecycle                                                   | Targeted reproduction                                                 |
+| Command                                               | What it does                                                                                          | When to run                                                                  |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `npm run build`                                       | `tsc` — emits `dist/`                                                                                 | Before publishing or running the CLI standalone                              |
+| `npm run dev`                                         | `tsc -w` — incremental compile while editing                                                          | While developing                                                             |
+| `npm run format`                                      | Writes Prettier formatting for sources and documentation                                              | Before staging a formatting change                                           |
+| `npm run format:check`                                | Checks Prettier formatting without modifying files                                                    | Read-only formatting validation                                              |
+| `npm run lint`                                        | ESLint with the flat config in `eslint.config.mjs`                                                    | Before pushing                                                               |
+| `npm test`                                            | Jest across all four projects (`unit`, `integration`, `e2e`, `smoke`)                                 | While iterating                                                              |
+| `npm run test:unit`                                   | Just the unit project (fastest)                                                                       | Quick local feedback                                                         |
+| `npm run test:integration`                            | Just integration tests (filesystem builders, scaffolds, installers)                                   | When changing builders / installers                                          |
+| `npm run test:e2e`                                    | E2E tests (CLI command surface)                                                                       | When changing command wiring                                                 |
+| `npm run test:staged`                                 | Classifies the staged snapshot and runs only its configured validation lanes                          | What Husky runs before every commit                                          |
+| `npm run test:impact -- --base <ref> --head <ref>`    | Classifies a Git range and executes its configured validation lanes                                   | Targeted local or CI-equivalent validation                                   |
+| `npm run test:pre-commit`                             | Compatibility alias for `test:staged`                                                                 | Existing local tooling                                                       |
+| `npm run test:pre-push`                               | Exact normal lifecycle lane: fresh monorepo full, fresh multirepo full, previous-release update smoke | Explicitly during AI Testing, before the PR leaves draft; record the results |
+| `npm run test:full`                                   | Format check, lint, build, package check, all Jest projects, and the full Docker lifecycle matrix     | Releases, classifier changes, and final deep validation                      |
+| `npm run test:docker` / `npm run test:docker:full`    | Exhaustive four-check lane: fresh generation and update for both topologies                           | Release, scheduled, or deep local validation                                 |
+| `npm run test:docker:normal`                          | The same three-check lane used by ordinary non-draft PRs                                              | Required AI Testing validation                                               |
+| `npm run test:docker:list -- --lane normal`           | Lists stable check name, scenario, browser depth, and outer budget                                    | Inspecting the CI contract                                                   |
+| `npm run test:docker:scenario -- <name> --depth full` | Builds the shared image once and runs one lifecycle                                                   | Targeted reproduction                                                        |
 
 The impact classifier fails wide: lockfiles, root build configuration, workflow/classifier changes, unknown paths, and invalid ranges select full validation. See
 [Impact-aware validation](/guide/impact-aware-validation) for the path matrix and dry-run commands.
@@ -132,11 +132,11 @@ Husky installs three hooks under `.husky/`:
 The pre-commit hook never rewrites files. If `format:check` fails, run `npm run format`, inspect and stage the result, then create the commit again.
 
 RC branches and tags, protected release targets, weekly schedules, and manual runs execute the exhaustive lane. Ordinary working-branch pushes and ready PRs classify their Git range and start only the
-selected lanes. Run and record the ticket's required lifecycle validation during AI Testing before opening the Human Testing draft PR.
+selected lanes. Run and record the ticket's required lifecycle validation during AI Testing, before the draft PR leaves draft.
 
-Draft PRs provide the diff and manual test plan without running test/build CI. After human approval, push the required non-regression tests; the developer then clicks **Ready for review**, which
-starts full CI. Without Human testing (`nature:internal`), the agent runs `workflow-cli.sh ready-pr <ticket>` itself at the end of AI Testing. Later ready-PR pushes rerun it; `draft-pr <ticket>`
-returns the PR to draft for further human testing and cancels obsolete CI.
+Draft PRs provide the diff and the test plan without running test/build CI. This repository runs the Solo workflow, which has no Human testing: at the end of AI Testing, once the test report is posted
+and the required local CI statuses are green on the PR head, the session runs `workflow-cli.sh ready-pr <ticket>` (a delegated agent stops before it), which starts full CI. The developer then reviews
+and merges. Later ready-PR pushes rerun it; `draft-pr <ticket>` returns the PR to draft and cancels obsolete CI.
 
 ## Migration framework — non-negotiable
 
@@ -156,18 +156,22 @@ writer, and worked examples for both manifest renames and module file splits.
 
 ## Workflow — never bypass statuses
 
-We dogfood our own ticketing flow. Every code change moves through:
+We dogfood our own ticketing flow, on the Solo preset (`workflow.template` in `.saasfoundry.json`). Every code change moves through:
 
 ```
-Backlog → Ready → In progress → AI testing → Human testing → In review → Done
+Backlog → In progress → AI testing → In review → Done
 ```
 
+- There is no Ready and no Human testing: the developer works alone, and the pull request review (`In review`) is the human gate. `AI testing → In review` needs no `nature:*` label.
 - Read `.claude/skills/sf-workflow/statuses/<N>-<name>.md` before any transition — the file lists the mandatory entry actions and exit conditions.
 - Use the workflow CLI: `.claude/skills/sf-workflow/workflow-cli.sh update-status <ticket> <status> --reason "..."`. Don't drag cards in the GitHub Projects UI manually — the CLI runs the guards (PR
   existence, complexity label, parent-status mirror, …) the UI doesn't know about.
 - Child tickets are native GitHub sub-issues, not checkboxes. Create them via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh create-subtask`.
 - Normal children own a branch and PR. A bundled child is one atomic commit on its delivery parent's branch, carries `nature:bundled-pr`, and may go AI Testing → Done after validation — see
   `.claude/skills/sf-workflow/SKILL.md` "Nature axis".
+
+Generated projects choose their own preset (the seven-status team preset, the five-status Solo preset or a custom workflow): agents read `workflow.statuses` in the manifest instead of generalizing
+this repository's.
 
 Full guidance: [Workflow skill SKILL.md](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/skills/sf-workflow/SKILL.md).
 
@@ -234,12 +238,12 @@ For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`
 ### Synchronizing the review button with GitHub Projects
 
 The **Ready for review** button triggers `.github/workflows/pr-review-sync.yml`. It checks the live PR and its linked ticket, then uses the guarded workflow CLI to move the ticket to **In review**.
-Clicked too early — the ticket still in AI testing and Human testing required, or not yet in testing — the job moves nothing and succeeds with a notice that names the next step; it fails only when the
-event, the ticket association or the ticket labels are wrong. A pull request whose head branch names no ticket under `workflow.branchNaming` (for example `chore/sync-back-v1.1.0`, the post-release
-sync-back into develop) has nothing to sync: the job succeeds with a notice and moves nothing. A release branch (`rc-*`) still synchronizes when it targets the release branch, and a ticket branch
-still fails without its `Resolves #N` line. A pull request that delivers only part of a ticket that stays open says `Part of #N` instead, naming the branch ticket: the job succeeds with a notice, on
-the click as on the merge, and the ticket does not move. Configure the `SF_PROJECTS_TOKEN` Actions secret with repository access and write access to the organization Project. GitHub's default Actions
-token cannot access Projects; see
+Clicked too early — the ticket still in AI testing on a workflow that requires Human testing, or not yet in testing — the job moves nothing and succeeds with a notice that names the next step; it
+fails only when the event, the ticket association or the ticket labels are wrong. A pull request whose head branch names no ticket under `workflow.branchNaming` (for example `chore/sync-back-v1.1.0`,
+the post-release sync-back into develop) has nothing to sync: the job succeeds with a notice and moves nothing. A release branch (`rc-*`) still synchronizes when it targets the release branch, and a
+ticket branch still fails without its `Resolves #N` line. A pull request that delivers only part of a ticket that stays open says `Part of #N` instead, naming the branch ticket: the job succeeds with
+a notice, on the click as on the merge, and the ticket does not move. Configure the `SF_PROJECTS_TOKEN` Actions secret with repository access and write access to the organization Project. GitHub's
+default Actions token cannot access Projects; see
 [GitHub's Projects automation documentation](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/automating-projects-using-actions).
 
 The listener must first be merged into the repository default branch. It never runs code from the PR head. It supports same-repository PRs, requires the native closing-issue link to agree with the

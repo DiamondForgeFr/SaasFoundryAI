@@ -28,14 +28,17 @@ all three surfaces (`srs`, `tickets`, `codeComments`).
 
 ### Workflow — NEVER bypass
 
-- **Statuses**: `Backlog → Ready → In progress → AI testing → Human testing → In review → Done`
+- **Statuses** (the Solo preset, `.saasfoundry.json` → `workflow.statuses`): `Backlog → In progress → AI testing → In review → Done`. There is no Ready and no Human testing: the developer works
+  alone, and the pull request review is the human gate.
 - **Before any status transition**: read `.claude/skills/sf-workflow/statuses/<N>-<name>.md` for mandatory actions and exit conditions
-- **Never skip statuses.** In particular: never go Backlog → AI Testing, open a draft PR for Human Testing and never mark it ready before human validation (unless ticket carries `nature:internal`).
-  Delivery tickets require a verified merged PR before Done, except validated `nature:bundled-pr` children. Epics own no PR and reach Done only after every native child has board status Done.
-- **Nature axis (Human Testing optionality)** — `nature:internal` tickets (refactor / scaffolding / non-terminal stories of an Epic) may transition AI Testing → In Review directly. Default (no label
-  or `nature:user-facing`) requires Human Testing. The `update-status` guard enforces this — see `.claude/skills/sf-workflow/SKILL.md` "Nature axis" section.
+- **Never skip statuses.** In particular: never go Backlog → AI Testing, and never take a pull request out of draft before the test report is posted and the local CI is green on its head. Under Solo
+  the session runs `ready-pr` at the end of AI Testing (a delegated agent never does), moves the ticket to In Review, and the developer reviews and merges. Delivery tickets require a verified merged PR
+  before Done, except validated `nature:bundled-pr` children. Epics own no PR and reach Done only after every native child has board status Done.
+- **Nature axis** — under Solo it no longer gates a testing step: AI Testing → In Review needs no `nature:*` label, whatever the ticket is. `nature:bundled-pr` still routes a child whose single commit
+  lands on its delivery parent's branch straight from AI Testing to Done (the parent's PR carries the review). Only the developer labels the nature of a ticket. The `update-status` guard enforces
+  this — see `.claude/skills/sf-workflow/SKILL.md` "Nature axis" section.
 - **Never bypass the CLI**: use `.claude/skills/sf-workflow/workflow-cli.sh` and `.claude/skills/sf-tool-github-projects/github-projects-cli.sh` — not raw `gh api graphql` mutations
-- **Heavy validation before Human Testing:** run the project's declared local pipeline explicitly during AI Testing and record the results: `molten ci run <branch>` when `.molten/project.json` declares at least one job in `ci.jobs` and `molten ci status` answers (exit 0, 1 or 2), otherwise `npm test` and `npm run test:pre-push`. Commits only check what they touch, and iterative pushes do
+- **Heavy validation before the PR leaves draft:** run the project's declared local pipeline explicitly during AI Testing and record the results: `molten ci run <branch>` when `.molten/project.json` declares at least one job in `ci.jobs` and `molten ci status` answers (exit 0, 1 or 2), otherwise `npm test` and `npm run test:pre-push`. The local CI must be green on the exact pushed head before the PR leaves draft: `ready-pr` applies that gate and refuses a head without it. Commits only check what they touch, and iterative pushes do
   not run Docker.
 - **Commit + push BEFORE moving to AI Testing.** Code must be on remote before any testing phase.
 - **Escape hatches** (`SF_WORKFLOW_BYPASS_*`, `--bypass-srs`, `--skip-local-ci`) are used only when the developer says so, for the cases and with the record listed in
@@ -126,7 +129,7 @@ scripts/              # Version management (tag-manager.sh)
 - `npm run lint` — ESLint
 - `npm run test:pre-commit` — The commit gate (alias of `test:staged`): format, lint and type-check the staged files and run their related Jest tests; dependency or configuration changes escalate to
   the full Jest run (see `docs/guide/impact-aware-validation.md`, #878)
-- `npm run test:pre-push` — the exact three-check normal lifecycle lane (run explicitly during AI Testing before Human Testing)
+- `npm run test:pre-push` — the exact three-check normal lifecycle lane (run explicitly during AI Testing, before the PR leaves draft)
 - `npm run test:full` — Full local validation: format, lint, build, package check, every Jest suite and the exhaustive Docker lane
 - `npm run test:docker` / `npm run test:docker:full` — the four-check exhaustive lifecycle lane
 - `npm run test:docker:normal` — the three checks used by ordinary non-draft pull requests
