@@ -39,7 +39,7 @@ import {
 import { auditHighProductionWorkspaces } from './npm-audit'
 import { createArtifactSink } from './lifecycle/artifacts'
 import { verifyHarnessBrowsers } from './lifecycle/browser'
-import { runLiveSuite } from './lifecycle/live-suite'
+import { browserCacheRoot, runLiveSuite } from './lifecycle/live-suite'
 import { isNpmEnvironmentFailure } from './lifecycle/npm-network'
 import { runSupervisedProcess, startSupervisedProcess } from './lifecycle/process'
 import { startPrivatePostgres, type PrivatePostgres } from './lifecycle/postgres'
@@ -1216,13 +1216,24 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
     await runStep('web E2E suite in CI mode', () => {
       rmSync(join(webDir, 'dist'), { recursive: true, force: true })
       const [cwd, command] = structure === 'monorepo' ? [projectDir, `npx turbo run test:e2e --filter=${scenario.projectName}-web`] : [webDir, 'npm run test:impact:lifecycle']
+      // The generated postinstall skipped the browser download in the lane: use the image's own.
+      const chromium = browserCapabilities.find((capability) => capability.name === 'chromium')
+      if (!chromium) throw new Error('The generated web E2E suite requires the verified Chromium capability.')
+      const env = { ...process.env, CI: '1', PLAYWRIGHT_BROWSERS_PATH: browserCacheRoot(chromium.executablePath) }
       try {
-        execSync(command, { cwd, stdio: 'pipe', env: { ...process.env, CI: '1' }, maxBuffer: 16 * 1024 * 1024, timeout: boundedScenarioTimeout(900_000) })
+        execSync(command, { cwd, stdio: 'pipe', env, maxBuffer: 16 * 1024 * 1024, timeout: boundedScenarioTimeout(900_000) })
         results.push({ passed: true, message: `OK: the generated web E2E suite passes in CI mode (${command})` })
       } catch (err) {
         const error = err as { stdout?: Buffer; stderr?: Buffer }
-        const output = `${error.stdout?.toString().slice(-3000) || ''}${error.stderr?.toString().slice(-2000) || ''}`
-        results.push({ passed: false, message: `FAIL: the generated web E2E suite is red in CI mode (${command})\n${output}` })
+        const output = `${error.stdout?.toString() || ''}${error.stderr?.toString() || ''}`
+        // Playwright's summary (counts and the failing titles) and its first failure, which a
+        // plain tail cuts off behind the list of tests that did not run.
+        const lines = output.split('\n')
+        const counts = lines.filter((line) => /\d+ (passed|failed|flaky|did not run|interrupted|skipped)\b/.test(line))
+        const titles = lines.filter((line) => /\[(chromium|firefox|webkit)\] ›/.test(line)).slice(0, 40)
+        const firstFailure = output.indexOf('  1) ')
+        const detail = firstFailure >= 0 ? output.slice(firstFailure, firstFailure + 4000) : output.slice(-4000)
+        results.push({ passed: false, message: `FAIL: the generated web E2E suite is red in CI mode (${command})\n${[...counts, ...titles].join('\n')}\n${detail}` })
       }
     })
   } catch (err) {

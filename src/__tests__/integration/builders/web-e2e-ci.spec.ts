@@ -55,6 +55,9 @@ describe('generated web E2E on CI (#979)', () => {
     const turbo = JSON.parse(await readFile(join(webPath(true), 'turbo.json'), 'utf8'))
     expect(turbo.extends).toEqual(['//'])
     expect(turbo.tasks['test:e2e'].dependsOn).toEqual(expect.arrayContaining(['^build', 'build']))
+    // Turborepo's strict env mode strips variables a task does not declare: without this, a CI
+    // runner's PLAYWRIGHT_BROWSERS_PATH (the official Playwright image sets one) never reaches it.
+    expect(turbo.tasks['test:e2e'].passThroughEnv).toEqual(expect.arrayContaining(['PLAYWRIGHT_*']))
 
     // The package config extends a root task: the root must keep declaring it.
     const root = JSON.parse(await readFile(resolve(overlaysPath, 'monorepo/root/turbo.json'), 'utf8'))

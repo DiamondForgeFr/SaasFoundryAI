@@ -81,10 +81,11 @@ des projets générés.
 cycle de vie lance les gardes au lieu de `test:e2e`, et la validation complète lance les gardes et les contrôles du contrat partagé. Tout changement de l'API ou du web sélectionne la voie de cycle de
 vie : un hook qui lançait la suite E2E la lançait donc à presque chaque commit. La CI garde `.saasfoundry/validation.json`, où la voie de cycle de vie lance toujours `test:e2e`. En CI, Playwright sert
 le build existant de l'application web (`vite preview`) et ne construit rien : la voie le construit donc d'abord. Dans un monorepo, `apps/web/turbo.json` fait dépendre la tâche `test:e2e` du web de
-son propre `build` ; la voie d'une application web autonome lance `npm run build && npm run test:e2e` (#979). Le `.prettierignore` généré exclut de `npm run format:check` les fichiers que
-SaaSFoundryAI écrit et rafraîchit à chaque `sf update` (`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, instructions des agents, workflow de validation) ainsi que les artefacts générés : les
-formater transformerait la mise à jour suivante en conflits. Il exclut aussi ce qu'écrivent les outils de test et de build (`test-results/`, `playwright-report/`, `blob-report/`, `coverage/`,
-`coverage-e2e/`, `.nyc_output/`, `dev-dist/`), que les configurations ESLint générées ignorent également : un rapport Playwright contient des mégaoctets de scripts minifiés.
+son propre `build` et lui transmet les variables `PLAYWRIGHT_*`, que le mode d'environnement strict de Turborepo écarterait (le `PLAYWRIGHT_BROWSERS_PATH` d'un runner, par exemple) ; la voie d'une
+application web autonome lance `npm run build && npm run test:e2e` (#979). Le `.prettierignore` généré exclut de `npm run format:check` les fichiers que SaaSFoundryAI écrit et rafraîchit à chaque
+`sf update` (`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, instructions des agents, workflow de validation) ainsi que les artefacts générés : les formater transformerait la mise à jour suivante
+en conflits. Il exclut aussi ce qu'écrivent les outils de test et de build (`test-results/`, `playwright-report/`, `blob-report/`, `coverage/`, `coverage-e2e/`, `.nyc_output/`, `dev-dist/`), que les
+configurations ESLint générées ignorent également : un rapport Playwright contient des mégaoctets de scripts minifiés.
 
 Inspectez une plage sans exécuter les commandes :
 
