@@ -162,6 +162,28 @@ TestAssertions.assertMockCallSequence(mockService.method, [
 
 ## 🌐 E2E Tests
 
+### Test users (`setupTestUser`)
+
+Every spec of an e2e run shares one database, so `setupTestUser` never changes what a role grants:
+
+- `roles` are assigned as they are seeded (PLATFORM roles without a target, ACCOUNT roles on the user's own test account).
+- `permissions` are extra grants for **this user only**. A custom ACCOUNT role of the user's test account (`TEST_GRANTS_ROLE_NAME`, `e2e-test-grants`) carries them, and `cleanupTestUser` deletes it
+  with the user. A permission the seed does not define throws instead of being added to the catalog.
+
+```typescript
+const admin = await setupTestUser(prismaService, {
+  email: 'roles-admin@example.test',
+  password: 'TestPassword123',
+  firstname: 'Roles',
+  lastname: 'Admin',
+  roles: ['account-user', 'account-admin'],
+  permissions: ['ROLE_CUSTOM_MANAGEMENT'] // not seeded on account-admin
+})
+```
+
+Ask for `permissions` only when the seeded roles lack one. Never link permissions to a system role from a spec: every later user of that role would hold them, and authorization tests would pass or
+fail with the spec order. `setup-test-user.e2e-spec.ts` proves the isolation in both orders.
+
 ### Using the `E2ETestBase` base class
 
 ```typescript

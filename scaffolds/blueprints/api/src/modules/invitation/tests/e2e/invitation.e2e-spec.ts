@@ -69,14 +69,14 @@ describe('Invitation Module (e2e)', () => {
 
     prismaService = moduleRef.get<PrismaService>(PrismaService)
 
-    // Set up test user with necessary roles and permissions
+    // Set up test user with necessary roles. The seeded account-admin role already grants the invitation
+    // permissions (USER_ACCOUNTS_INVITATION, USER_ENTITIES_INVITATION, USER_ROLE_ALLOCATION).
     testUser = await setupTestUser(prismaService, {
       email: 'invitationtest@billmate.test',
       password: 'TestPassword123',
       firstname: 'Invitation',
       lastname: 'Manager',
-      roles: ['account-admin'],
-      permissions: ['USER_ACCOUNTS_INVITATION', 'USER_ENTITIES_INVITATION', 'USER_ROLE_ALLOCATION']
+      roles: ['account-admin']
     })
 
     // Create a test organization

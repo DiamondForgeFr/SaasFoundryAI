@@ -76,7 +76,8 @@ describe('Accounts Module (e2e)', () => {
       lastname: 'Manager',
       roles: ['account-user', 'account-admin'],
       // ROLE_CUSTOM_MANAGEMENT is opt-in (not granted to account-admin by default) — the custom-role
-      // builder tests below need it. The helper grants it RBAC v2-correctly (module + ROLES sub-module first).
+      // builder tests below need it. The helper grants it to this user only, through a custom role of its
+      // own account (module + ROLES sub-module first): the system roles keep their seeded grants (#987).
       permissions: ['ROLE_CUSTOM_MANAGEMENT']
     })
 

@@ -347,6 +347,11 @@ const agent = request.agent(app.getHttpServer())
 await loginTestUser(agent, testUser.email, 'TestPassword123')
 ```
 
+Test users come from `setupTestUser` (`src/common/tests/e2e/utils/setup-test-user.ts`). Every spec of a run shares one e2e database, so the helper never changes what a role grants: `roles` are
+assigned as seeded, and `permissions` are extra grants for that user only, carried by a custom ACCOUNT role (`e2e-test-grants`) of its own test account and removed by `cleanupTestUser`. Ask for
+`permissions` only when the seeded role lacks one (for example `ROLE_CUSTOM_MANAGEMENT` on `account-admin`), and never write grants to a system role from a spec: a later `account-user` would hold
+them, and an authorization test would pass or fail with the spec order (#987). `src/common/tests/e2e/setup-test-user.e2e-spec.ts` proves it, in both orders.
+
 The test database is set up by `src/configs/test/e2e-environment.ts` (Jest `globalSetup`) which spins up `docker-compose.db-test.yml` (tmpfs-backed PostgreSQL) and runs the migrations + the seed
 loader. Cleanup is done by `e2e-teardown.ts`.
 
