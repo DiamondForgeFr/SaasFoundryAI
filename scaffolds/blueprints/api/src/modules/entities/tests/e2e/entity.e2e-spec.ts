@@ -68,14 +68,14 @@ describe('Entities Module (e2e)', () => {
     prismaService = moduleRef.get<PrismaService>(PrismaService)
     accountService = moduleRef.get<AccountService>(AccountService)
 
-    // Set up test user with necessary roles and permissions
+    // Set up test user with necessary roles. The seeded account-admin role already grants ENTITY_CREATION
+    // and ENTITY_USER_MANAGEMENT: no extra `permissions` needed.
     testUser = await setupTestUser(prismaService, {
       email: 'entitytest@billmate.test',
       password: 'TestPassword123',
       firstname: 'Entity',
       lastname: 'Manager',
-      roles: ['account-user', 'account-admin'],
-      permissions: ['ENTITY_CREATION', 'ENTITY_USER_MANAGEMENT']
+      roles: ['account-user', 'account-admin']
     })
 
     // Create a test organization. This org becomes the entity's typed profile, so its name is the
@@ -461,8 +461,7 @@ describe('Entities Module (e2e)', () => {
         password,
         firstname: 'Other',
         lastname: 'Admin',
-        roles: ['account-admin'],
-        permissions: ['ENTITY_CREATION']
+        roles: ['account-admin']
       })
       probeEmails.push(otherAccountAdmin.email)
       await prismaService.userAccountLink.create({ data: { userId: otherAccountAdmin.id, accountId: testUser.accountId } })

@@ -74,6 +74,28 @@ src/modules/auth/
         └── auth.controller.spec.ts
 ```
 
+### Utilisateurs des tests de bout en bout
+
+Les specs e2e de l’API créent leurs utilisateurs avec `setupTestUser` (`src/common/tests/e2e/utils/setup-test-user.ts`) : chaque utilisateur reçoit son propre compte de test et les rôles indiqués,
+tels qu’ils sont amorcés. Toutes les specs d’une exécution partagent une même base, donc l’utilitaire ne modifie jamais ce qu’un rôle accorde. Depuis la 1.3.0, les `permissions` facultatives sont des
+droits supplémentaires réservés à cet utilisateur : un rôle personnalisé de son propre compte (`e2e-test-grants`) les porte, et `cleanupTestUser` le supprime avec l’utilisateur. Un `account-user` créé
+ensuite détient exactement les droits amorcés, quelle que soit la spec exécutée avant lui.
+
+```typescript
+const admin = await setupTestUser(prismaService, {
+  email: 'roles-admin@example.test',
+  password: 'TestPassword123',
+  firstname: 'Roles',
+  lastname: 'Admin',
+  roles: ['account-user', 'account-admin'],
+  // Absente d’account-admin dans l’amorçage : accordée à cet utilisateur seul, dans son propre compte.
+  permissions: ['ROLE_CUSTOM_MANAGEMENT']
+})
+```
+
+Ne demandez des `permissions` que lorsqu’un rôle amorcé n’en dispose pas, et n’écrivez jamais de droits sur un rôle système depuis une spec. Une permission que l’amorçage ne définit pas fait échouer
+la préparation au lieu d’être ajoutée au catalogue.
+
 ### Alias de chemins
 
 ```typescript
