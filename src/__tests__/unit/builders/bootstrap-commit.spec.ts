@@ -5,22 +5,25 @@ import { join } from 'path'
 
 import { commitBootstrap, defersFirstCommitToWorkflow, describeBootstrapCommit, ROOT_COMMIT_MESSAGE } from '../../../builders/bootstrap-commit'
 import type { WorkflowConfig } from '../../../types'
-import { applySandboxGitEnv } from '../../helpers/pushed-git-sandbox'
+import { sandboxGitEnv, sandboxSpawnedGit, type SpawnedGitSandbox } from '../../helpers/pushed-git-sandbox'
 
 /**
  * #969 — the first commit of a generated project is made once, after everything `sf new` writes is on
  * disk, and only when no workflow's `bootstrap` command is going to make it.
+ *
+ * The `git` the code under test starts runs in a sandbox of its own: a Git identity that is the sandbox's, never
+ * the machine's, since a CI runner has none.
  */
 describe('commitBootstrap (#969)', () => {
   let root: string
-  let restoreGitEnv: () => void
+  let sandbox: SpawnedGitSandbox
 
   beforeAll(() => {
-    restoreGitEnv = applySandboxGitEnv()
+    sandbox = sandboxSpawnedGit()
   })
 
   afterAll(() => {
-    restoreGitEnv()
+    sandbox.restore()
   })
 
   beforeEach(() => {
@@ -31,7 +34,7 @@ describe('commitBootstrap (#969)', () => {
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   })
 
-  const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: sandboxGitEnv() }).trim()
   const solo: WorkflowConfig = { tool: 'github-projects', workingBranch: 'develop', prTargetBranch: 'develop' }
 
   /** What `provision*` leaves behind: a repository on its main branch with files in it and no commit. */
@@ -57,6 +60,8 @@ describe('commitBootstrap (#969)', () => {
     expect(git(dir, 'rev-list', '--count', 'HEAD')).toBe('1')
     expect(git(dir, 'log', '-1', '--format=%s')).toBe(ROOT_COMMIT_MESSAGE)
     expect(git(dir, 'ls-files').split('\n').sort()).toEqual(['.saasfoundry.json', 'AGENTS.md', 'package.json'])
+    // The identity is the sandbox's, not the machine's: this passes where no Git identity is configured
+    expect(git(dir, 'log', '-1', '--format=%an <%ae>')).toBe('Test <test@example.com>')
   })
 
   it('honours .gitignore: what the project ignores stays out of the commit and out of `git status`', () => {
@@ -152,6 +157,17 @@ describe('commitBootstrap (#969)', () => {
     expect(note.message).toContain('git add -A')
     // Nothing was forced through: the files are staged, the repository still has no commit
     expect(() => git(dir, 'rev-parse', '--verify', 'HEAD')).toThrow()
+  })
+
+  it('says which settings are missing when Git has no identity, the commonest reason on a new machine', () => {
+    const dir = bornEmpty('no-identity')
+
+    const [result] = sandbox.withoutIdentity(() => commitBootstrap({ repositories: [{ dir, label: 'The monorepo' }], mainBranch: 'main' }))
+
+    expect(result).toEqual({ label: 'The monorepo', status: 'failed', step: 'git commit', detail: 'Git does not know who you are: set user.name and user.email' })
+    expect(describeBootstrapCommit(result).message).toBe(
+      'Could not commit The monorepo (git commit failed: Git does not know who you are: set user.name and user.email) — run `git add -A` and `git commit` there once it is fixed'
+    )
   })
 
   it('stops at the first Git step that fails, so a refused commit never creates the working branch', () => {
