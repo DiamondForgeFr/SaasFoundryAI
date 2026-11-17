@@ -52,13 +52,20 @@ export function defersFirstCommitToWorkflow(workflow: WorkflowConfig | undefined
   return Boolean(workflow && workflow.tool !== 'none')
 }
 
-/** The line a failed Git step explains itself with. */
+/**
+ * What a failed Git step is reported as. The commonest cause on a new machine is no Git identity, and Git's
+ * own words for it end on "empty ident name (for <user@host>) not allowed", which names no command: say which
+ * settings are missing. Otherwise the last `fatal:` or `error:` line, or the last line a hook printed.
+ */
 function reason(stderr: string, stdout: string): string {
-  const lines = `${stderr}\n${stdout}`
+  const text = `${stderr}\n${stdout}`
+  if (/please tell me who you are|empty ident name|unable to auto-detect email/i.test(text)) return 'Git does not know who you are: set user.name and user.email'
+  const lines = text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-  return lines.slice(-2).join(' ') || 'no output'
+  const cause = [...lines].reverse().find((line) => /^(fatal|error):/i.test(line))
+  return cause ?? lines[lines.length - 1] ?? 'no output'
 }
 
 /**

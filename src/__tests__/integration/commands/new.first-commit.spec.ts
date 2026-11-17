@@ -7,7 +7,7 @@ import { promisify } from 'util'
 
 import inquirer from 'inquirer'
 
-import { applySandboxGitEnv } from '../../helpers/pushed-git-sandbox'
+import { sandboxGitEnv, sandboxSpawnedGit, type SpawnedGitSandbox } from '../../helpers/pushed-git-sandbox'
 
 jest.mock('inquirer')
 
@@ -60,16 +60,17 @@ describe('sf new — the first commit (#969)', () => {
   let warnSpy: jest.SpyInstance
   let errorSpy: jest.SpyInstance
   let exitSpy: jest.SpyInstance
-  let restoreGitEnv: () => void
+  let gitSandbox: SpawnedGitSandbox
 
   beforeAll(() => {
-    // The command runs `git` in this process: it must see the sandbox's identity and configuration, and
-    // never the repository this suite may be running inside a commit hook of (GIT_INDEX_FILE and friends).
-    restoreGitEnv = applySandboxGitEnv()
+    // The command starts `git` itself: it must run with the sandbox's identity and configuration, never the
+    // machine's (a CI runner has no identity) nor the repository this suite may be running inside a commit
+    // hook of (GIT_INDEX_FILE and friends).
+    gitSandbox = sandboxSpawnedGit()
   })
 
   afterAll(() => {
-    restoreGitEnv()
+    gitSandbox.restore()
   })
 
   beforeEach(async () => {
@@ -109,10 +110,10 @@ describe('sf new — the first commit (#969)', () => {
     workflow: 'none'
   }
 
-  const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+  const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, encoding: 'utf8', env: sandboxGitEnv() }).trim()
   const gitFails = (cwd: string, ...args: string[]): boolean => {
     try {
-      execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' })
+      execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe', env: sandboxGitEnv() })
       return false
     } catch {
       return true
@@ -128,6 +129,8 @@ describe('sf new — the first commit (#969)', () => {
     expect(git(dir, 'status', '--porcelain', '--untracked-files=all')).toBe('')
     expect(git(dir, 'rev-list', '--count', 'HEAD')).toBe('1')
     expect(git(dir, 'log', '-1', '--format=%s')).toBe('Initial commit')
+    // Made with the sandbox's identity, not the machine's: the spec holds where no Git identity is configured
+    expect(git(dir, 'log', '-1', '--format=%an <%ae>')).toBe('Test <test@example.com>')
     expect(git(dir, 'branch', '--show-current')).toBe(branch)
     // The commit could not run the project's hooks: husky had no `.git` to configure when npm ran
     expect(gitFails(dir, 'config', '--get', 'core.hooksPath')).toBe(true)
@@ -197,6 +200,17 @@ describe('sf new — the first commit (#969)', () => {
     expect(git(project, 'ls-files').split('\n')).toContain('.saasfoundry.json')
   })
 
+  it('still finishes, and names what to set, when Git has no identity to commit with (a new machine, a CI runner)', async () => {
+    await gitSandbox.withoutIdentity(() => newCommand({ ...baseOpts, structure: 'monorepo', setupRepo: 'local' }))
+
+    const project = join(tempDir, 'acme')
+    // The project is written and the command went to its end: only the commit is left to make by hand
+    expect(existsSync(join(project, '.saasfoundry.json'))).toBe(true)
+    expect(gitFails(project, 'rev-parse', '--verify', 'HEAD')).toBe(true)
+    expect(output()).toContain('Could not commit The monorepo (git commit failed: Git does not know who you are: set user.name and user.email)')
+    expect(output()).toContain('git add -A')
+  })
+
   it('says in the summary what it committed, so a clean tree is not a surprise', async () => {
     await newCommand({ ...baseOpts, structure: 'monorepo', setupRepo: 'local' })
 
@@ -216,7 +230,7 @@ describe('sf new — the first commit (#969)', () => {
 
     it('leaves the repository without a commit, on its main branch, and names the command that makes it', async () => {
       const origin = join(tempDir, 'origin.git')
-      execFileSync('git', ['init', '-q', '--bare', '-b', 'main', origin])
+      execFileSync('git', ['init', '-q', '--bare', '-b', 'main', origin], { env: sandboxGitEnv() })
 
       await newCommand({ ...workflowOpts, monorepoUrl: origin })
 
@@ -234,7 +248,7 @@ describe('sf new — the first commit (#969)', () => {
     it('fits `workflow-cli.sh bootstrap`: it commits everything sf new wrote and leaves a clean tree', async () => {
       const root = tempDir
       const origin = join(root, 'origin.git')
-      execFileSync('git', ['init', '-q', '--bare', '-b', 'main', origin])
+      execFileSync('git', ['init', '-q', '--bare', '-b', 'main', origin], { env: sandboxGitEnv() })
 
       await newCommand({ ...workflowOpts, monorepoUrl: origin })
 
@@ -264,7 +278,8 @@ exit 0
 
       const { stdout } = await execFileP('/bin/bash', [join(project, '.claude/skills/sf-workflow/workflow-cli.sh'), 'bootstrap', '1'], {
         cwd: project,
-        env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }
+        // The script is the project's own: it commits and pushes with the sandbox's identity, as `sf new` did
+        env: { ...sandboxGitEnv(), PATH: `${binDir}:${process.env.PATH}` }
       })
 
       expect(stdout).toContain('.saasfoundry.json')
