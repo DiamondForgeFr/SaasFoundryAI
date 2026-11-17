@@ -140,9 +140,16 @@ describe('what each consumer resolves in a project generated with the storage mo
     rmSync(projectRoot, { recursive: true, force: true })
   })
 
-  /** Node's own resolver, from the API folder, with the extra conditions a consumer sets. */
+  /**
+   * Node's own resolver, from the API folder, with the extra conditions a consumer sets.
+   *
+   * `-p` colours numbers and objects when FORCE_COLOR is set, which the local CI runner does and
+   * a shell does not: the expression is printed as a string, and colour is switched off as well.
+   */
   const node = (expression: string, conditions: string[] = []): string => {
-    const result = spawnSync(process.execPath, [...conditions.map((condition) => `--conditions=${condition}`), '-p', expression], { cwd: apiDir, encoding: 'utf8' })
+    const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '0' }
+    delete env.NO_COLOR // Node warns when both are set
+    const result = spawnSync(process.execPath, [...conditions.map((condition) => `--conditions=${condition}`), '-p', `String(${expression})`], { cwd: apiDir, encoding: 'utf8', env })
     if (result.status !== 0) throw new Error(`node -p ${expression} failed:\n${result.stderr}`)
     return result.stdout.trim()
   }
