@@ -204,6 +204,11 @@ avec `409 ROLE_IN_USE` (voir « Supprimer un rôle encore utilisé » ci-dessus)
 `role-delete-refusal-notice.tsx` à côté d'elle, et les traductions `account`, fusionnés par `sf update` comme les correctifs ci-dessus ; aucune migration de module n'est nécessaire. Un client qui
 lisait le `400` d'un rôle utilisé reçoit désormais `409`.
 
+En 1.2.0, inviter une adresse qui appartenait déjà à un utilisateur actif répondait `201 Invitation sent successfully` sans rien écrire : ni invitation, ni lien, ni rôle, ni e-mail. La 1.2.1 la refuse
+avec `409 USER_ALREADY_ACTIVE` (voir « Inviter une adresse qui a déjà un compte actif » plus bas). Le correctif touche `invitation.service.ts` et `invitation.controller.ts`, les deux dialogues
+d'invitation, le hook `useInviteUserCreate`, le nouveau `utils/invitation-refusal.ts` et les traductions `account`, fusionnés par `sf update` comme les correctifs ci-dessus ; aucune migration de
+module n'est nécessaire. Un client qui lisait le `201` d'une adresse active reçoit désormais `409`.
+
 :::
 
 ## Rôles inclus dans un projet généré
@@ -234,6 +239,19 @@ Les invitations transportent leurs cibles compte, entité et rôle. Avant l'envo
 
 L'acceptation crée ensemble les liens utilisateur et les affectations de rôles contextualisées ; d'ici là, une invitation en attente compte comme un endroit où ses rôles `ENTITY` servent (voir « Qui
 peut modifier un rôle »). Le scheduler généré traite les invitations expirées, et le flux d'e-mails anglais/français est déjà relié au module d'invitation.
+
+### Inviter une adresse qui a déjà un compte actif
+
+Une invitation accueille un nouvel utilisateur : l'accepter fixe le mot de passe et active le compte. Une adresse qui appartient déjà à un utilisateur actif ne peut pas en accepter, donc
+`POST /invitations` répond `409` et ne change rien : aucune invitation, aucun jeton, aucun lien ni aucune attribution de rôle n'est écrit, et aucun e-mail ne part. Le message commence par
+`USER_ALREADY_ACTIVE:` et nomme l'adresse :
+
+```text
+USER_ALREADY_ACTIVE: alice@acme.test already has an active account. An invitation only onboards a new user, so none was sent and nothing was changed.
+```
+
+Les contrôles ci-dessus passent d'abord : un appelant qui ne peut pas inviter dans les cibles demandées reçoit son `401` ou son `403`, jamais l'information que l'adresse a un compte. Les dialogues
+d'invitation de l'application web restent ouverts et affichent le refus sous le champ e-mail. Une adresse dont l'utilisateur est encore inactif (invité, pas encore accepté) est réinvitée comme avant.
 
 ## Défense en profondeur
 

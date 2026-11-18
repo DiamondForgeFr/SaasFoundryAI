@@ -1739,6 +1739,9 @@
           },
           "403": {
             "description": "Forbidden - user does not have required permissions"
+          },
+          "409": {
+            "description": "USER_ALREADY_ACTIVE - the email belongs to an active user; nothing is created"
           }
         },
         "summary": "Create invitation",

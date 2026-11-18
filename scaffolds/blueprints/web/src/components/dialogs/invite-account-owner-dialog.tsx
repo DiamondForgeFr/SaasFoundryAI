@@ -13,6 +13,7 @@ import { z } from 'zod'
  */
 import { useInviteUser, useInviteUserSchema } from '@/hooks/api/accounts/mutations/useInviteUserCreate'
 import { useInvitedUsers } from '@/hooks/api/invitations/queries/useInvitedUsers'
+import { invitationRefusalOf } from '@/utils/invitation-refusal'
 
 /**
  * Components
@@ -112,6 +113,11 @@ export function InviteAccountOwnerDialog({ isOpen, onOpenChange }: InviteAccount
       form.reset()
       onOpenChange(false)
     } catch (error) {
+      // An address that already has an active account is refused with a 409 and nothing is sent (#988).
+      if (invitationRefusalOf(error).kind === 'already-active') {
+        form.setError('email', { type: 'server', message: tAccount('dialogs.inviteUser.tk_already-active_') })
+        return
+      }
       console.error('Failed to invite account owner', error)
     }
   }

@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { InvitationStatus, Locale, TokenType } from '@/generated/prisma/client'
 import * as bcrypt from 'bcrypt'
@@ -33,6 +33,12 @@ import type { AuthTokens, TokenPayload } from '@modules/auth/services/auth.servi
 import type { User } from '@/generated/prisma/client'
 
 /**
+ * Constants
+ */
+/** Prefix of the 409 an invitation to an already active user answers (#988): the web invite dialogs read it. */
+export const USER_ALREADY_ACTIVE = 'USER_ALREADY_ACTIVE'
+
+/**
  * Exports
  */
 export interface InvitationTokenPayload extends TokenPayload {
@@ -59,7 +65,8 @@ export class InvitationService {
   ) {}
 
   /**
-   * Create an invitation for a new user
+   * Create an invitation for a new user. An address that already belongs to an active user is refused
+   * with a 409 `USER_ALREADY_ACTIVE` and nothing is written (#988).
    */
   async createInvitation(inviterId: string, createInvitationDto: CreateInvitationDto): Promise<InvitationResponseDto> {
     const response: InvitationResponseDto = {
@@ -300,12 +307,16 @@ export class InvitationService {
         }
       }
 
-      // Check if the email already exists
+      // An invitation onboards a NEW user: accepting it sets the password and activates the account. An address
+      // that already belongs to an active user cannot accept one, so nothing is created and the inviter is told so
+      // with a 409 (#988), never a success that writes nothing. The check comes after the authorization above: a
+      // caller who may not invite into these targets gets their 401/403, never whether the address has an account.
       const existingUser = await this.prisma.user.findUnique({ where: { email } })
       if (existingUser && existingUser.isActive) {
-        // If the user is already active, don't create a new one, just return a success message
-        this.logger.warn(`Invitation attempted for existing active user: ${email}`, 'createInvitation')
-        return response
+        this.logger.warn(`Invitation refused for existing active user: ${email}`, 'createInvitation')
+        throw new ConflictException(
+          `${USER_ALREADY_ACTIVE}: ${email} already has an active account. An invitation only onboards a new user, so none was sent and nothing was changed.`
+        )
       }
 
       // Use existing user or create a new one if none exists
@@ -443,7 +454,13 @@ export class InvitationService {
       return response
     } catch (error) {
       this.logger.error(`Failed to create invitation for ${email}: ${error.message}`, 'createInvitation')
-      if (error instanceof UnauthorizedException || error instanceof ForbiddenException || error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
+      ) {
         throw error
       }
       throw new BadRequestException(`Failed to create invitation: ${error.message}`)

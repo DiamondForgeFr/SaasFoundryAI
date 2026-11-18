@@ -434,6 +434,7 @@ dialogs:
     tk_account-name-hint_: Auto-suggested from the invitee's identity. The invitee can change it at acceptance.
     tk_submit_: Send invitation
   inviteUser:
+    tk_already-active_: This address already has an active account. An invitation only onboards a new user, so none was sent.
     tk_section-who_: 'A — Who?'
     tk_section-access-scope_: 'B — Access scope'
     tk_section-roles_: 'C — Roles'

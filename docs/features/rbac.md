@@ -196,6 +196,11 @@ announced that the assignments would be removed. A role carried only by a pendin
 a role still in use" above). The fix lives in `account.service.ts`, the web page `account-roles.tsx`, the new `role-delete-refusal.ts` and `role-delete-refusal-notice.tsx` next to it, and the
 `account` locales, merged by `sf update` like the fixes above; no module migration is needed. A client that read the `400` of a used role now gets `409`.
 
+In 1.2.0 inviting an address that already belonged to an active user answered `201 Invitation sent successfully` and wrote nothing: no invitation, no link, no role, no email. 1.2.1 refuses it with
+`409 USER_ALREADY_ACTIVE` (see "Inviting an address that already has an active account" below). The fix lives in `invitation.service.ts` and `invitation.controller.ts`, the two invite dialogs, the
+`useInviteUserCreate` hook, the new `utils/invitation-refusal.ts` and the `account` locales, merged by `sf update` like the fixes above; no module migration is needed. A client that read the `201` of
+an active address now gets `409`.
+
 :::
 
 ## Roles included in a generated project
@@ -226,6 +231,18 @@ Invitations carry their account, entity and role targets. Before issuing one, th
 
 Acceptance creates the user links and scoped role assignments together; until then, a pending invitation counts as a place where its `ENTITY` roles are used (see "Who may change a role"). Expired
 invitations are handled by the generated scheduler, and the English/French email flow is already wired to the invitation module.
+
+### Inviting an address that already has an active account
+
+An invitation onboards a new user: accepting it sets the password and activates the account. An address that already belongs to an active user cannot accept one, so `POST /invitations` answers `409`
+and changes nothing: no invitation, token, link or role assignment is written, and no email goes out. The message starts with `USER_ALREADY_ACTIVE:` and names the address:
+
+```text
+USER_ALREADY_ACTIVE: alice@acme.test already has an active account. An invitation only onboards a new user, so none was sent and nothing was changed.
+```
+
+The checks above come first: a caller who may not invite into the requested targets gets their `401` or `403`, never whether the address has an account. The invite dialogs of the web app keep the form
+open and show the refusal on the email field. An address whose user is still inactive (invited, not yet accepted) is re-invited as before.
 
 ## Defense in depth
 

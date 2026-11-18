@@ -219,6 +219,24 @@ describe('Invitation Module (e2e)', () => {
       expect(response.body).toHaveProperty('message')
       expect(response.body.message).toContain('account or entity')
     })
+
+    it('refuses an address that belongs to an active user with a 409 and writes nothing (#988)', async () => {
+      // The inviter's own address is an active user: an invitation could never be accepted by it.
+      const activeEmail = testUser.email
+      const invitationsBefore = await prismaService.invitation.count({ where: { inviteeUserEmail: activeEmail } })
+      const tokensBefore = await prismaService.userToken.count({ where: { userId: testUser.id, type: 'INVITATION' } })
+
+      const response = await agent
+        .post('/api/invitations')
+        .send({ email: activeEmail, firstname: 'Already', lastname: 'Active', roleIds: [2], accountIds: [testUser.accountId], entityIds: [], locale: Locale.FR })
+
+      expect(response.status).toBe(409)
+      expect(response.body.message).toMatch(/^USER_ALREADY_ACTIVE: /)
+      expect(response.body.message).toContain(activeEmail)
+      expect(response.body).not.toHaveProperty('invitationToken')
+      expect(await prismaService.invitation.count({ where: { inviteeUserEmail: activeEmail } })).toBe(invitationsBefore)
+      expect(await prismaService.userToken.count({ where: { userId: testUser.id, type: 'INVITATION' } })).toBe(tokensBefore)
+    })
   })
 
   describe('List User Invitations', () => {

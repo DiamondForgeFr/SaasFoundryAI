@@ -47,6 +47,7 @@ export class InvitationController {
   @ApiResponse({ status: 400, description: 'Invalid request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - user does not have required permissions' })
+  @ApiResponse({ status: 409, description: 'USER_ALREADY_ACTIVE - the email belongs to an active user; nothing is created' })
   /** End -- Documentation */
   async createInvitation(@Req() req: AuthenticatedRequest, @Body() createInvitationDto: CreateInvitationDto): Promise<InvitationResponseDto> {
     return this.invitationService.createInvitation(req.user.id, createInvitationDto)
