@@ -435,6 +435,7 @@ dialogs:
     tk_account-name-hint_: Suggéré automatiquement à partir des infos de l'invité. Modifiable au moment de l'acceptation.
     tk_submit_: Envoyer l'invitation
   inviteUser:
+    tk_already-active_: "Cette adresse a déjà un compte actif. Une invitation n'accueille qu'un nouvel utilisateur : aucune n'a été envoyée."
     tk_section-who_: 'A — Qui ?'
     tk_section-access-scope_: "B — Périmètre d'accès"
     tk_section-roles_: 'C — Rôles'

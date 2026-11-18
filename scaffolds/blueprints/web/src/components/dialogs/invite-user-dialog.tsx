@@ -25,6 +25,7 @@ import { useModuleAccess } from '@/hooks/auth/useModuleAccess'
  */
 import { FloatingLabelInput } from '@/components/ui/custom/floating-label-input'
 import { WaveButton } from '@/components/ui/custom/wave-button'
+import { invitationRefusalOf } from '@/utils/invitation-refusal'
 import { cn } from '@/utils/ui'
 import { useAdminScope } from '@/hooks/auth/useAdminScope'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/shadcn/dialog'
@@ -215,6 +216,13 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
       form.reset()
       onOpenChange(false)
     } catch (error) {
+      // An address that already has an active account is refused with a 409 and nothing is sent (#988): say it
+      // on the email field and keep the dialog open, instead of letting the inviter believe it went out.
+      const refusal = invitationRefusalOf(error)
+      if (refusal.kind === 'already-active') {
+        form.setError('email', { type: 'server', message: tAccount('dialogs.inviteUser.tk_already-active_') })
+        return
+      }
       console.error('Failed to invite user:', error)
     }
   }
