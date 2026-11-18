@@ -314,9 +314,7 @@ export class InvitationService {
       const existingUser = await this.prisma.user.findUnique({ where: { email } })
       if (existingUser && existingUser.isActive) {
         this.logger.warn(`Invitation refused for existing active user: ${email}`, 'createInvitation')
-        throw new ConflictException(
-          `${USER_ALREADY_ACTIVE}: ${email} already has an active account. An invitation only onboards a new user, so none was sent and nothing was changed.`
-        )
+        throw new ConflictException(`${USER_ALREADY_ACTIVE}: ${email} already has an active account. An invitation only onboards a new user, so none was sent and nothing was changed.`)
       }
 
       // Use existing user or create a new one if none exists
