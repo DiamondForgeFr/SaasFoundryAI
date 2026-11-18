@@ -152,6 +152,24 @@ des tests e2e) le réécrit et laisse l'arbre modifié. Lequel des deux cas s'ap
 
 Lancez la commande une fois les dépendances installées à la nouvelle version : `prisma generate` utilise le CLI Prisma installé.
 
+### Le client API suit son codegen
+
+Un monorepo versionne le client API qu'orval génère sous `packages/api-client/src/generated`, et son hook de pre-commit lance `codegen:check` : `npm run codegen`, puis une comparaison avec le client
+versionné. Le résultat dépend de la version épinglée d'orval dans `packages/api-client`, de celle de prettier qui le formate, et des deux fichiers qu'orval lit en plus de l'instantané OpenAPI,
+`orval.config.ts` et le mutator `src/http-client.ts`. Quand la mise à jour change l'un d'eux, par exemple orval 8.28.1 → 8.47.0 avec le rafraîchissement de la 1.2.0, le client versionné ne correspond
+plus et le premier commit après la mise à jour est refusé. `sf update` l'aligne comme il aligne le client Prisma :
+
+| La mise à jour                                                                                        | Le client API                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A déplacé la version d'orval ou de prettier, et la résolution du lockfile a eu lieu et a réussi       | `sf update` le régénère juste après, avec `npm run codegen` à la racine et la version de Node de son `.nvmrc`. Committez-le avec la mise à jour. |
+| A déplacé la version, et la résolution n'a pas eu lieu (`--non-interactive`, réponse non) ou a échoué | `npm run codegen` est affiché parmi les étapes, après la résolution du lockfile.                                                                 |
+| A réécrit `orval.config.ts` ou `src/http-client.ts` sans déplacer de version                          | Une exécution interactive le régénère aussitôt (l'orval installé est déjà le bon) ; une exécution `--non-interactive` affiche `npm run codegen`. |
+| La génération échoue                                                                                  | Son erreur et la commande pour réessayer sont affichées, et la mise à jour sort avec le code 1.                                                  |
+| Un conflit sur `package.json` laissé en sidecar change orval ou prettier                              | L'avertissement du sidecar ajoute `npm run codegen`, à lancer une fois la fusion installée.                                                      |
+
+Le codegen lit l'instantané OpenAPI présent sur le disque (`apps/api/docs/openapi.json`), que la mise à jour ne touche pas : l'API le réécrit à son démarrage. Un changement du contrat de l'API y
+apparaît au démarrage suivant, et `npm run codegen` aligne alors le client comme d'habitude. Un multirepo n'a pas de paquet de client API : rien de tout cela ne s'applique.
+
 ## Migrations et récupération
 
 Une mise à jour peut combiner trois mécanismes distincts :
@@ -430,9 +448,10 @@ Puis :
 4. Inspectez `git diff` et chaque sidecar `.saasfoundry.new`.
 5. Fusionnez ou écartez chaque sidecar explicitement, puis supprimez-le.
 6. Si la mise à jour a changé des versions épinglées sans que vous la laissiez résoudre le lockfile, résolvez-le de nouveau (voir [Versions épinglées et lockfile](#versions-epinglees-et-lockfile)),
-   puis lancez le `prisma generate` qu'elle a affiché si elle a déplacé la version de Prisma (voir [Le client Prisma suit la version de Prisma](#le-client-prisma-suit-la-version-de-prisma)).
+   puis lancez le `prisma generate` qu'elle a affiché si elle a déplacé la version de Prisma (voir [Le client Prisma suit la version de Prisma](#le-client-prisma-suit-la-version-de-prisma)) et le
+   `npm run codegen` qu'elle a affiché si elle a changé le codegen du client API (voir [Le client API suit son codegen](#le-client-api-suit-son-codegen)).
 7. Lancez le build, le lint, les tests et la procédure de base requise par le projet généré.
-8. Versionnez ensemble les fichiers mis à jour, `package-lock.json`, le client Prisma régénéré et `.saasfoundry.json`.
+8. Versionnez ensemble les fichiers mis à jour, `package-lock.json`, les clients Prisma et API régénérés et `.saasfoundry.json`.
 
 Si la commande échoue, suivez son message de récupération et relancez la même commande après correction. Ne supprimez pas les journaux de transition et ne réécrivez pas les empreintes de propriété
 manuellement.

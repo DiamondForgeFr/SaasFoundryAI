@@ -149,6 +149,24 @@ leaves the tree dirty. Which of the two cases applies depends on the lockfile re
 
 Run the command after the dependencies are installed at the new pin: `prisma generate` uses the installed Prisma CLI.
 
+### The API client follows its codegen
+
+A monorepo commits the API client orval generates under `packages/api-client/src/generated`, and its pre-commit hook runs `codegen:check`: `npm run codegen`, then a comparison with the committed
+client. The output depends on the orval pin of `packages/api-client`, on the prettier pin that formats it, and on the two files orval reads besides the OpenAPI snapshot, `orval.config.ts` and the
+mutator `src/http-client.ts`. When the update changes one of them, for example orval 8.28.1 → 8.47.0 in the 1.2.0 stack refresh, the committed client no longer matches and the first commit after the
+update is refused. `sf update` aligns it the way it aligns the Prisma client:
+
+| The update                                                                              | The API client                                                                                                                                |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Moved the orval or prettier pin, and the lockfile resolve ran and succeeded             | `sf update` regenerates it right after, with `npm run codegen` at the root under the Node version of its `.nvmrc`. Commit it with the update. |
+| Moved the pin, and the resolve did not run (`--non-interactive`, answered no) or failed | `npm run codegen` is printed among the steps, after the lockfile resolve.                                                                     |
+| Rewrote `orval.config.ts` or `src/http-client.ts` and moved no pin                      | An interactive run regenerates it at once (the installed orval is already the right one); a `--non-interactive` run prints `npm run codegen`. |
+| The codegen fails                                                                       | Its error and the command to retry are printed, and the update exits with code 1.                                                             |
+| A `package.json` conflict left as a sidecar bumps orval or prettier                     | The sidecar notice adds `npm run codegen`, to run once the merge is installed.                                                                |
+
+The codegen reads the OpenAPI snapshot on disk (`apps/api/docs/openapi.json`), which the update does not touch: the API rewrites it when it starts. A change to the API contract shows up there at the
+next start, and `npm run codegen` then aligns the client as usual. A multirepo has no API client package: nothing applies.
+
 ## Migrations and recovery
 
 Updates can involve three distinct mechanisms:
@@ -418,9 +436,10 @@ Then:
 4. Inspect `git diff` and every `.saasfoundry.new` sidecar.
 5. Merge or discard sidecars deliberately, then remove them.
 6. If the update changed pinned versions and you did not let it resolve the lockfile, resolve it again (see [Pinned versions and the lockfile](#pinned-versions-and-the-lockfile)), then run the
-   `prisma generate` it printed when it moved the Prisma pin (see [The Prisma client follows the Prisma pin](#the-prisma-client-follows-the-prisma-pin)).
+   `prisma generate` it printed when it moved the Prisma pin (see [The Prisma client follows the Prisma pin](#the-prisma-client-follows-the-prisma-pin)) and the `npm run codegen` it printed when it
+   changed the API client codegen (see [The API client follows its codegen](#the-api-client-follows-its-codegen)).
 7. Run the generated project's build, lint, tests, and any required database procedure.
-8. Commit the updated files, `package-lock.json`, the regenerated Prisma client and `.saasfoundry.json` together.
+8. Commit the updated files, `package-lock.json`, the regenerated Prisma and API clients and `.saasfoundry.json` together.
 
 If the command fails, read its recovery message and rerun the same lifecycle command after correcting the reported cause. Do not delete transition journals or rewrite ownership hashes manually.
 
