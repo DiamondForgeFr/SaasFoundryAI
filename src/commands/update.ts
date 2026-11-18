@@ -52,7 +52,19 @@ import {
   validateUpdateOutputOptions
 } from './update.options'
 import { handleProfileTransition } from './update.profile-transition'
-import { groupByLockfileRoot, isPackageManifestPath, logPendingSidecarPins, offerLockfileResolution, pinChanges, readPackageManifests, type LockfileRoot, type PinChange } from './update.lockfile'
+import {
+  groupByLockfileRoot,
+  isPackageManifestPath,
+  logPendingSidecarPins,
+  offerLockfileResolution,
+  pinChanges,
+  planApiClientCodegen,
+  readPackageManifests,
+  regenerateApiClients,
+  type ApiClientTarget,
+  type LockfileRoot,
+  type PinChange
+} from './update.lockfile'
 import { runRequired } from '../run'
 import { getSharedAgentEntrypoints } from '../harness/agent-registry'
 import { previewCodexInstructionLimits } from '../harness/codex-instruction-limit-preview'
@@ -1393,6 +1405,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         // Lockfiles that still hold the pins this refresh replaced, and sidecars that propose new pins (#1229).
         let lockfileRoots: LockfileRoot[] = []
         let pendingSidecarRoots: LockfileRoot[] = []
+        // Roots whose committed API client a rewritten codegen file leaves behind, no pin moved (#1264).
+        let apiClientTargets: ApiClientTarget[] = []
 
         try {
           // Regenerate project in temp dir with current CLI
@@ -1463,17 +1477,25 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               unresolvedConflicts = conflictStrategy !== 'replace' && conflicts.length > 0
               // Pins the refresh changed on disk, and pins a package.json sidecar proposes (#1229).
               const pinsAfter = await readPackageManifests('.', [...packageManifestsBefore.keys()])
-              lockfileRoots = await groupByLockfileRoot(
+              // The committed API client follows orval, prettier and the codegen files (#1264).
+              const written = [...applied, ...added, ...(conflictStrategy === 'replace' ? conflicts : [])].map((entry) => entry.path)
+              const apiClientPlan = await planApiClientCodegen(
                 '.',
-                [...packageManifestsBefore].flatMap(([path, before]) => pinChanges(path, before, pinsAfter.get(path)))
+                await groupByLockfileRoot(
+                  '.',
+                  [...packageManifestsBefore].flatMap(([path, before]) => pinChanges(path, before, pinsAfter.get(path)))
+                ),
+                written
               )
+              lockfileRoots = apiClientPlan.roots
+              apiClientTargets = apiClientPlan.standalone
               if (conflictStrategy === 'save-new') {
                 const sidecarPins: PinChange[] = []
                 for (const conflict of conflicts.filter((entry) => isPackageManifestPath(entry.path))) {
                   const proposed = await readFile(`${conflict.path}.saasfoundry.new`, 'utf8').catch(() => undefined)
                   if (proposed !== undefined) sidecarPins.push(...pinChanges(conflict.path, pinsAfter.get(conflict.path), proposed))
                 }
-                pendingSidecarRoots = await groupByLockfileRoot('.', sidecarPins)
+                pendingSidecarRoots = (await planApiClientCodegen('.', await groupByLockfileRoot('.', sidecarPins))).roots
               }
 
               spinner.succeed(chalk.green('Template update complete.'))
@@ -1542,9 +1564,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               confirm: async (message) => (await promptWithPrefill<{ confirm: boolean }>([{ type: 'confirm', name: 'confirm', message, default: true }])).confirm
             }
           )
+          const apiClients = regenerateApiClients(apiClientTargets, { interactive: !nonInteractive })
           const failedResolve = resolutions.some((resolution) => resolution.outcome === 'failed')
           const failedPrismaGenerate = resolutions.some((resolution) => resolution.prismaClients?.some((client) => client.outcome === 'failed'))
-          if (failedResolve || failedPrismaGenerate) process.exitCode = 1
+          const failedCodegen = [...resolutions.map((resolution) => resolution.apiClient), ...apiClients].some((client) => client?.outcome === 'failed')
+          if (failedResolve || failedPrismaGenerate || failedCodegen) process.exitCode = 1
           logPendingSidecarPins(pendingSidecarRoots)
         }
 

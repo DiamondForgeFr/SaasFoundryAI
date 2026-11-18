@@ -64,6 +64,45 @@ export interface PrismaClientResult {
   outcome: 'regenerated' | 'manual' | 'failed'
 }
 
+/**
+ * The pins whose version shapes the API client a monorepo commits (#1264). `npm run codegen` runs
+ * orval on the OpenAPI snapshot, then prettier on what it wrote, and `codegen:check` (the project's
+ * pre-commit guard) compares that output with `packages/api-client/src/generated`. After the update
+ * moves one of these pins (orval 8.28.1 → 8.47.0 from 1.1.0 to 1.2.0), the committed client no
+ * longer matches and the first commit after the update is refused. The update regenerates it once
+ * the dependencies are installed at the new pin, as it does for the Prisma client (#1246).
+ */
+export const API_CLIENT_TOOLCHAIN_PINS = ['orval', 'prettier'] as const
+
+/** What the stack runs, at the root of the monorepo, to generate the API client (`codegen:check` runs it too). */
+export const API_CLIENT_CODEGEN_COMMAND = 'npm run codegen'
+
+/**
+ * The files of the API client package orval reads besides the OpenAPI snapshot: its configuration,
+ * and the mutator whose signature shapes every generated hook. An update that rewrites one of
+ * them changes the codegen output without moving any pin.
+ */
+export function isApiClientCodegenInput(path: string): boolean {
+  const normalized = path.split(sep).join('/')
+  return /(^|\/)orval\.config\.[cm]?[jt]s$/.test(normalized) || /^packages\/[^/]+\/src\/http-client\.ts$/.test(normalized)
+}
+
+/** Why the committed API client of one package root no longer matches its codegen. */
+export interface ApiClientCodegen {
+  /** Printed in the step: `orval 8.28.1 → 8.47.0`, or the codegen file the update rewrote. */
+  reason: string
+}
+
+/** A package root whose API client must be regenerated, with no lockfile to resolve first. */
+export interface ApiClientTarget extends ApiClientCodegen {
+  root: string
+}
+
+export interface ApiClientResult {
+  root: string
+  outcome: 'regenerated' | 'manual' | 'failed'
+}
+
 export interface PinChange {
   /** Project-relative path of the `package.json`. */
   manifest: string
@@ -78,6 +117,8 @@ export interface LockfileRoot {
   /** Project-relative directory that holds `package-lock.json` (`.` for the root). */
   root: string
   changes: PinChange[]
+  /** Set when the root generates an API client the changes leave behind (`planApiClientCodegen`). */
+  apiClient?: ApiClientCodegen
 }
 
 export interface FrameworkCopies {
@@ -178,6 +219,53 @@ export async function groupByLockfileRoot(projectRoot: string, changes: readonly
   return [...roots.entries()].map(([root, rootChanges]) => ({ root, changes: rootChanges }))
 }
 
+/**
+ * Why a package root's committed API client no longer matches its codegen: an orval pin that moved
+ * (it generates), else a prettier pin (it formats the output), else a codegen file the update
+ * rewrote. `undefined` when nothing the codegen reads changed.
+ */
+export function apiClientCodegenReason(changes: readonly PinChange[], inputs: readonly string[] = []): string | undefined {
+  const moved = (name: string) =>
+    changes.find((change) => change.name === name && (change.field === 'dependencies' || change.field === 'devDependencies') && change.from !== undefined && change.to !== undefined)
+  for (const name of API_CLIENT_TOOLCHAIN_PINS) {
+    const change = moved(name)
+    if (change) return `${name} ${change.from} → ${change.to}`
+  }
+  return inputs.length > 0 ? `${inputs.join(', ')} updated` : undefined
+}
+
+/** Whether the `package.json` of a package root declares the `codegen` script the stack runs. */
+export async function declaresCodegen(projectRoot: string, root: string): Promise<boolean> {
+  const manifest = parsePackageJson(await readFile(join(projectRoot, root, 'package.json'), 'utf8').catch(() => undefined))
+  return isObject(manifest?.scripts) && typeof manifest.scripts.codegen === 'string'
+}
+
+/**
+ * Mark the package roots whose committed API client the update leaves behind (#1264): a root whose
+ * pins moved gets `apiClient`, regenerated after its lockfile resolve; a root where the update only
+ * rewrote a codegen file (`inputs`) is returned apart, since it has no lockfile to resolve. Only a
+ * root whose `package.json` declares `codegen` counts: a multirepo app generates no client.
+ */
+export async function planApiClientCodegen(projectRoot: string, roots: readonly LockfileRoot[], inputs: readonly string[] = []): Promise<{ roots: LockfileRoot[]; standalone: ApiClientTarget[] }> {
+  const inputsByRoot = new Map<string, string[]>()
+  for (const input of inputs.filter(isApiClientCodegenInput)) {
+    const root = (await findLockfileRoot(projectRoot, input)) ?? '.'
+    inputsByRoot.set(root, [...(inputsByRoot.get(root) ?? []), input])
+  }
+  const planned: LockfileRoot[] = []
+  for (const entry of roots) {
+    const reason = apiClientCodegenReason(entry.changes, inputsByRoot.get(entry.root))
+    inputsByRoot.delete(entry.root)
+    planned.push(reason !== undefined && (await declaresCodegen(projectRoot, entry.root)) ? { ...entry, apiClient: { reason } } : entry)
+  }
+  const standalone: ApiClientTarget[] = []
+  for (const [root, rootInputs] of inputsByRoot) {
+    const reason = apiClientCodegenReason([], rootInputs)
+    if (reason !== undefined && (await declaresCodegen(projectRoot, root))) standalone.push({ root, reason })
+  }
+  return { roots: planned, standalone }
+}
+
 /** Read the `package.json` files a template update is about to write, before it writes them. */
 export async function readPackageManifests(projectRoot: string, paths: readonly string[]): Promise<Map<string, string | undefined>> {
   const contents = new Map<string, string | undefined>()
@@ -240,6 +328,44 @@ export interface LockfileResolutionResult {
   duplicates?: FrameworkCopies[]
   /** The Prisma clients whose pin moved: regenerated, or left with the command to run. */
   prismaClients?: PrismaClientResult[]
+  /** The API client the changes leave behind: regenerated, or left with the command to run (#1264). */
+  apiClient?: ApiClientResult
+}
+
+/** The step a developer runs to align the committed API client with the update. */
+function logApiClientCodegenStep(root: string, codegen: ApiClientCodegen, log: (line: string) => void, lead: string): void {
+  log(chalk.yellow(`    ${lead} regenerate the API client the project commits (${codegen.reason}): ${inRoot(root, API_CLIENT_CODEGEN_COMMAND)}`))
+}
+
+/** Run the codegen in one package root under the Node version its `.nvmrc` names. */
+function regenerateApiClient(root: string, codegen: ApiClientCodegen, deps: Pick<LockfileResolutionDeps, 'run' | 'nvmPrefix'>, log: (line: string) => void): ApiClientResult {
+  const execute = deps.run ?? ((command: string, options: { cwd: string }) => run(command, options))
+  const prefix = (deps.nvmPrefix ?? getNvmPrefix)(root)
+  const result = execute(`${prefix}${API_CLIENT_CODEGEN_COMMAND}`, { cwd: root })
+  if (result.code === 0) {
+    log(chalk.green(`    ✓ API client regenerated (${codegen.reason}): commit it with the update, codegen:check compares it with what ${API_CLIENT_CODEGEN_COMMAND} emits.`))
+    return { root, outcome: 'regenerated' }
+  }
+  log(chalk.red(`    Regenerating the API client failed (exit ${result.code}).`))
+  const detail = (result.stderr || result.stdout).trim().split('\n').slice(-5)
+  for (const line of detail) if (line) log(chalk.red(`    ${line}`))
+  logApiClientCodegenStep(root, codegen, log, 'To retry,')
+  return { root, outcome: 'failed' }
+}
+
+/**
+ * The roots where the update rewrote a codegen file but moved no pin (#1264): the installed
+ * toolchain is already the right one, so an interactive run regenerates the client at once; a
+ * non-interactive run, which never runs an install or a generator, prints the command.
+ */
+export function regenerateApiClients(targets: readonly ApiClientTarget[], options: { interactive: boolean }, deps: Pick<LockfileResolutionDeps, 'run' | 'nvmPrefix' | 'log'> = {}): ApiClientResult[] {
+  const log = deps.log ?? ((line: string) => console.log(line))
+  return targets.map(({ root, reason }) => {
+    log(chalk.yellow(`\n  ⚠ The update changed what the API client codegen emits (${reason}): codegen:check refuses a commit until the committed client is regenerated.`))
+    if (options.interactive) return regenerateApiClient(root, { reason }, deps, log)
+    logApiClientCodegenStep(root, { reason }, log, 'Before the next commit,')
+    return { root, outcome: 'manual' }
+  })
 }
 
 const prismaPinLabel = ({ from, to }: PrismaClientTarget): string => `prisma ${from} → ${to}`
@@ -290,7 +416,7 @@ export function checkFrameworkCopies(root: string, deps: Pick<LockfileResolution
 export async function offerLockfileResolution(roots: readonly LockfileRoot[], options: { interactive: boolean }, deps: LockfileResolutionDeps): Promise<LockfileResolutionResult[]> {
   const log = deps.log ?? ((line: string) => console.log(line))
   const results: LockfileResolutionResult[] = []
-  for (const { root, changes } of roots) {
+  for (const { root, changes, apiClient } of roots) {
     const lockfile = root === '.' ? 'package-lock.json' : `${root}/package-lock.json`
     const manifests = [...new Set(changes.map((change) => change.manifest))]
     log(chalk.yellow(`\n  ⚠ The update changed the pinned versions of ${summarizeChanges(changes)} (${manifests.join(', ')}).`))
@@ -306,6 +432,10 @@ export async function offerLockfileResolution(roots: readonly LockfileRoot[], op
     const prismaTargets = prismaClientTargets(changes)
     const manualPrisma = (): PrismaClientResult[] => prismaTargets.map(({ dir, to }) => ({ dir, to, outcome: 'manual' }))
     const withPrisma = (clients: PrismaClientResult[]): Pick<LockfileResolutionResult, 'prismaClients'> => (clients.length > 0 ? { prismaClients: clients } : {})
+    const manualClients = (): Pick<LockfileResolutionResult, 'prismaClients' | 'apiClient'> => ({
+      ...withPrisma(manualPrisma()),
+      ...(apiClient ? { apiClient: { root, outcome: 'manual' } } : {})
+    })
     const manual = (): void => {
       log(chalk.yellow(`    Resolve it again: ${inRoot(root, LOCKFILE_RESOLVE_COMMAND)}`))
       // The generated projects require npm 11, which Node 22 does not ship (#589).
@@ -313,16 +443,17 @@ export async function offerLockfileResolution(roots: readonly LockfileRoot[], op
       log(chalk.gray(`    Then check one copy of each framework is installed: ${inRoot(root, frameworkCheckCommand())}`))
       log(chalk.gray('    npm dedupe is not enough: it moves the shared copy to the newest version in range, not to the pin.'))
       logPrismaGenerateStep(prismaTargets, log, 'Once installed,')
+      if (apiClient) logApiClientCodegenStep(root, apiClient, log, 'Once installed,')
     }
     if (!options.interactive) {
       manual()
-      results.push({ root, outcome: 'non-interactive', ...withPrisma(manualPrisma()) })
+      results.push({ root, outcome: 'non-interactive', ...manualClients() })
       continue
     }
     const accepted = await deps.confirm(`Resolve ${lockfile} again now? node_modules and the lockfile are re-created; the previous ones come back if it fails.`)
     if (!accepted) {
       manual()
-      results.push({ root, outcome: 'declined', ...withPrisma(manualPrisma()) })
+      results.push({ root, outcome: 'declined', ...manualClients() })
       continue
     }
     try {
@@ -331,7 +462,7 @@ export async function offerLockfileResolution(roots: readonly LockfileRoot[], op
       log(chalk.red(`    Resolving ${lockfile} again failed; the previous lockfile and node_modules are back.`))
       log(chalk.red(`    ${error instanceof Error ? error.message.split('\n').join('\n    ') : String(error)}`))
       manual()
-      results.push({ root, outcome: 'failed', ...withPrisma(manualPrisma()) })
+      results.push({ root, outcome: 'failed', ...manualClients() })
       continue
     }
     const duplicates = checkFrameworkCopies(root, deps)
@@ -346,7 +477,15 @@ export async function offerLockfileResolution(roots: readonly LockfileRoot[], op
     }
     // The client is generated from the installed CLI, so only once the tree holds the new pin.
     const prismaClients = regeneratePrismaClients(prismaTargets, deps, log)
-    results.push({ root, outcome: 'resolved', ...(duplicates !== undefined ? { duplicates } : {}), ...withPrisma(prismaClients) })
+    // Same for orval and prettier: `codegen:check` runs the installed ones (#1264).
+    const apiClientResult = apiClient ? regenerateApiClient(root, apiClient, deps, log) : undefined
+    results.push({
+      root,
+      outcome: 'resolved',
+      ...(duplicates !== undefined ? { duplicates } : {}),
+      ...withPrisma(prismaClients),
+      ...(apiClientResult ? { apiClient: apiClientResult } : {})
+    })
   }
   return results
 }
@@ -356,10 +495,11 @@ export async function offerLockfileResolution(roots: readonly LockfileRoot[], op
  * anything for them, since the file on disk did not change, but says the merge will need it.
  */
 export function logPendingSidecarPins(roots: readonly LockfileRoot[], log: (line: string) => void = (line) => console.log(line)): void {
-  for (const { root, changes } of roots) {
+  for (const { root, changes, apiClient } of roots) {
     const sidecars = [...new Set(changes.map((change) => `${change.manifest}.saasfoundry.new`))]
     log(chalk.yellow(`\n  ⚠ ${sidecars.join(', ')} change${sidecars.length === 1 ? 's' : ''} pinned versions (${summarizeChanges(changes)}).`))
     log(chalk.yellow(`    Once merged, resolve the lockfile again: ${inRoot(root, LOCKFILE_RESOLVE_COMMAND)}, then ${inRoot(root, frameworkCheckCommand())}`))
     logPrismaGenerateStep(prismaClientTargets(changes), log, 'Once installed,')
+    if (apiClient) logApiClientCodegenStep(root, apiClient, log, 'Once installed,')
   }
 }

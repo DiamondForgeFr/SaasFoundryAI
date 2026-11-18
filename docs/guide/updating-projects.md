@@ -278,6 +278,8 @@ rm -rf node_modules package-lock.json && npm install
 npm ls @nestjs/common @nestjs/core react react-dom @types/react @types/react-dom @prisma/client prisma --all
 # ...and it moved the Prisma pin: regenerate the client the API commits (multirepo: from the API app)
 cd apps/api && npx prisma generate && cd -
+# ...and it changed the API client codegen (monorepo): regenerate the client codegen:check compares
+npm run codegen
 
 # 8. Re-run tests and commit
 npm test
@@ -297,7 +299,9 @@ Be clear about the boundaries:
   plain `npm install` would keep the previous versions beside the new ones (see [Pinned versions and the lockfile](/cli/sf-update#pinned-versions-and-the-lockfile)). When that update moves the Prisma
   pin of the API, the resolve you accept is followed by `npx prisma generate` in the API, so the committed client carries the new version; without the resolve (`--non-interactive`, answered no,
   failed), the command is printed among the steps instead (see [The Prisma client follows the Prisma pin](/cli/sf-update#the-prisma-client-follows-the-prisma-pin)). Any other change to the Prisma
-  schema: run `prisma generate` yourself after reviewing the diff.
+  schema: run `prisma generate` yourself after reviewing the diff. The API client a monorepo commits follows the same rule: when the update moves the orval or prettier pin, or rewrites
+  `orval.config.ts` or the mutator, `npm run codegen` runs after the resolve (at once when no pin moved), or is printed among the steps, so the project's `codegen:check` accepts the first commit (see
+  [The API client follows its codegen](/cli/sf-update#the-api-client-follows-its-codegen)).
 - **It does not migrate your database.** Prisma schema changes in the template are propagated as files only. You run `npx prisma db push` (schema sync) or `npm run db:setup:dev` (full rebuild +
   re-seed, destructive) separately.
 - **It does not touch your git history.** No commits are created. The tree is left dirty for you to review and commit.

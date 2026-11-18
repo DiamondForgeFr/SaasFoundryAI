@@ -3,17 +3,22 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  API_CLIENT_CODEGEN_COMMAND,
+  apiClientCodegenReason,
   duplicatedFrameworks,
   findLockfileRoot,
   groupByLockfileRoot,
+  isApiClientCodegenInput,
   isPackageManifestPath,
   LOCKFILE_RESOLVE_COMMAND,
   logPendingSidecarPins,
   offerLockfileResolution,
   pinChanges,
+  planApiClientCodegen,
   PRISMA_GENERATE_COMMAND,
   prismaClientTargets,
   readPackageManifests,
+  regenerateApiClients,
   type LockfileResolutionDeps,
   type LockfileRoot
 } from '../../../commands/update.lockfile'
@@ -332,6 +337,65 @@ describe('update lockfile resolution (#1229)', () => {
       })
     })
 
+    describe('an update that moves the API client codegen (#1264)', () => {
+      const orvalBump: LockfileRoot[] = [
+        {
+          root: '.',
+          changes: [
+            { manifest: 'packages/api-client/package.json', name: 'orval', field: 'devDependencies', from: '8.28.1', to: '8.47.0' },
+            { manifest: 'package.json', name: 'prettier', field: 'devDependencies', from: '3.8.3', to: '3.8.5' }
+          ],
+          apiClient: { reason: 'orval 8.28.1 → 8.47.0' }
+        }
+      ]
+
+      it('regenerates the client at the root, under its Node, after the resolve', async () => {
+        const order: string[] = []
+        const deps = depsWith({
+          refresh: jest.fn(async () => {
+            order.push('resolve')
+          }),
+          run: jest.fn((command: string) => {
+            order.push(command)
+            return { code: 0, stdout: command.includes('npm ls') ? JSON.stringify({ dependencies: {} }) : '', stderr: '' }
+          })
+        })
+        const [result] = await offerLockfileResolution(orvalBump, { interactive: true }, deps)
+        expect(deps.run).toHaveBeenCalledWith(`NVM; ${API_CLIENT_CODEGEN_COMMAND}`, { cwd: '.' })
+        expect(order[0]).toBe('resolve')
+        expect(order.at(-1)).toBe(`NVM; ${API_CLIENT_CODEGEN_COMMAND}`)
+        expect(result.apiClient).toEqual({ root: '.', outcome: 'regenerated' })
+        expect(output()).toContain('API client regenerated (orval 8.28.1 → 8.47.0): commit it with the update')
+      })
+
+      it('names npm run codegen among the steps when the lockfile is not resolved', async () => {
+        const nonInteractive = await offerLockfileResolution(orvalBump, { interactive: false }, depsWith({}))
+        const declined = await offerLockfileResolution(orvalBump, { interactive: true }, depsWith({ confirm: jest.fn(async () => false) }))
+        expect(nonInteractive[0].apiClient).toEqual({ root: '.', outcome: 'manual' })
+        expect(declined[0].apiClient).toEqual({ root: '.', outcome: 'manual' })
+        expect(output()).toContain(`Once installed, regenerate the API client the project commits (orval 8.28.1 → 8.47.0): ${API_CLIENT_CODEGEN_COMMAND}`)
+      })
+
+      it('reports a failed codegen with the command to retry', async () => {
+        const deps = depsWith({
+          run: jest.fn((command: string) => (command.includes('codegen') ? { code: 1, stdout: '', stderr: 'orval: cannot read openapi.json' } : { code: 0, stdout: '{}', stderr: '' }))
+        })
+        const [result] = await offerLockfileResolution(orvalBump, { interactive: true }, deps)
+        expect(result.outcome).toBe('resolved')
+        expect(result.apiClient).toEqual({ root: '.', outcome: 'failed' })
+        expect(output()).toContain('Regenerating the API client failed (exit 1)')
+        expect(output()).toContain('cannot read openapi.json')
+        expect(output()).toContain(`To retry, regenerate the API client the project commits (orval 8.28.1 → 8.47.0): ${API_CLIENT_CODEGEN_COMMAND}`)
+      })
+
+      it('leaves the client alone in a root that generates none', async () => {
+        const deps = depsWith({})
+        const [result] = await offerLockfileResolution(roots, { interactive: true }, deps)
+        expect(result.apiClient).toBeUndefined()
+        expect(deps.run).not.toHaveBeenCalledWith(expect.stringContaining('codegen'), expect.anything())
+      })
+    })
+
     it('does nothing when no lockfile holds a changed pin', async () => {
       const deps = depsWith({})
       expect(await offerLockfileResolution([], { interactive: true }, deps)).toEqual([])
@@ -352,6 +416,116 @@ describe('update lockfile resolution (#1229)', () => {
     const lines: string[] = []
     logPendingSidecarPins([{ root: '.', changes: [{ manifest: 'apps/api/package.json', name: 'prisma', field: 'devDependencies', from: '7.10.0', to: '7.10.1' }] }], (line) => lines.push(line))
     expect(strip(lines.join('\n'))).toContain(`(prisma 7.10.0 → 7.10.1): cd apps/api && ${PRISMA_GENERATE_COMMAND}`)
+  })
+
+  it('tells a package.json sidecar that bumps orval will need the API client regenerated (#1264)', () => {
+    const lines: string[] = []
+    logPendingSidecarPins(
+      [
+        {
+          root: '.',
+          changes: [{ manifest: 'packages/api-client/package.json', name: 'orval', field: 'devDependencies', from: '8.28.1', to: '8.47.0' }],
+          apiClient: { reason: 'orval 8.28.1 → 8.47.0' }
+        }
+      ],
+      (line) => lines.push(line)
+    )
+    expect(strip(lines.join('\n'))).toContain(`(orval 8.28.1 → 8.47.0): ${API_CLIENT_CODEGEN_COMMAND}`)
+  })
+
+  describe('API client codegen (#1264)', () => {
+    it('recognises the codegen files orval reads', () => {
+      expect(isApiClientCodegenInput('packages/api-client/orval.config.ts')).toBe(true)
+      expect(isApiClientCodegenInput('packages/api-client/src/http-client.ts')).toBe(true)
+      expect(isApiClientCodegenInput('packages/api-client/src/index.ts')).toBe(false)
+      expect(isApiClientCodegenInput('apps/web/src/http-client.ts')).toBe(false)
+    })
+
+    it('names the orval pin first, then prettier, then the rewritten codegen files', () => {
+      const orval = { manifest: 'packages/api-client/package.json', name: 'orval', field: 'devDependencies', from: '8.28.1', to: '8.47.0' }
+      const prettier = { manifest: 'package.json', name: 'prettier', field: 'devDependencies', from: '3.8.3', to: '3.8.5' }
+      expect(apiClientCodegenReason([prettier, orval])).toBe('orval 8.28.1 → 8.47.0')
+      expect(apiClientCodegenReason([prettier])).toBe('prettier 3.8.3 → 3.8.5')
+      expect(apiClientCodegenReason([], ['packages/api-client/orval.config.ts'])).toBe('packages/api-client/orval.config.ts updated')
+    })
+
+    it('ignores an added or removed orval pin, an override and other packages', () => {
+      expect(
+        apiClientCodegenReason([
+          { manifest: 'packages/api-client/package.json', name: 'orval', field: 'devDependencies', to: '8.47.0' },
+          { manifest: 'package.json', name: 'orval', field: 'overrides', from: '"8.28.1"', to: '"8.47.0"' },
+          { manifest: 'apps/web/package.json', name: 'react', field: 'dependencies', from: '19.2.5', to: '19.3.1' }
+        ])
+      ).toBeUndefined()
+    })
+
+    describe('planApiClientCodegen', () => {
+      let project: string
+      const orval = { manifest: 'packages/api-client/package.json', name: 'orval', field: 'devDependencies', from: '8.28.1', to: '8.47.0' }
+      beforeEach(async () => {
+        project = await mkdtemp(join(tmpdir(), 'sf-api-client-plan-'))
+      })
+      afterEach(async () => {
+        await rm(project, { recursive: true, force: true })
+      })
+      const monorepo = async (): Promise<void> => {
+        await mkdir(join(project, 'packages/api-client'), { recursive: true })
+        await writeFile(join(project, 'package-lock.json'), '{}')
+        await writeFile(join(project, 'package.json'), JSON.stringify({ scripts: { codegen: 'turbo run codegen' } }))
+      }
+
+      it('marks the monorepo root whose orval pin moved', async () => {
+        await monorepo()
+        const plan = await planApiClientCodegen(project, [{ root: '.', changes: [orval] }])
+        expect(plan).toEqual({ roots: [{ root: '.', changes: [orval], apiClient: { reason: 'orval 8.28.1 → 8.47.0' } }], standalone: [] })
+      })
+
+      it('regenerates after the resolve when a codegen file changed with the pins', async () => {
+        await monorepo()
+        const react = { manifest: 'apps/web/package.json', name: 'react', field: 'dependencies', from: '19.2.5', to: '19.3.1' }
+        const plan = await planApiClientCodegen(project, [{ root: '.', changes: [react] }], ['packages/api-client/orval.config.ts', 'README.md'])
+        expect(plan.roots[0].apiClient).toEqual({ reason: 'packages/api-client/orval.config.ts updated' })
+        expect(plan.standalone).toEqual([])
+      })
+
+      it('returns a codegen file rewritten without any pin change apart', async () => {
+        await monorepo()
+        const plan = await planApiClientCodegen(project, [], ['packages/api-client/src/http-client.ts'])
+        expect(plan).toEqual({ roots: [], standalone: [{ root: '.', reason: 'packages/api-client/src/http-client.ts updated' }] })
+      })
+
+      it('leaves a root that declares no codegen script alone: a multirepo app', async () => {
+        await mkdir(join(project, 'apps/acme-web'), { recursive: true })
+        await writeFile(join(project, 'apps/acme-web/package.json'), JSON.stringify({ scripts: { build: 'vite build' } }))
+        const prettier = { manifest: 'apps/acme-web/package.json', name: 'prettier', field: 'devDependencies', from: '3.8.3', to: '3.8.5' }
+        const plan = await planApiClientCodegen(project, [{ root: 'apps/acme-web', changes: [prettier] }])
+        expect(plan).toEqual({ roots: [{ root: 'apps/acme-web', changes: [prettier] }], standalone: [] })
+      })
+    })
+
+    describe('regenerateApiClients', () => {
+      it('runs the codegen at once on an interactive run: the installed toolchain is already right', () => {
+        const lines: string[] = []
+        const run = jest.fn(() => ({ code: 0, stdout: '', stderr: '' }))
+        const results = regenerateApiClients(
+          [{ root: '.', reason: 'packages/api-client/orval.config.ts updated' }],
+          { interactive: true },
+          { run, nvmPrefix: () => 'NVM; ', log: (line) => lines.push(line) }
+        )
+        expect(run).toHaveBeenCalledWith(`NVM; ${API_CLIENT_CODEGEN_COMMAND}`, { cwd: '.' })
+        expect(results).toEqual([{ root: '.', outcome: 'regenerated' }])
+        expect(strip(lines.join('\n'))).toContain('codegen:check refuses a commit until the committed client is regenerated')
+      })
+
+      it('prints the command on a non-interactive run, and runs nothing', () => {
+        const lines: string[] = []
+        const run = jest.fn(() => ({ code: 0, stdout: '', stderr: '' }))
+        const results = regenerateApiClients([{ root: '.', reason: 'packages/api-client/orval.config.ts updated' }], { interactive: false }, { run, log: (line) => lines.push(line) })
+        expect(run).not.toHaveBeenCalled()
+        expect(results).toEqual([{ root: '.', outcome: 'manual' }])
+        expect(strip(lines.join('\n'))).toContain(`Before the next commit, regenerate the API client the project commits (packages/api-client/orval.config.ts updated): ${API_CLIENT_CODEGEN_COMMAND}`)
+      })
+    })
   })
 
   describe('prismaClientTargets (#1246)', () => {
