@@ -498,6 +498,15 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
       // A merged file (AGENTS.md's generated region) is project-owned: no baseline.
       if (!report.conflicts.includes(file.path) && !file.merge) report.fileHashes[file.path] = hash(file.content)
     }
+    // A dry run names the shared copies the refresh would retire (#1248); an edited one is reported when applied.
+    for (const path of plan.retired ?? []) {
+      const current = await checkLocalPath(root, path).catch(() => undefined)
+      if (!current) (report.releasedHashes ??= []).push(path)
+      else if (hash(current) === before.manifest.fileHashes?.[path]) {
+        ;(report.removed ??= []).push(path)
+        ;(report.releasedHashes ??= []).push(path)
+      } else report.warnings.push(`${path}: no longer generated, and edited; kept. Merge what you still need, then delete it.`)
+    }
     return {
       scope,
       configuredAgents: union(previous, local.agents),
@@ -553,6 +562,11 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
       }
     }
     if (Object.keys(report.fileHashes).length) next.fileHashes = { ...before.manifest.fileHashes, ...report.fileHashes }
+    // A shared copy the render no longer writes leaves the manifest with its file (#1248).
+    if (report.releasedHashes?.length) {
+      const released = new Set(report.releasedHashes)
+      next.fileHashes = Object.fromEntries(Object.entries(next.fileHashes ?? before.manifest.fileHashes ?? {}).filter(([path]) => !released.has(path)))
+    }
     const manifestChanged = await persist(root, before, next)
     if (params.refreshSettings && !report.conflicts.length && !params.adoption && configuredAgents.includes('claude-code')) await mergeCaptureSettings(root, report)
     let localStateChanged = false

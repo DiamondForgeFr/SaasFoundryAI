@@ -15,8 +15,9 @@ import {
   updateGitHubProjectStatuses,
   WORKFLOW_PRESETS
 } from '../prompts/workflow.prompts'
-import { installWorkflowSkill } from '../installers/workflow-skill.installer'
-import { readManifest } from '../utils'
+import { pathExists } from 'fs-extra'
+import { hasWorkflowSection, installWorkflowSkill, RETIRED_STATUS_SUFFIX, WORKFLOW_SKILL_DIR, type WorkflowSkillInstallResult } from '../installers/workflow-skill.installer'
+import { hashFileContent, readManifest } from '../utils'
 import { mutateProjectManifestSafe } from '../manifest-file'
 import { assertGitBranchName } from '../run'
 import { assertBoardUrl, boardRemediation, isMissingBoard } from '../utils/workflow-board'
@@ -279,8 +280,21 @@ async function useTemplate(manifest: SaaSFoundryManifest, args: string[]) {
   // the new status set — without this, an in-place preset upgrade leaves the
   // agent documentation describing the previous workflow.
   if (appliedManifest.workflow?.tool !== 'none') {
-    await installWorkflowSkill({ targetPath: process.cwd(), workflow: appliedManifest.workflow!, projectUrl: appliedManifest.workflow?.projectUrl })
+    const result = await switchWorkflowSkill(process.cwd(), manifest.workflow, appliedManifest)
     console.log(chalk.green('✅ Workflow skill regenerated (SKILL.md + statuses docs)'))
+    if (result.removed.length) console.log(chalk.gray(`   Removed ${result.removed.length} status document(s) of the previous preset, which this one does not ship.`))
+    for (const { path: docPath, keptAs } of result.kept) {
+      console.log(
+        chalk.yellow(
+          keptAs === docPath
+            ? `⚠️  ${docPath}: edited, and an earlier ${path.basename(docPath)}${RETIRED_STATUS_SUFFIX} exists; left in place. Reconcile both, then delete it: this preset does not ship it.`
+            : `⚠️  ${docPath}: edited, and this preset does not ship it; kept as ${keptAs}. Merge what you still need, then delete it.`
+        )
+      )
+    }
+    if (await pathExists(path.join(process.cwd(), '.agents/skills/sf-workflow'))) {
+      console.log(chalk.gray('   The shared copy under .agents/skills follows with `sf agents refresh --scope shared`.'))
+    }
   }
 
   // Align the GitHub Project board with the new status set (best-effort).
@@ -296,6 +310,37 @@ async function useTemplate(manifest: SaaSFoundryManifest, args: string[]) {
 }
 
 type ManifestWorkflow = NonNullable<SaaSFoundryManifest['workflow']>
+
+/**
+ * Regenerate the workflow skill for the preset `sf workflow use` applied (#1248). On a project that already had
+ * a workflow, the switch changes the skill and nothing else outside the manifest's workflow block and the board:
+ * the "Workflow System" section of the instructions is refreshed only where it already exists, and the PR-review
+ * listener is left to the install that first chose GitHub Projects. The status documents of the previous preset
+ * are retired (removed, or set aside when edited), and a project that tracks its harness in `fileHashes` keeps
+ * baselines that match the disk: a retired document drops its own, a written file gets the hash of what was written.
+ */
+export async function switchWorkflowSkill(targetPath: string, previous: ManifestWorkflow | undefined, applied: SaaSFoundryManifest): Promise<WorkflowSkillInstallResult> {
+  const hadWorkflow = previous?.tool !== undefined && previous.tool !== 'none'
+  const result = await installWorkflowSkill({
+    targetPath,
+    workflow: applied.workflow!,
+    projectUrl: applied.workflow?.projectUrl,
+    baselines: applied.fileHashes,
+    injectSection: hadWorkflow ? await hasWorkflowSection(targetPath) : true,
+    depositListener: previous?.tool !== 'github-projects'
+  })
+  const prefix = `${WORKFLOW_SKILL_DIR}/`
+  if (Object.keys(applied.fileHashes ?? {}).some((file) => file.startsWith(prefix))) {
+    const written: Record<string, string> = {}
+    for (const file of result.written) written[file] = hashFileContent(await fs.readFile(path.join(targetPath, file)))
+    await mutateProjectManifestSafe(targetPath, (current) => {
+      const hashes = { ...current.fileHashes }
+      for (const file of Object.keys(hashes)) if (file.startsWith(`${prefix}statuses/`) && !(file in written)) delete hashes[file]
+      current.fileHashes = { ...hashes, ...written }
+    })
+  }
+  return result
+}
 
 /**
  * The `workflow` block `sf workflow use` writes (#1233): the project's current block, with only what the template

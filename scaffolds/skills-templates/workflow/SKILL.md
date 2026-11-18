@@ -350,9 +350,7 @@ Drive it with:
 ```
 
 Each phase is documented in detail:
-- `statuses/3a-ai-drafting.md` — AI drafter runs against the configured backend
-- `statuses/3b-human-review.md` — spec owner reviews and approves
-- `statuses/3c-spawning.md` — children land in Backlog, drafting ticket reaches Done
+{{DRAFTING_STATUSES_LIST}}
 
 **Guard** — `update-status <ticket> <any testing/review status>` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch errors (offline / auth issues) so normal teams are not punished by infrastructure hiccups.
 

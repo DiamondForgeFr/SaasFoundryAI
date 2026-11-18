@@ -292,6 +292,8 @@ export async function agentsCommand(
       process.stdout.write(`Scope: ${options.scope ?? 'local'}\n`)
       process.stdout.write(`Effective agents: ${result.configuredAgents.join(', ') || '(none recorded)'}\n`)
       process.stdout.write(`${result.report.written.length} files written, ${result.report.unchanged.length} unchanged, ${result.report.conflicts.length} conflicts.\n`)
+      // A shared copy the render no longer writes, such as a previous workflow preset's status document (#1248).
+      for (const path of result.report.removed ?? []) process.stdout.write(`Removed: ${path} (no longer generated)\n`)
       for (const warning of result.report.warnings) process.stderr.write(`Warning: ${warning}\n`)
       for (const conflict of result.report.conflicts) process.stderr.write(`Conflict: ${conflict}\n`)
     }
