@@ -4,7 +4,7 @@ banner_ai: Spawn child tickets from the approved FR pages, then move the draftin
 banner_human: Nothing — children land in Backlog for later prioritization
 complexity_profiles: [srs-drafting, srs-update, srs-new]
 entry_conditions:
-  - `3b-human-review.md` complete — owner approval signalled
+  - `2b-human-review.md` complete — owner approval signalled
   - Backend page is stable
   - Ticket still carries its `srs:*` label
 mandatory_actions:

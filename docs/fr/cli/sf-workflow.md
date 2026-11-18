@@ -106,6 +106,18 @@ aussi, bien que les presets les écrivent `In Progress`, `AI Testing` et `In Rev
 options ainsi, et `update-status` passe la cible en minuscules avant chaque garde-fou et trouve l'option du board sans tenir compte de la casse : les deux orthographes déplacent un ticket de la même
 façon.
 
+Hors du manifeste, un changement sur un projet qui a déjà un workflow ne touche que le skill `sf-workflow` et le board :
+
+- le dossier `statuses/` du skill contient les documents du nouveau preset, et rien d'autre. Un document du preset précédent est supprimé s'il contient encore les octets écrits par la CLI (sa
+  référence dans `fileHashes`, ou une version livrée) ; un document que vous avez modifié est renommé `<nom>.saasfoundry.old`, que la CLI du workflow ne lit jamais, et la commande le nomme. Un
+  document qu'aucun preset ne livre, écrit pour un statut à vous, reste où il est ;
+- `SKILL.md` nomme les documents de rédaction du preset installé (`2a`–`2c` en Solo, `3a`–`3c` en Team) ;
+- la section « Workflow System » d'`AGENTS.md` est rafraîchie quand le fichier en a une, et jamais ajoutée ; l'écouteur de revue de PR n'est déposé que quand le projet passe à GitHub Projects ;
+- un projet qui suit son harness dans `fileHashes` reçoit les références des fichiers écrits et perd celles des documents partis.
+
+La copie partagée sous `.agents/skills/sf-workflow` suit avec `sf agents refresh --scope shared`, qui applique la même règle à chaque skill projeté : une copie que le rafraîchissement n'écrit plus est
+supprimée avec sa référence quand elle contient les octets enregistrés, et conservée, puis nommée dans un avertissement à chaque rafraîchissement, quand vous l'avez modifiée.
+
 ### Garde-fou de CI locale (`set-local-ci`)
 
 Avec GitHub Projects, une pull request ouverte pour la revue (`create-pr` sans `--draft`), marquée prête (`ready-pr`) ou passée en Human testing exige que les statuts de CI locale du projet soient

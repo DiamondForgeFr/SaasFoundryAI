@@ -104,6 +104,18 @@ A status the project already names with another case keeps the project's spellin
 the presets spell them `In Progress`, `AI Testing` and `In Review`. Status names are compared without case everywhere: the board update matches options that way, and `update-status` lower-cases the
 target before every guard and finds the board option without case, so both spellings move a ticket the same way.
 
+Outside the manifest, a switch on a project that already has a workflow changes only the `sf-workflow` skill and the board:
+
+- the skill's `statuses/` folder holds the documents of the new preset and nothing else. A document of the previous preset is removed when it still holds the bytes the CLI wrote (its baseline in
+  `fileHashes`, or a shipped version); a document you edited is renamed `<name>.saasfoundry.old`, which the workflow CLI never reads, and the command names it. A document no preset ships, written for
+  a status of your own, stays where it is;
+- `SKILL.md` names the drafting documents of the preset it was installed for (`2a`–`2c` under Solo, `3a`–`3c` under Team);
+- the "Workflow System" section of `AGENTS.md` is refreshed when the file has one, and never added; the PR-review listener is deposited only when the project moves to GitHub Projects;
+- a project that tracks its harness in `fileHashes` gets baselines for the written files and loses those of the documents that left.
+
+The shared copy under `.agents/skills/sf-workflow` follows with `sf agents refresh --scope shared`, which applies the same rule to every projected skill: a copy the refresh no longer writes is removed
+with its baseline when it holds its recorded bytes, and kept and named in a warning on every refresh when you edited it.
+
 ### Local CI gate (`set-local-ci`)
 
 With GitHub Projects, a pull request opened for review (`create-pr` without `--draft`), marked ready (`ready-pr`) or moved to Human testing needs the project's local CI statuses green on its exact

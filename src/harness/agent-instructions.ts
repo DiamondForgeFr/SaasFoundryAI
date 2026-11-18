@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { lstat, readFile, readdir } from 'fs/promises'
+import { lstat, readFile, readdir, rmdir, unlink } from 'fs/promises'
 import { join, posix, resolve } from 'path'
 
 import { safeWriteAgentFile } from './agent-file-writer'
@@ -53,6 +53,10 @@ export interface AgentInstructionsReport {
   warnings: string[]
   /** Baselines for successfully installed files only; merge these into the manifest. */
   fileHashes: Record<string, string>
+  /** Generated files the render no longer contains, removed because they still held the recorded bytes (#1248). */
+  removed?: string[]
+  /** Baselines to drop from the manifest: the files removed, and those already gone (#1248). */
+  releasedHashes?: string[]
 }
 
 export class AgentInstructionsError extends Error {
@@ -758,6 +762,12 @@ export interface AgentInstructionFile {
 export interface AgentInstructionPlan {
   files: AgentInstructionFile[]
   warnings: string[]
+  /**
+   * Shared skill copies the manifest records a baseline for and the render no longer contains: a status
+   * document of a previous workflow preset, a file a skill stopped shipping (#1248). Applying the plan
+   * removes each one that still holds its recorded bytes and keeps (and names) an edited one.
+   */
+  retired?: string[]
 }
 
 /** Render the complete candidate set without changing the target project. */
@@ -886,6 +896,8 @@ async function planInstructionFileSet({ targetPath, agents, manifest, referenceO
     report.warnings.push(`${source}: no installed compatibility skills found.`)
     return plan
   }
+  // The skills whose whole tree was projected: only their shared copies can be retired.
+  const projected = new Set<string>()
   for (const skill of skills.sort((a, b) => a.name.localeCompare(b.name))) {
     if (!skill.name.startsWith('sf-')) continue
     if (!skill.isDirectory()) {
@@ -937,8 +949,70 @@ async function planInstructionFileSet({ targetPath, agents, manifest, referenceO
       }
     }
     await copyTree(skill.name)
+    projected.add(skill.name)
   }
+  plan.retired = retiredSharedCopies(plan.files, baselines, projected)
   return plan
+}
+
+/** Baselines under `.agents/skills/<skill>/` of a projected skill that the render no longer writes (#1248). */
+function retiredSharedCopies(files: AgentInstructionFile[], baselines: Record<string, string>, projected: Set<string>): string[] {
+  const planned = new Set(files.map((file) => file.path))
+  return Object.keys(baselines)
+    .filter((path) => {
+      const skill = /^\.agents\/skills\/([^/]+)\//.exec(path)?.[1]
+      return skill !== undefined && projected.has(skill) && !planned.has(path)
+    })
+    .sort()
+}
+
+/**
+ * Apply the retirement of `plan.retired`: a copy still holding its recorded bytes is removed with its
+ * baseline, a copy already gone only loses its baseline, and an edited one stays, baseline included, so
+ * every refresh names it until the developer deletes it.
+ */
+async function retireSharedCopies(root: string, retired: readonly string[], baselines: Record<string, string>, report: AgentInstructionsReport): Promise<void> {
+  for (const path of retired) {
+    if (await hasLinkedAncestor(root, path)) {
+      report.warnings.push(`${path}: no longer generated; symbolic link left untouched.`)
+      continue
+    }
+    const fullPath = join(root, path)
+    let current: Buffer
+    try {
+      const stat = await lstat(fullPath)
+      if (!stat.isFile()) {
+        report.warnings.push(`${path}: no longer generated; not a regular file, left untouched.`)
+        continue
+      }
+      current = await readFile(fullPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      ;(report.releasedHashes ??= []).push(path)
+      continue
+    }
+    if (hashBytes(current) !== baselines[path]) {
+      report.warnings.push(`${path}: no longer generated, and edited; kept. Merge what you still need, then delete it.`)
+      continue
+    }
+    await unlink(fullPath)
+    await removeEmptyParents(root, posix.dirname(path))
+    ;(report.removed ??= []).push(path)
+    ;(report.releasedHashes ??= []).push(path)
+  }
+}
+
+/** Remove the directories a retirement left empty, up to (and never including) `.agents/skills`. */
+async function removeEmptyParents(root: string, dir: string): Promise<void> {
+  for (let current = dir; current.startsWith('.agents/skills/'); current = posix.dirname(current)) {
+    try {
+      await rmdir(join(root, current))
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOTEMPTY' || code === 'EEXIST' || code === 'ENOENT') return
+      throw error
+    }
+  }
 }
 
 function planTierAgents(agents: HarnessAgent[], manifest: InstallAgentInstructionsParams['manifest'], warnings: string[]): AgentInstructionFile[] {
@@ -1011,6 +1085,11 @@ export async function installPlannedAgentInstructions(targetPath: string, plan: 
     } catch (error) {
       throw new AgentInstructionsError(file.path, report, error)
     }
+  }
+  try {
+    await retireSharedCopies(targetPath, plan.retired ?? [], baselines, report)
+  } catch (error) {
+    throw new AgentInstructionsError('.agents/skills', report, error)
   }
   return report
 }

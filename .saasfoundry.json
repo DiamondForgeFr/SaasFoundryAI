@@ -153,7 +153,7 @@
     ".agents/skills/sf-workflow/scripts/plan.sh": "cec9907f9800b41a22251352ef8cc2d589a6e55212f75ce743dcbc1f7a9cbac6",
     ".agents/skills/sf-workflow/SKILL.md": "8dcf72bbe262eefd15dc3baf6eb621427bb899996bd99e482b8c270758027abc",
     ".agents/skills/sf-workflow/statuses/1-backlog.md": "3b746f01e6c15a8db3260b8272289e9104552eb9f8c52a8f90f1eaf84a425f09",
-    ".agents/skills/sf-workflow/workflow-cli.sh": "def38b9e2b1c0895d73ddcbe101d46d5f2119da176fcd6ac9a4747116b829f41",
+    ".agents/skills/sf-workflow/workflow-cli.sh": "f937d1014ed34eac511597ff575ab736af3a659bb4dfe5bff23625818f12fecf",
     ".claude/rules/claude-code.md": "2eafdde282421c15bfea3645b722ac0dfffbe0c5c04c3ce7fe3763b341717178",
     ".claude/agents/sf-light.md": "e8304d2408100d144ce2c7919ea559dc04073057385ec1624b531a25e894a05b",
     ".claude/agents/sf-edit.md": "473dd0e265d0788b1aca0e37c34ade429fd40158a146f1988d6df70818b21594",
@@ -170,7 +170,7 @@
     ".agents/skills/sf-workflow/statuses/2-in-progress.md": "32ee5f593fb0d0d560fe2f17a0fbf484a2b43360e011de0e340e0ff3528fe723",
     ".agents/skills/sf-workflow/statuses/2a-ai-drafting.md": "cfa2159ae86c6402c3ed7f41a3f55be935472072a7d3c74008bad9493d33e373",
     ".agents/skills/sf-workflow/statuses/2b-human-review.md": "0866da898a41a86523517b8a2bbf9a187c56b59e3f22ee13ab7ffa565e3354b9",
-    ".agents/skills/sf-workflow/statuses/2c-spawning.md": "c33b53d202fba9b9f12090a3caf0d16b2ddfee46b3a2b16b90e2368844fdb1f0",
+    ".agents/skills/sf-workflow/statuses/2c-spawning.md": "b82ff50dd8d2bb7adc82fbd5a01c396f6afcb618e92e8d3b2d8746eebef7d873",
     ".agents/skills/sf-workflow/statuses/3-ai-testing.md": "7f6638a6d6c44bbd99657846b7567c979c464ebe339de91886c45dcbe865f7aa",
     ".agents/skills/sf-workflow/statuses/4-in-review.md": "f373fb90a007f4388c6bf3573d5e9f89598a784cb75792d35b79d0602ad327a6",
     ".agents/skills/sf-workflow/statuses/5-done.md": "13f0767a26e391ade5b2494ef23b626e5d98a75672b216304b17d55dd3940684"

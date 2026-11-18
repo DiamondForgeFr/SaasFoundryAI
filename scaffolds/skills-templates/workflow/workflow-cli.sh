@@ -370,7 +370,9 @@ check_srs_guard() {
     echo "  Use instead:" >&2
     echo "    .claude/skills/sf-workflow/workflow-cli.sh transition-drafting ${ticket} <phase>" >&2
     echo "  Phases: ai-draft → human-review → spawning → done" >&2
-    echo "  See .claude/skills/sf-workflow/statuses/3a-ai-drafting.md" >&2
+    local drafting_doc
+    drafting_doc=$(resolve_status_file "drafting:ai-draft")
+    echo "  See .claude/skills/sf-workflow/statuses/$(basename "${drafting_doc:-ai-drafting.md}")" >&2
     return 1
   fi
   return 0
