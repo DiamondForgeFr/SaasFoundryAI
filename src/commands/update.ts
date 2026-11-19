@@ -66,7 +66,7 @@ import {
   type PinChange
 } from './update.lockfile'
 import { runRequired } from '../run'
-import { getSharedAgentEntrypoints, hasCapability } from '../harness/agent-registry'
+import { declaredAgents, getSharedAgentEntrypoints, hasCapability } from '../harness/agent-registry'
 import { previewCodexInstructionLimits } from '../harness/codex-instruction-limit-preview'
 import { logHarnessSettings, syncHarnessSettingsForProject } from '../harness/harness-settings'
 import { hookCliNotice } from '../harness/hook-cli-notice'
@@ -1616,11 +1616,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     }
     // The guard and capture hooks run the CLI the project resolves, not this one: say which, and when it cannot run them (#1228).
     if (!dryRun && manifest.modules?.harness) {
-      const lines = await hookCliNotice('.', manifest.modules.harness.agents ?? ['claude-code'], { requiredVersion: cliVersion })
+      const agents = declaredAgents(manifest.modules.harness.agents)
+      const lines = await hookCliNotice('.', agents, { requiredVersion: cliVersion })
       for (const line of lines) console.log((line.needsAttention ? chalk.yellow : chalk.gray)(`  ${line.text}`))
       // The shell shape check is on by absence (#1251): nothing is written, so an update says what the guard now does and how to change it.
-      if ((manifest.modules.harness.agents ?? ['claude-code']).some((agent) => hasCapability(agent, 'hooks')))
-        console.log(chalk.gray(`  ${shellShapeNotice(recordedShellShape(manifest) ?? DEFAULT_SHELL_SHAPE)}`))
+      if (agents.some((agent) => hasCapability(agent, 'hooks'))) console.log(chalk.gray(`  ${shellShapeNotice(recordedShellShape(manifest) ?? DEFAULT_SHELL_SHAPE)}`))
     }
 
     // The agent-instruction refresh above raises Codex's `project_doc_max_bytes` when the AGENTS.md chain a

@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { AGENT_REGISTRY_VERSION, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
+import { AGENT_REGISTRY_VERSION, declaredAgents, getAgentIds, getSkillDirectory, listAgentProfiles } from '../harness/agent-registry'
 import { clearDelegation, type DelegationRecord, enableAgents, readAgentSupport, readDelegation, recordDelegation, refreshAgents, replaceAgents } from '../harness/agent-support'
 import type { DelegationState } from '../harness/delegation'
 import { delegationCommitAdvice, readBranchProtection } from '../harness/branch-protection'
@@ -50,7 +50,7 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
     providers = [parseRoutingProvider(options.provider)]
   } else if (harness) {
     // A harness without an agent declaration is the legacy Claude Code setup.
-    const declared = harness.agents ?? ['claude-code']
+    const declared = declaredAgents(harness.agents)
     providers = declared.filter(isRoutingProvider)
     if (!providers.length) throw noRoutedAgentError(declared)
   } else {

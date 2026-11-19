@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 
+import { declaredAgents } from './agent-registry'
 import { defaultRemoteBranch, readCommittedFile, readHeadFile } from './git-agent-scope'
 import { resolveAdjustPolicy, type AdjustPolicy } from './routing-adjust-config'
 import { routingOverrideIssues, type RoutingOverrides } from './routing-grid'
@@ -147,8 +148,7 @@ export async function readProjectRouting(root: string, options: { validate?: boo
   return {
     ...(manifest ? { manifest } : {}),
     ...(harness?.routing ? { routing: harness.routing } : {}),
-    // A harness without an agent declaration is the legacy Claude Code setup.
-    agents: harness ? (harness.agents ?? ['claude-code']) : [],
+    agents: harness ? [...declaredAgents(harness.agents)] : [],
     policy,
     decision
   }

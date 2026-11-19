@@ -1,5 +1,5 @@
 import registryData from '../../../harness/agent-profiles.json'
-import { agentsWith, capabilityLimitation, findAgentProfile, getAgentProfile, hasCapability, validateAgentRegistry } from '../../../harness/agent-registry'
+import { agentsWith, capabilityLimitation, declaredAgents, findAgentProfile, getAgentProfile, hasCapability, validateAgentRegistry } from '../../../harness/agent-registry'
 import { PROVIDER_EFFORTS, ROUTING_GRID_VERSION, ROUTING_PROVIDERS, noRoutedAgentError, parseRoutingProvider } from '../../../harness/routing-grid'
 import { renderTierAgents, TIER_AGENT_PATH } from '../../../harness/tier-agents'
 import type { StatusRoutingState } from '../../../status/collect'
@@ -48,6 +48,12 @@ describe('the registry derives what two lists and a ternary used to say', () => 
     expect(hasCapability('cursor', 'hooks')).toBe(false)
     expect(findAgentProfile('cursor')).toBeUndefined()
     expect(capabilityLimitation('cursor', 'routing')).toBeUndefined()
+  })
+
+  it('reads a harness that declares no agent as the legacy Claude Code setup, once for every caller', () => {
+    expect(declaredAgents(undefined)).toEqual(['claude-code'])
+    expect(declaredAgents(['codex', 'kimi'])).toEqual(['codex', 'kimi'])
+    expect(declaredAgents([])).toEqual([])
   })
 
   it('writes no tier agent for a host whose profile declares no tier-agent folder', () => {
