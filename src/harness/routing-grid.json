@@ -2,10 +2,6 @@
   "gridVersion": 1,
   "updated": "2026-10-14",
   "rule": "The cheapest candidate within 5 points of the best measured score at no more than half its cost per task (NFR-AEX-004), compared within one source.",
-  "providers": {
-    "claude-code": { "vendor": "anthropic" },
-    "codex": { "vendor": "openai" }
-  },
   "tiers": {
     "light": {
       "claude-code": { "model": "claude-haiku-5-5", "effort": "medium" },

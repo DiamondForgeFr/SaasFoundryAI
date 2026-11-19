@@ -125,3 +125,10 @@ Use `sf agents catalog --json` to inspect versioned profiles, declared discovery
 Profiles identify coding tools, not model brands. Configure model/provider selection in the tool's personal settings. For an unknown tool, `sf agents enable generic --scope shared` deposits portable instructions to load manually; it does not certify tool execution or workflow compliance. Existing local/shared scope rules still apply.
 
 Gemini receives a small GEMINI.md import of AGENTS.md. Qwen reads AGENTS.md directly, with explicit shared-skill reading fallback. The common source is AGENTS.md. Adding a profile must preserve this one-way instruction chain, user files, safe path constraints and workflow guards.
+
+### Capability block
+
+Each profile also declares a `capabilities` block: `routing` (vendor and the efforts the tool can write), `tierAgents` (folder, file format, and whether the model is bound in the file or chosen per call),
+`hooks` (scope, file, guard and capture events, whether the tool must trust a project hook), `worktrees` (`native`, `manual` or `none`) and `limitations`. The routing providers, the tier-agent files and the
+status wording are derived from it, so adding a tool starts as data. A capability the profile lacks is `null` (or `worktrees` other than `native`) and must carry its reason in `limitations`; commands and
+`sf status` name that reason instead of a generic "not supported". Only a file format has code of its own, one renderer per `tierAgents.format`.

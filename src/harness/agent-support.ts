@@ -40,7 +40,7 @@ import { requireLedgerDir } from './delegation-ledger'
 import { DEFAULT_SHELL_SHAPE, recordedShellShape, validateGuardConfig } from './shell-guard-mode'
 import type { ShellShapeMode } from './tool-call-guard'
 import { summarizeHarnessSettings, syncHarnessSettings } from './harness-settings'
-import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
+import { parseRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
 import { updateLocalRouting, withLogEntry } from './routing-local'
 import { renderTierAgents, TIER_AGENT_PATH } from './tier-agents'
 import { harnessInstallerMeta } from '../installers/harness.installer'
@@ -306,8 +306,7 @@ export async function promoteLocalRouting(params: { targetPath: string; kind?: s
   const root = resolve(params.targetPath)
   const dir = await requireLedgerDir(root)
   const kindFilter = params.kind === undefined ? undefined : parseTaskKind(params.kind)
-  if (params.provider !== undefined && !isRoutingProvider(params.provider)) throw new Error(`No routing for '${params.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
-  const providerFilter = params.provider as RoutingProvider | undefined
+  const providerFilter = params.provider === undefined ? undefined : parseRoutingProvider(params.provider)
   const at = (params.now?.() ?? new Date()).toISOString()
   return updateLocalRouting<PromoteRoutingResult>(dir, async (local) => {
     const before = await snapshot(root)

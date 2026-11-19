@@ -3,7 +3,7 @@ import { constants } from 'fs'
 import { access, lstat, readFile } from 'fs/promises'
 import { join } from 'path'
 
-import type { HarnessAgent } from './agent-registry'
+import { findAgentProfile, type HarnessAgent, type HookProvider } from './agent-registry'
 import { hookCliLabel, hookNoteFunction, hookPathDirs, normalizeProbe, olderThan, readHookCliVersion, type HookCli, type HookCliProbeResult } from './hook-cli'
 import type { ClaudeHooksConfig } from '../utils/claude-settings'
 
@@ -27,7 +27,7 @@ import type { ClaudeHooksConfig } from '../utils/claude-settings'
  * 4. when the CLI it reached exits non-zero (an older release with no `agents outcome capture`; a current one
  *    always exits 0), writes that to the capture error log itself, stage `cli`, instead of exiting silently (#1228).
  */
-export type CaptureHost = 'claude-code' | 'codex'
+export type CaptureHost = HookProvider
 
 const CAPTURE_SCRIPT = [
   'p=$(cat)',
@@ -92,8 +92,8 @@ export const CLAUDE_CAPTURE_HOOKS: ClaudeHooksConfig = {
   PostToolUse: [{ matcher: 'Agent|Task', hooks: [{ type: 'command', command: CLAUDE_CAPTURE_COMMAND, timeout: HOOK_TIMEOUT_SECONDS }] }]
 }
 
-/** Codex: project hooks load from this file next to the tracked `.codex/agents/`, once the `.codex/` layer is trusted. */
-export const CODEX_HOOKS_PATH = '.codex/hooks.json'
+/** Codex: project hooks load from this file next to the tracked `.codex/agents/`, once the `.codex/` layer is trusted. The path is the profile's, not a second copy. */
+export const CODEX_HOOKS_PATH = findAgentProfile('codex')!.capabilities.hooks!.file
 
 interface HookGroup {
   matcher?: string
@@ -152,7 +152,10 @@ export const CODEX_RETRUST_NOTICE = `${CODEX_HOOKS_PATH}: the delegation capture
  * `outdated`: a hook an earlier release wrote (a refresh replaces it). `missing`: no hook. `not-enforced`: the host
  * has no capture hook at all.
  */
-export type CaptureState = 'enforced' | 'declared' | 'declared-not-runnable' | 'declared-outdated-cli' | 'outdated' | 'missing' | 'not-enforced'
+export type CaptureState = HookState
+
+/** What a guard or a capture hook amounts to: one vocabulary for both (`CaptureState`, `GuardState`), read by one function (`hookStanding`). */
+export type HookState = 'enforced' | 'declared' | 'declared-not-runnable' | 'declared-outdated-cli' | 'outdated' | 'missing' | 'not-enforced'
 
 /**
  * A hook's state, with the CLI it reaches when one resolves (#1228): `sf status` and `sf update` name it, since the
@@ -253,14 +256,39 @@ export const defaultCaptureProbe = async (root: string): Promise<HookCliProbeRes
  * cannot is said first.
  */
 export async function captureStanding(root: string, agent: HarnessAgent, probe: CaptureProbe = defaultCaptureProbe, requiredVersion?: string): Promise<HookStanding<CaptureState>> {
-  if (agent !== 'claude-code' && agent !== 'codex') return { state: 'not-enforced' }
-  const config = agent === 'claude-code' ? await readJson(join(root, '.claude', 'settings.json')) : await readJson(join(root, CODEX_HOOKS_PATH))
-  const own = agent === 'claude-code' ? CLAUDE_CAPTURE_COMMAND : CODEX_CAPTURE_COMMAND
-  if (!registers(config, 'SubagentStop', (command) => command === own)) {
-    if (!registers(config, 'SubagentStop', isLegacyCaptureCommand)) return { state: 'missing' }
-    return standingOf<CaptureState>('outdated', normalizeProbe(await probe(root)), requiredVersion)
+  return hookStanding(root, agent, { event: 'captureEvent', command: captureCommand, isLegacy: isLegacyCaptureCommand }, probe, requiredVersion)
+}
+
+/** What `hookStanding` needs to know about one kind of hook: the profile field that names its event, the command it runs, the commands earlier releases wrote. */
+interface HookKind {
+  event: 'guardEvent' | 'captureEvent'
+  command: (host: HookProvider) => string
+  isLegacy: (command: unknown) => boolean
+}
+
+/**
+ * The state of a guard or a capture hook for one agent, read the same way for every host: the file and the event come
+ * from the agent's profile (`capabilities.hooks`), and the hook counts as `declared` rather than `enforced` when the
+ * profile says the host runs a project hook only once it is trusted. An agent with no hooks block (a profile that
+ * declares none, or an id this CLI does not know) is `not-enforced`.
+ */
+export async function hookStanding(
+  root: string,
+  agent: string,
+  kind: HookKind,
+  probe: (root: string) => Promise<boolean | HookCliProbeResult>,
+  requiredVersion?: string
+): Promise<HookStanding<HookState>> {
+  const hooks = findAgentProfile(agent)?.capabilities.hooks
+  if (!hooks) return { state: 'not-enforced' }
+  const config = await readJson(join(root, hooks.file))
+  const event = hooks[kind.event]
+  const own = kind.command(agent as HookProvider)
+  if (!registers(config, event, (command) => command === own)) {
+    if (!registers(config, event, kind.isLegacy)) return { state: 'missing' }
+    return standingOf<HookState>('outdated', normalizeProbe(await probe(root)), requiredVersion)
   }
-  return standingOf<CaptureState>(agent === 'codex' ? 'declared' : 'enforced', normalizeProbe(await probe(root)), requiredVersion)
+  return standingOf<HookState>(hooks.needsTrust ? 'declared' : 'enforced', normalizeProbe(await probe(root)), requiredVersion)
 }
 
 /** The state alone (`captureStanding`). */

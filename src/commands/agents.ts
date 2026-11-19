@@ -8,7 +8,7 @@ import { applyAgentAdoption, planAgentAdoption } from '../harness/agent-adoption
 import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-diagnostics'
 import { readProjectRouting } from '../harness/project-routing'
 import { COMPLEXITIES, NATURES, type Complexity, type Nature } from '../harness/delegation-ledger'
-import { getRoutingGrid, isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, tierRank, type RoutingProvider } from '../harness/routing-grid'
+import { getRoutingGrid, isRoutingProvider, noRoutedAgentError, parseRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, tierRank, type RoutingProvider } from '../harness/routing-grid'
 import { issueRoutes, loadRoutingState } from '../harness/routing-runtime'
 import { resolveRouteFacts, type RouteFacts } from '../harness/ticket-labels'
 import { registerGuardCommand } from './agents.guard'
@@ -47,12 +47,12 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
   const harness = project.manifest?.modules?.harness
   let providers: RoutingProvider[]
   if (options.provider !== undefined) {
-    if (!isRoutingProvider(options.provider)) throw new Error(`No routing for '${options.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
-    providers = [options.provider]
+    providers = [parseRoutingProvider(options.provider)]
   } else if (harness) {
     // A harness without an agent declaration is the legacy Claude Code setup.
-    providers = (harness.agents ?? ['claude-code']).filter(isRoutingProvider)
-    if (!providers.length) throw new Error(`None of the declared coding agents (${harness.agents?.join(', ')}) has routing candidates. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
+    const declared = harness.agents ?? ['claude-code']
+    providers = declared.filter(isRoutingProvider)
+    if (!providers.length) throw noRoutedAgentError(declared)
   } else {
     providers = [...ROUTING_PROVIDERS]
   }

@@ -1,8 +1,8 @@
 import { readFile, lstat } from 'fs/promises'
 import { join } from 'path'
 
-import { CODEX_HOOKS_PATH, executable, probeHookCli, readJson, registers, standingOf, type HookStanding } from './delegation-hooks'
-import { hookNoteFunction, hookPathDirs, normalizeProbe, type HookCli, type HookCliProbeResult } from './hook-cli'
+import { CODEX_HOOKS_PATH, executable, hookStanding, probeHookCli, registers, type HookState, type HookStanding } from './delegation-hooks'
+import { hookNoteFunction, hookPathDirs, type HookCli, type HookCliProbeResult } from './hook-cli'
 import type { HarnessAgent } from './agent-registry'
 import type { GuardHost } from './tool-call-guard'
 import type { ClaudeHooksConfig } from '../utils/claude-settings'
@@ -172,7 +172,7 @@ export const CODEX_GUARD_TRUST_NOTICE = `${CODEX_HOOKS_PATH}: the PreToolUse gua
  * hook an earlier release wrote (a refresh replaces it). `missing`: no hook. `not-enforced`: the host has no guard
  * hook at all.
  */
-export type GuardState = 'enforced' | 'declared' | 'declared-not-runnable' | 'declared-outdated-cli' | 'outdated' | 'missing' | 'not-enforced'
+export type GuardState = HookState
 
 export type GuardCli = HookCli
 
@@ -213,14 +213,7 @@ export const defaultGuardProbe = async (root: string): Promise<HookCliProbeResul
  * the project) turns an older CLI into `declared-outdated-cli`.
  */
 export async function guardStanding(root: string, agent: HarnessAgent, probe: GuardProbe = defaultGuardProbe, requiredVersion?: string): Promise<HookStanding<GuardState>> {
-  if (agent !== 'claude-code' && agent !== 'codex') return { state: 'not-enforced' }
-  const config = agent === 'claude-code' ? await readJson(join(root, '.claude', 'settings.json')) : await readJson(join(root, CODEX_HOOKS_PATH))
-  const own = agent === 'claude-code' ? CLAUDE_GUARD_COMMAND : CODEX_GUARD_COMMAND
-  if (!registers(config, 'PreToolUse', (command) => command === own)) {
-    if (!registers(config, 'PreToolUse', isLegacyGuardCommand)) return { state: 'missing' }
-    return standingOf<GuardState>('outdated', normalizeProbe(await probe(root)), requiredVersion)
-  }
-  return standingOf<GuardState>(agent === 'codex' ? 'declared' : 'enforced', normalizeProbe(await probe(root)), requiredVersion)
+  return hookStanding(root, agent, { event: 'guardEvent', command: guardCommand, isLegacy: isLegacyGuardCommand }, probe, requiredVersion)
 }
 
 /** The state alone (`guardStanding`). */

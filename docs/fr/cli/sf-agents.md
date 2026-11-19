@@ -229,8 +229,9 @@ Le registre de profils décrit comment un outil de code charge les instructions 
 éléments personnellement dans votre outil ; les modifier ne nécessite pas de régénérer les instructions du projet. La grille d'allocation recommande seulement un modèle et un niveau de raisonnement
 par type de tâche délégué (voir plus bas).
 
-`sf agents catalog --json` fonctionne hors d'un projet géré et renvoie la version du registre, la prise en charge de découverte déclarée, les sources documentaires et les limites. Chaque profil
-rapporte ses capacités d'exécution comme `not-checked` : une déclaration ne constitue pas un test réussi de connexion ou de découverte.
+`sf agents catalog --json` fonctionne hors d'un projet géré et renvoie la version du registre, la prise en charge de découverte déclarée, les sources documentaires, les limites et le
+[bloc de capacités](#le-bloc-de-capacites-d-un-profil). Chaque profil rapporte ses capacités d'exécution comme `not-checked` : une déclaration ne constitue pas un test réussi de connexion ou de
+découverte.
 
 | Profil        | Instructions                        | Découverte des skills documentée                                                                                   | Skills fournies par le harness                         |
 | ------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
@@ -259,6 +260,30 @@ noms de modèles ou fournisseurs comme `deepseek`, `gpt` ou `minimax` sont rejet
 Les nouvelles intégrations sont des modifications de données examinées dans `src/harness/agent-profiles.json`, avec parité entre registre et schéma ainsi que tests de dépôt. Les profils ne peuvent
 contenir ni commandes, ni identifiants, ni répertoires de sortie arbitraires. Cette release contient uniquement les profils intégrés ; elle ne charge ni n'exécute de plugins de profils distants.
 
+### Le bloc de capacités d'un profil
+
+Au-delà de la façon dont un outil charge les instructions et les skills, chaque profil déclare dans un bloc `capabilities` ce que le harness fait pour cet outil. Les fournisseurs routés, les efforts
+qu'un outil sait écrire, les dossiers et formats des agents de palier, les fichiers de hooks et les formulations de `sf status` en sont tous lus : aucune autre source ne nomme Claude Code ou Codex
+pour les décider, si bien qu'un nouvel outil commence par être une modification de données.
+
+| Champ         | Dit                                                                                                                                                                                                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routing`     | `{ vendor, efforts }` : la grille a des candidats pour l'outil, rangés sous ce fournisseur, et un fichier d'agent de palier de l'outil sait exprimer ces efforts. `null` sinon                                                                                          |
+| `tierAgents`  | `{ dir, format, modelBinding }` : le dossier du projet où l'outil lit ses sous-agents, leur format de fichier (`claude-md`, `codex-toml`) et si le modèle est écrit dans le fichier (`file`) ou choisi à chaque appel (`call-alias`). `null` sinon. Exige `routing`     |
+| `hooks`       | `{ scope, file, guardEvent, captureEvent, needsTrust }` : le fichier qui déclare les hooks de l'outil (portée `project` ou `user`), les événements du hook de garde et du hook de capture, et si l'outil n'exécute un hook de projet qu'une fois approuvé. `null` sinon |
+| `worktrees`   | `native` (l'outil isole lui-même un délégué dans un worktree), `manual` (la session l'ouvre avec Git) ou `none`                                                                                                                                                         |
+| `limitations` | La raison de chaque capacité qui manque à l'outil, indexée par nom de capacité                                                                                                                                                                                          |
+
+**La règle d'une capacité manquante.** Un profil auquel une capacité manque (un bloc `null`, ou `worktrees` autre que `native`) doit dire pourquoi dans `limitations`, et ne dit rien d'une capacité
+qu'il a : le registre refuse un profil qui enfreint l'une ou l'autre moitié. Toute commande qui a besoin de la capacité nomme alors cette raison au lieu d'un simple « pas de routage ».
+`sf agents route --provider kimi` répond `kimi (Kimi Code) cannot be routed: Kimi Code has no routing candidates in the grid yet: routing arrives with FR-MAH-021, …`, et `sf status` ajoute
+`limitation: …` à un hook non appliqué. Un identifiant qu'aucun profil n'enregistre est déclaré non enregistré. `sf status` lit un hook comme `enforced` quand le harness l'installe et que l'outil
+l'exécute, `declared` quand l'outil doit d'abord l'approuver (`needsTrust`), et dit qu'il n'est pas appliqué, avec la raison, quand le profil ne déclare aucun hook.
+
+Seuls les formats de fichier diffèrent dans le code : chaque `tierAgents.format` a un moteur de rendu, au-dessus du même modèle d'agent de palier (nom, description, modèle, effort, instructions), et
+un format sans moteur de rendu ne compile pas. Tout ce qui ne diffère que par sa valeur (un dossier, une liste d'efforts, un nom d'événement) est un champ du profil. Le bloc n'ajoute aucun champ à
+`.saasfoundry.json` : il n'exige donc aucune migration du manifeste.
+
 ## Routage des délégations (`sf agents route`)
 
 Un agent de code qui délègue du travail peut demander quel modèle et quel niveau de raisonnement la tâche mérite, au lieu de lancer chaque sous-agent sur le modèle de la session :
@@ -271,7 +296,8 @@ sf agents route --task terminal-ci --provider codex
 Le CLI livre une grille d'allocation versionnée. Chaque type de tâche (`exploration`, `scoped-edit`, `bug-fix`, `multi-file-feature`, `tests`, `review`, `planning`, `terminal-ci`, `prose`) désigne un
 palier, et chaque palier désigne un candidat (modèle et niveau de raisonnement) pour Claude Code et pour Codex. La sortie donne le palier, le candidat sous la forme d'un identifiant canonique
 `provider/runtime/model/effort`, l'origine de la décision (`shipped` ou `project`) et la preuve qui fonde une entrée livrée. La commande fonctionne hors d'un projet géré ; dans un projet, elle répond
-pour les agents de code déclarés qui disposent de candidats.
+pour les agents de code déclarés qui disposent de candidats. Un agent de code sans routage est refusé avec la limitation que documente son profil (voir
+[le bloc de capacités](#le-bloc-de-capacites-d-un-profil)), jamais avec un simple « pas de routage ».
 
 Chaque entrée livrée cite sa preuve. Une entrée `measured` porte le benchmark public, sa date, son score et son coût par tâche : c'est le candidat le moins cher à moins de 5 points du meilleur score
 mesuré pour au plus la moitié de son coût, comparé au sein d'une même source. Une entrée `provisional` nomme l'indicateur le plus proche et n'a pas de score : aucun benchmark public ne mesure ce type
