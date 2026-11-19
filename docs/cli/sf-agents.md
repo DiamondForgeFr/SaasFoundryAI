@@ -214,8 +214,8 @@ This is the canonical support matrix. The [installation guide](/getting-started/
 The profile registry describes how a coding tool loads project instructions. It does not select your session's model, provider or API credential. Configure those personally in your tool; changing them
 does not require regenerating project instructions. The allocation grid only recommends a model and effort per delegated task kind (see below).
 
-`sf agents catalog --json` works outside a managed project and returns the registry version, declared discovery support, documentation sources and limitations. Every profile reports runtime
-capabilities as `not-checked`; declaration is not a successful connection or discovery test.
+`sf agents catalog --json` works outside a managed project and returns the registry version, declared discovery support, documentation sources, limitations and the
+[capability block](#the-capability-block-of-a-profile). Every profile reports runtime capabilities as `not-checked`; declaration is not a successful connection or discovery test.
 
 | Profile       | Instructions                    | Documented skill discovery                                                                                         | Skills provided by the harness                   |
 | ------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
@@ -242,6 +242,29 @@ For an unlisted tool, explicitly choose `generic` and verify that it loads the i
 New integrations are reviewed data changes in `src/harness/agent-profiles.json`, with registry/schema parity and deposit tests. Profiles cannot contain commands, credentials or arbitrary output
 directories. This delivery includes built-in profiles only; it does not load or execute remote profile plugins.
 
+### The capability block of a profile
+
+Beyond how a tool loads instructions and skills, each profile declares what the harness does for that tool in a `capabilities` block. The routing providers, the efforts a tool can write, the
+tier-agent folders and formats, the hook files and the wording of `sf status` are all read from it: no other source names Claude Code or Codex to decide them, so a new tool is first a data change.
+
+| Field         | Says                                                                                                                                                                                                                                                                   |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routing`     | `{ vendor, efforts }`: the grid has candidates for the tool, filed under this vendor, and a tier-agent file of the tool can express these efforts. `null` without                                                                                                      |
+| `tierAgents`  | `{ dir, format, modelBinding }`: the project folder of the tool's subagent files, their file format (`claude-md`, `codex-toml`) and whether the model is written in the file (`file`) or chosen per call (`call-alias`). `null` without. Needs `routing`               |
+| `hooks`       | `{ scope, file, guardEvent, captureEvent, needsTrust }`: the file that declares the tool's hooks (`project` or `user` scope), the events of the guard and the capture hook, and whether the tool runs a project hook only once the developer trusts it. `null` without |
+| `worktrees`   | `native` (the tool isolates a delegate in a worktree itself), `manual` (the session opens it with Git) or `none`                                                                                                                                                       |
+| `limitations` | The reason for every capability the tool lacks, keyed by capability name                                                                                                                                                                                               |
+
+**The rule for a missing capability.** A profile that lacks a capability (a `null` block, or `worktrees` other than `native`) must say why in `limitations`, and says nothing for a capability it has:
+the registry refuses a profile that breaks either half. Every command that needs the capability then names that reason instead of a bare "no routing". `sf agents route --provider kimi` answers
+`kimi (Kimi Code) cannot be routed: Kimi Code has no routing candidates in the grid yet: routing arrives with FR-MAH-021, …`, and `sf status` adds `limitation: …` to a hook that is not enforced. An id
+that no profile registers is said to be unregistered. `sf status` reads a hook as `enforced` when the harness installs it and the tool runs it, `declared` when the tool must trust it first
+(`needsTrust`), and says it is not enforced, with the reason, when the profile declares no hooks.
+
+Only the file formats differ in code: each `tierAgents.format` has one renderer over the same tier-agent model (name, description, model, effort, instructions), and a format without a renderer does
+not compile. Everything that only differs in value (a folder, an effort list, an event name) is a field of the profile. The block adds no field to `.saasfoundry.json`, so it needs no manifest
+migration.
+
 ## Delegation routing (`sf agents route`)
 
 A coding agent that delegates work can ask which model and effort the task deserves instead of running every subagent on the session's own model:
@@ -253,7 +276,8 @@ sf agents route --task terminal-ci --provider codex
 
 The CLI ships a versioned allocation grid. Each task kind (`exploration`, `scoped-edit`, `bug-fix`, `multi-file-feature`, `tests`, `review`, `planning`, `terminal-ci`, `prose`) names a tier, and each
 tier names a candidate (model and effort) for Claude Code and for Codex. The output gives the tier, the candidate as a canonical `provider/runtime/model/effort` id, the source of the decision
-(`shipped` or `project`) and the evidence behind a shipped entry. The command works outside a managed project; inside one, it answers for the declared coding agents that have routing candidates.
+(`shipped` or `project`) and the evidence behind a shipped entry. The command works outside a managed project; inside one, it answers for the declared coding agents that have routing candidates. A
+coding agent without routing is refused with the limitation its profile documents (see [the capability block](#the-capability-block-of-a-profile)), never with a bare "no routing".
 
 Every shipped entry cites its evidence. A `measured` entry carries the public benchmark, its date, its score and its cost per task: it is the cheapest candidate within 5 points of the best measured
 score at no more than half its cost, compared within one source. A `provisional` entry names the nearest proxy and has no score: no public benchmark measures that kind with a cost, and the

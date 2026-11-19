@@ -125,8 +125,9 @@ agent, whether the hooks that record every delegation are in place **and can run
 `agents outcome capture`; `capture hook declared but the CLI it reaches (<cli> <version>) cannot run sf agents outcome capture` when it does not (install `saasfoundryai-cli` in the project, or upgrade
 the `saasfoundryai` on the PATH: until then delegations are not recorded); `capture hook declared but the CLI it reaches (<cli> <version>) is older than the project's harness` when that CLI predates
 the version that last updated the project; `codex capture declared` when the hook is there but Codex has to trust it first; `capture hook outdated` for the bare-`sf` hook of the first build or the
-hook v1.1.0 or v1.2.0 shipped; `capture hook missing` (`run sf agents refresh --scope shared`); or `not enforced` for a host without hooks, whose delegations are recorded by hand. A damaged local
-layer shows as `unreadable (…)` and never fails the status.
+hook v1.1.0 or v1.2.0 shipped; `capture hook missing` (`run sf agents refresh --scope shared`); or `not enforced` for a host without hooks, whose delegations are recorded by hand, followed by
+`limitation: …`, the reason the host's profile gives for having none (see [the capability block](./sf-agents.md#the-capability-block-of-a-profile)). Which hosts have hooks, and whether one must be
+trusted first, come from the profiles. A damaged local layer shows as `unreadable (…)` and never fails the status.
 
 **The CLI a hook reaches is not always the one that writes the report.** A hook runs `node_modules/.bin/saasfoundryai`, then this repository's `bin/sf.js`, then `saasfoundryai` on the PATH. A
 generated project does not depend on `saasfoundryai-cli`, so its hooks reach the global install, which may be older than the `npx saasfoundryai-cli@<version> status` you run. The probe resolves the
@@ -147,7 +148,7 @@ that has `agents guard`, a call goes through unchecked. So its state is never si
 | `declared-outdated-cli` | `guard hook declared but the CLI it reaches (<cli> <version>) is older than the project's harness: upgrade it`                                                   |
 | `outdated`              | `guard hook outdated (run sf agents refresh --scope shared)`: the hook v1.2.0 shipped, which exited silently on a CLI that could not run it                      |
 | `missing`               | `guard hook missing (run sf agents refresh --scope shared)`                                                                                                      |
-| `not-enforced`          | `guard not enforced`: a host without a guard hook; its agent is told to ask the developer, and nothing stops it                                                  |
+| `not-enforced`          | `guard not enforced`: a host without a guard hook; its agent is told to ask the developer, and nothing stops it. A host with a profile adds `limitation: …`      |
 
 The guard text ends with what the hook does with a shell line that is not one plain command (see
 [a shell line that is not one plain command](./sf-agents.md#a-shell-line-that-is-not-one-plain-command)): `; shell shape: refuse` by default (absence in `.saasfoundry.json` means `refuse`), or

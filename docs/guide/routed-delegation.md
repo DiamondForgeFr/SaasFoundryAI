@@ -42,6 +42,10 @@ invalid override makes the command fail instead of silently using the grid. The 
 For each declared coding agent that the grid routes, the harness writes one subagent per tier. For Claude Code these are `.claude/agents/sf-<tier>.md`, with the model and effort in their frontmatter;
 for Codex they are `.codex/agents/sf-<tier>.toml`. Each description lists the task kinds the tier serves, so Claude Code can pick the right agent from its description alone.
 
+Which agents are routed, which efforts a tier agent can carry, and which folder and format it is written in are not decided by the harness's code: each coding-agent profile declares them in its
+`capabilities` block ([`sf agents`](/cli/sf-agents#the-capability-block-of-a-profile)). A tool whose profile declares no routing has no route and no tier agent, and a command that needs one tells you
+why in the words of that profile, for example that Kimi Code's routing arrives with a later release. The same rule covers every capability a profile lacks: it says why, or the registry refuses it.
+
 The files are generated and tracked. `sf agents enable`, `replace`, `refresh` and `sf update` rewrite an untouched file and leave an edited one beside a `.saasfoundry.new` sidecar.
 [`sf status`](/cli/sf-status#tier-agents) warns when one is missing, edited or outdated. The tier agents only name a model and an effort; they do not carry credentials, and a missing provider account
 makes the delegation fail, it does not fall back silently.

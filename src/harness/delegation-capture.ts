@@ -2,6 +2,8 @@ import { lstat, open } from 'fs/promises'
 import { homedir } from 'os'
 import { isAbsolute, join } from 'path'
 
+import { agentsWith } from './agent-registry'
+import type { CaptureHost } from './delegation-hooks'
 import {
   agentToken,
   appendEntry,
@@ -46,8 +48,8 @@ import { CHECKS } from '../execution/calibration'
  * runs is woken by the host when the job reports. Such an interim stop carries no outcome, so a routing adjustment
  * that runs in between never reads a `fail` written about unfinished work.
  */
-export const CAPTURE_HOSTS = ['claude-code', 'codex'] as const
-export type CaptureHost = (typeof CAPTURE_HOSTS)[number]
+export const CAPTURE_HOSTS: readonly CaptureHost[] = agentsWith('hooks')
+export type { CaptureHost }
 
 /** The most a single stop reads: a transcript beyond it is picked up by the next stop of the agent. */
 const MAX_SEGMENT_BYTES = 64 * 1024 * 1024
@@ -369,6 +371,17 @@ export function summarizeCodexLines(lines: readonly string[], before?: TokenUsag
 export const summarizeClaudeTranscript = (text: string): TranscriptSummary => summarizeClaudeLines(text.split('\n'))
 export const summarizeCodexTranscript = (text: string, before?: TokenUsage | null): TranscriptSummary => summarizeCodexLines(text.split('\n'), before)
 
+/**
+ * How each capture host's transcript is read. The formats differ (a Claude Code subagent transcript lists API calls,
+ * a Codex rollout reports cumulative token counts), which is why a host needs its own reader; the record is keyed by
+ * the hosts the profiles declare hooks for, so a new host cannot be captured with another host's reader by default.
+ * `prior` is what the agent's earlier stops already counted, read only by a host whose counts are cumulative.
+ */
+const TRANSCRIPT_SUMMARIZERS: Record<CaptureHost, (lines: readonly string[], prior: () => TokenUsage | null) => TranscriptSummary> = {
+  'claude-code': (lines) => summarizeClaudeLines(lines),
+  codex: (lines, prior) => summarizeCodexLines(lines, prior())
+}
+
 export interface TranscriptSlice {
   lines: string[]
   /** Where this slice starts: the offset asked for, or 0 when the file is shorter than that (it started over). */
@@ -539,7 +552,7 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
     return { status: 'replayed', id: previous.id, record: previous, root, dir, project, ...(decision ? { decision } : {}) }
   }
   const ask = lineMissing && !hostContinuing && !previous?.evidenceRefs.includes(ASKED_FOR_LINE_REF)
-  const summary = slice === undefined ? undefined : host === 'claude-code' ? summarizeClaudeLines(slice.lines) : summarizeCodexLines(slice.lines, sumTokens(segments))
+  const summary = slice === undefined ? undefined : TRANSCRIPT_SUMMARIZERS[host](slice.lines, () => sumTokens(segments))
   const verdict = interim ? undefined : (report as (DelegationReport & { verdict: 'pass' | 'fail' }) | undefined)
   const passed = verdict?.verdict === 'pass' && verdict.checks.some((check) => check !== 'self-review')
 

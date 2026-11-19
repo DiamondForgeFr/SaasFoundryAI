@@ -1,5 +1,6 @@
 import { isAbsolute } from 'path'
 
+import { agentsWith } from '../harness/agent-registry'
 import { readShellShapeMode } from '../harness/shell-guard-mode'
 import { SHELLS } from '../harness/shell-shape'
 import { evaluateToolCall, GUARDED_TOOLS, guardHookOutput, type GuardHost } from '../harness/tool-call-guard'
@@ -11,7 +12,7 @@ import { evaluateToolCall, GUARDED_TOOLS, guardHookOutput, type GuardHost } from
  * the whole CLI for it costs about a second, where the guard alone costs a Node start. What the error path needs (the
  * capture error log) is loaded only when a call goes wrong.
  */
-export const GUARD_HOSTS: readonly GuardHost[] = ['claude-code', 'codex']
+export const GUARD_HOSTS: readonly GuardHost[] = agentsWith('hooks')
 
 export interface AgentsGuardOptions {
   host?: string
@@ -73,8 +74,8 @@ function commandOf(toolInput: unknown): string {
  * is written to the capture error log, where `sf status` counts it.
  */
 export async function agentsGuard(options: AgentsGuardOptions): Promise<void> {
-  const host = options.host
-  if (host !== 'claude-code' && host !== 'codex') {
+  const host = GUARD_HOSTS.find((candidate) => candidate === options.host)
+  if (host === undefined) {
     process.stderr.write(`sf agents guard: --host must be ${GUARD_HOSTS.join(' or ')}.\n`)
     return
   }

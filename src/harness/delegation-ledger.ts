@@ -4,6 +4,7 @@ import { lstat, mkdir, open, readdir, readFile, rename, stat, unlink, writeFile 
 import { join } from 'path'
 import { createInterface } from 'readline'
 
+import { agentsWith, type HookProvider } from './agent-registry'
 import { costOfUsage, type ModelPrice, type PricedCost, type TokenUsage } from './model-prices'
 import { resolveGitCommonDir } from './git-agent-scope'
 import { ROUTING_PROVIDERS, TASK_KINDS, tierRank, type RoutingProvider, type TaskKind } from './routing-grid'
@@ -47,8 +48,9 @@ const LOCK_WAIT_MS = 5_000
 /** A lock older than this is broken even when its pid looks alive (the pid may have been reused). */
 const LOCK_HARD_STALE_MS = 10 * 60_000
 
-export const LEDGER_HOSTS = ['claude-code', 'codex', 'manual'] as const
-export type LedgerHost = (typeof LEDGER_HOSTS)[number]
+/** Who recorded a run: a host whose capture hook the harness installs (its profile declares `capabilities.hooks`), or the session by hand. */
+export type LedgerHost = HookProvider | 'manual'
+export const LEDGER_HOSTS: readonly LedgerHost[] = [...agentsWith('hooks'), 'manual']
 export const COMPLEXITIES = ['bug', 'low', 'medium', 'complex'] as const
 export type Complexity = (typeof COMPLEXITIES)[number]
 export const NATURES = ['user-facing', 'internal', 'bundled-pr'] as const

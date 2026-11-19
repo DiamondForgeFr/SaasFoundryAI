@@ -1,6 +1,7 @@
 import chalk from 'chalk'
 
 import { describeCliVersion } from '../cli-channel'
+import { agentsWith, capabilityLimitation, findAgentProfile, getAgentProfile } from '../harness/agent-registry'
 import { CAPTURE_ERROR_WINDOW_DAYS } from '../harness/capture-errors'
 import { hookCliText } from '../harness/hook-cli'
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
@@ -99,15 +100,37 @@ interface HookEntry {
   cliVersion?: string
 }
 
+/**
+ * What a declared hook leaves to the host, from the agent's profile (`capabilities.hooks.needsTrust`): a host that
+ * runs a project hook only once the developer trusts it says so, naming its own project layer; any other host runs it.
+ */
+function declaredNote(agent: string): string {
+  const profile = findAgentProfile(agent)
+  const hooks = profile?.capabilities.hooks
+  return profile && hooks?.needsTrust ? `${profile.displayName} runs it once the ${hooks.file.split('/')[0]}/ layer and the hook are trusted` : 'the host runs it'
+}
+
+/** The hosts whose hooks the harness installs, as the profiles name them: `Claude Code and Codex`. */
+function hookHosts(): string {
+  const names = agentsWith('hooks').map((id) => getAgentProfile(id).displayName)
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('')
+}
+
+/** The reason the profile gives for lacking hooks, as a clause for a not-enforced line; empty for an agent with no profile. */
+function noHooksReason(agent: string): string {
+  const reason = capabilityLimitation(agent, 'hooks')
+  return reason ? `; limitation: ${reason.replace(/\.$/, '')}` : ''
+}
+
 const GUARD_TEXT: Record<NonNullable<StatusRoutingState['guard']>[number]['state'], (entry: HookEntry) => string> = {
   enforced: () => 'guard enforced',
-  declared: ({ agent }) => `guard declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
+  declared: ({ agent }) => `guard declared (${declaredNote(agent)})`,
   'declared-not-runnable': (entry) =>
     `guard hook declared but the CLI it reaches (${hookCliText(entry)}) cannot run sf agents guard (install saasfoundryai-cli in the project, or upgrade the saasfoundryai on the PATH): an agent is not stopped from setting an escape hatch`,
   'declared-outdated-cli': (entry) => `guard hook declared but the CLI it reaches (${hookCliText(entry)}) is older than the project's harness: upgrade it`,
   outdated: () => 'guard hook outdated (run sf agents refresh --scope shared)',
   missing: () => 'guard hook missing (run sf agents refresh --scope shared)',
-  'not-enforced': () => 'guard not enforced (the guard hook is for Claude Code and Codex; an agent here is told to ask the developer, nothing stops it)'
+  'not-enforced': ({ agent }) => `guard not enforced (the guard hook is for ${hookHosts()}${noHooksReason(agent)}; an agent here is told to ask the developer, nothing stops it)`
 }
 
 /**
@@ -122,13 +145,13 @@ export function captureErrorsSummary(errors: StatusRoutingState['captureErrors']
 
 const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (entry: HookEntry) => string> = {
   enforced: () => 'capture enforced',
-  declared: ({ agent }) => `capture declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
+  declared: ({ agent }) => `capture declared (${declaredNote(agent)})`,
   'declared-not-runnable': (entry) =>
     `capture hook declared but the CLI it reaches (${hookCliText(entry)}) cannot run sf agents outcome capture (install saasfoundryai-cli in the project, or upgrade the saasfoundryai on the PATH): delegations are not recorded`,
   'declared-outdated-cli': (entry) => `capture hook declared but the CLI it reaches (${hookCliText(entry)}) is older than the project's harness: upgrade it`,
   outdated: () => 'capture hook outdated (run sf agents refresh --scope shared)',
   missing: () => 'capture hook missing (run sf agents refresh --scope shared)',
-  'not-enforced': () => 'capture not enforced (record its delegations with sf agents outcome record)'
+  'not-enforced': ({ agent }) => `capture not enforced (record its delegations with sf agents outcome record${noHooksReason(agent)})`
 }
 
 /** Holds that say something (a kind stuck on a failing tier, a tier that costs more) are named; the ordinary waits are counted. */

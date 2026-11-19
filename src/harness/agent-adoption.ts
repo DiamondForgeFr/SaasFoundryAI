@@ -4,7 +4,7 @@ import { join, resolve } from 'path'
 
 import { inspectInstructionSource, AgentInstructionPlan } from './agent-instructions'
 import { enableAgents, replaceAgents, AgentSupportResult, AgentSelectionMode } from './agent-support'
-import { getAgentIds, isHarnessAgent } from './agent-registry'
+import { agentsWith, getAgentIds, getAgentProfile, isHarnessAgent } from './agent-registry'
 import type { HarnessAgent } from '../types'
 
 export interface AgentAdoptionPlan {
@@ -38,8 +38,8 @@ const knownPaths = [
   '.codex/skills',
   '.gemini/skills',
   '.qwen/skills',
-  '.claude/agents',
-  '.codex/agents',
+  // The subagent folders the profiles declare, so a host that gains tier agents is inspected without a second list.
+  ...agentsWith('tierAgents').map((id) => getAgentProfile(id).capabilities.tierAgents!.dir),
   '.claude/settings.json',
   '.claude/settings.local.json',
   '.codex/config.toml',

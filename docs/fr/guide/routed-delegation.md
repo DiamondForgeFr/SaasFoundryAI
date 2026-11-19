@@ -45,6 +45,11 @@ Pour chaque agent de développement déclaré que la grille route, le harness é
 l'effort dans leur frontmatter ; pour Codex, ce sont `.codex/agents/sf-<palier>.toml`. Chaque description liste les types de tâches servis par le palier, afin que Claude Code choisisse le bon agent à
 partir de sa seule description.
 
+Les agents routés, les efforts qu'un agent de palier peut porter, son dossier et son format de fichier ne sont pas décidés par le code du harness : chaque profil d'agent de développement les déclare
+dans son bloc `capabilities` ([`sf agents`](/fr/cli/sf-agents#le-bloc-de-capacites-d-un-profil)). Un outil dont le profil ne déclare aucun routage n'a ni route ni agent de palier, et une commande qui
+en a besoin dit pourquoi avec les mots de ce profil, par exemple que le routage de Kimi Code arrive avec une version ultérieure. La même règle vaut pour toute capacité qui manque à un profil : il dit
+pourquoi, ou le registre le refuse.
+
 Les fichiers sont générés et suivis par Git. `sf agents enable`, `replace`, `refresh` et `sf update` réécrivent un fichier non modifié et laissent un fichier édité à côté d'un sidecar
 `.saasfoundry.new`. [`sf status`](/fr/cli/sf-status#agents-de-palier) signale un fichier absent, modifié ou périmé. Les agents de palier ne désignent qu'un modèle et un effort ; ils ne portent aucun
 identifiant, et l'absence d'un compte fournisseur fait échouer la délégation au lieu de basculer silencieusement sur un autre modèle.

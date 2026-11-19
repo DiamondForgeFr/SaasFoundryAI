@@ -95,7 +95,8 @@ describe('the automatic routing in sf status (#1035)', () => {
         })
       )
       expect(summary).toContain('codex capture hook missing (run sf agents refresh --scope shared)')
-      expect(summary).toContain('gemini-cli capture not enforced (record its delegations with sf agents outcome record)')
+      // FR-MAH-020: a host without hooks says why, in the words of its profile
+      expect(summary).toContain('gemini-cli capture not enforced (record its delegations with sf agents outcome record; limitation: No Gemini CLI guard or capture hook is installed by the harness)')
     })
 
     it('does not call a hook enforced when nothing can run it, or when the host has not trusted it yet', () => {

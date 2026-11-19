@@ -66,7 +66,7 @@ import {
   type PinChange
 } from './update.lockfile'
 import { runRequired } from '../run'
-import { getSharedAgentEntrypoints } from '../harness/agent-registry'
+import { getSharedAgentEntrypoints, hasCapability } from '../harness/agent-registry'
 import { previewCodexInstructionLimits } from '../harness/codex-instruction-limit-preview'
 import { logHarnessSettings, syncHarnessSettingsForProject } from '../harness/harness-settings'
 import { hookCliNotice } from '../harness/hook-cli-notice'
@@ -1619,7 +1619,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       const lines = await hookCliNotice('.', manifest.modules.harness.agents ?? ['claude-code'], { requiredVersion: cliVersion })
       for (const line of lines) console.log((line.needsAttention ? chalk.yellow : chalk.gray)(`  ${line.text}`))
       // The shell shape check is on by absence (#1251): nothing is written, so an update says what the guard now does and how to change it.
-      if ((manifest.modules.harness.agents ?? ['claude-code']).some((agent) => agent === 'claude-code' || agent === 'codex'))
+      if ((manifest.modules.harness.agents ?? ['claude-code']).some((agent) => hasCapability(agent, 'hooks')))
         console.log(chalk.gray(`  ${shellShapeNotice(recordedShellShape(manifest) ?? DEFAULT_SHELL_SHAPE)}`))
     }
 

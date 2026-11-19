@@ -15,9 +15,11 @@
  */
 import { posix } from 'path'
 
+import { getSkillDirectory, type HookProvider } from './agent-registry'
 import { analyzeShellShape, SHELLS, squash, WRAPPERS, type ShapeAnalysis, type ShapeFinding, type ShapeKind } from './shell-shape'
 
-export type GuardHost = 'claude-code' | 'codex'
+/** The hosts whose hooks the harness installs: the agents whose profile declares `capabilities.hooks`. */
+export type GuardHost = HookProvider
 
 export type GuardRule =
   | 'bypass-variable'
@@ -461,7 +463,7 @@ function targetDirectories(command: SimpleCommand): string[] {
 const HEAD = 'Refused by the SaaSFoundry guard hook:'
 
 function catalogue(host: GuardHost): string {
-  return host === 'codex' ? '.agents/skills/sf-workflow/escape-hatches.md' : '.claude/skills/sf-workflow/escape-hatches.md'
+  return `${getSkillDirectory(host)}/sf-workflow/escape-hatches.md`
 }
 
 /** How the developer runs a command the guard refused an agent. The agent never does. */

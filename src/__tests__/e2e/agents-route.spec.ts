@@ -51,12 +51,29 @@ describe('compiled sf agents route (#930)', () => {
   it.each<[string, string[], string]>([
     ['an unknown task kind', ['--task', 'deploy', '--json'], 'Task kinds: exploration'],
     ['an unrouted agent', ['--task', 'bug-fix', '--provider', 'gemini-cli', '--json'], 'Routed coding agents: claude-code, codex'],
+    // FR-MAH-020: the refusal names the limitation the agent's profile documents, never a bare "no routing"
+    [
+      'an agent whose routing is documented as coming',
+      ['--task', 'bug-fix', '--provider', 'kimi', '--json'],
+      'kimi (Kimi Code) cannot be routed: Kimi Code has no routing candidates in the grid yet: routing arrives with FR-MAH-021'
+    ],
+    ['an agent no profile registers', ['--task', 'bug-fix', '--provider', 'cursor', '--json'], "'cursor' is not a registered coding agent."],
     ['an invalid override', ['--task', 'prose', '--json'], 'Invalid modules.harness.routing']
   ])('fails closed on %s', async (_, args, message) => {
     await manifest({ version: 4, agents: ['codex'], routing: { kinds: { prose: { tier: 'nowhere' } } } })
     const result = run(...args)
     expect(result.status).toBe(1)
     expect(JSON.parse(result.stdout).error).toContain(message)
+  })
+
+  it('says why when none of the declared coding agents is routed (FR-MAH-020)', async () => {
+    await manifest({ version: 4, agents: ['kimi'] })
+    const result = run('--task', 'bug-fix', '--json')
+    expect(result.status).toBe(1)
+    const message = JSON.parse(result.stdout).error as string
+    expect(message).toContain('None of the declared coding agents (kimi) has routing candidates.')
+    expect(message).toContain('kimi (Kimi Code) cannot be routed: Kimi Code has no routing candidates in the grid yet: routing arrives with FR-MAH-021')
+    expect(message).toContain('Routed coding agents: claude-code, codex.')
   })
 
   // #1105 — the documented form of the command names a ticket and no --complexity: the record used to say "unknown"
