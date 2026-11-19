@@ -175,7 +175,7 @@ rôle `ACCOUNT`, reçoit désormais `403` là où il recevait `401`.
 
 En 1.2.0, la règle « personne n'accorde ce qu'il ne détient pas » contrôlait un rôle `ENTITY` attribué nulle part contre le compte. Un administrateur de compte ne pouvait plus créer, ni étendre, un
 rôle de type d'entité accordant des sections qui n'existent que sur l'entité : `403 You cannot grant what you do not hold where this role applies`. Un rôle `ENTITY` déjà attribué, ou porté par une
-invitation en attente, était contrôlé dans chaque entité où il sert, avec le même `403` pour l'administrateur du compte. La 1.2.1 laisse l'administrateur du compte accorder ce que le type d'entité
+invitation en attente, était contrôlé dans chaque entité où il sert, avec le même `403` pour l'administrateur du compte. La 1.3.0 laisse l'administrateur du compte accorder ce que le type d'entité
 permet sur tout rôle `ENTITY` de son compte, qu'il serve ou non (voir « Qui peut modifier un rôle » ci-dessus). Le correctif touche `account.service.ts`, fusionné par `sf update` comme celui de la
 1.1.1 ; aucune migration de module n'est nécessaire.
 
@@ -189,7 +189,7 @@ Inchangés : les rôles `ACCOUNT`, les administrateurs d'entité et la plateform
 rôles d'entité, restreignez `loadEntityTypeGrants` aux rôles système du type du rôle lors de la fusion.
 
 En 1.2.0, une invitation en attente portant un rôle `ENTITY` ne comptait pas comme un endroit où le rôle sert : un administrateur d'entité pouvait modifier, activer, désactiver ou supprimer un rôle
-encore seulement promis à des personnes invitées dans une entité sœur, et la modification les atteignait à l'acceptation. La 1.2.1 compte les entités de chaque invitation en attente (`SENT`) comme des
+encore seulement promis à des personnes invitées dans une entité sœur, et la modification les atteignait à l'acceptation. La 1.3.0 compte les entités de chaque invitation en attente (`SENT`) comme des
 attributions (voir « Qui peut modifier un rôle » ci-dessus), dans le même `account.service.ts` ; le mock de test `service-mocks.ts` reçoit `invitationEntityLink.findMany`. Les parcours qui changent de
 comportement :
 
@@ -199,12 +199,12 @@ comportement :
   toujours pour l'administrateur du compte.
 
 En 1.2.0, supprimer un rôle personnalisé encore attribué répondait `400 Failed to delete custom role` : la clé étrangère de l'attribution refusait la suppression, et la confirmation du panneau des
-rôles annonçait à tort que les attributions seraient retirées. Un rôle porté seulement par une invitation en attente était supprimé, et l'invitation le perdait sans bruit. La 1.2.1 refuse les deux
+rôles annonçait à tort que les attributions seraient retirées. Un rôle porté seulement par une invitation en attente était supprimé, et l'invitation le perdait sans bruit. La 1.3.0 refuse les deux
 avec `409 ROLE_IN_USE` (voir « Supprimer un rôle encore utilisé » ci-dessus). Le correctif touche `account.service.ts`, la page web `account-roles.tsx`, les nouveaux `role-delete-refusal.ts` et
 `role-delete-refusal-notice.tsx` à côté d'elle, et les traductions `account`, fusionnés par `sf update` comme les correctifs ci-dessus ; aucune migration de module n'est nécessaire. Un client qui
 lisait le `400` d'un rôle utilisé reçoit désormais `409`.
 
-En 1.2.0, inviter une adresse qui appartenait déjà à un utilisateur actif répondait `201 Invitation sent successfully` sans rien écrire : ni invitation, ni lien, ni rôle, ni e-mail. La 1.2.1 la refuse
+En 1.2.0, inviter une adresse qui appartenait déjà à un utilisateur actif répondait `201 Invitation sent successfully` sans rien écrire : ni invitation, ni lien, ni rôle, ni e-mail. La 1.3.0 la refuse
 avec `409 USER_ALREADY_ACTIVE` (voir « Inviter une adresse qui a déjà un compte actif » plus bas). Le correctif touche `invitation.service.ts` et `invitation.controller.ts`, les deux dialogues
 d'invitation, le hook `useInviteUserCreate`, le nouveau `utils/invitation-refusal.ts` et les traductions `account`, fusionnés par `sf update` comme les correctifs ci-dessus ; aucune migration de
 module n'est nécessaire. Un client qui lisait le `201` d'une adresse active reçoit désormais `409`.

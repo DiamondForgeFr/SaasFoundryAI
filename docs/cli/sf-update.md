@@ -267,7 +267,7 @@ and, for a project that already chose, which mode it is in. The line is printed 
 
 **The update names the CLI the hooks will reach.** The guard and capture hooks run `node_modules/.bin/saasfoundryai`, then `saasfoundryai` on the PATH, never the CLI that ran the update: an
 `npx saasfoundryai-cli@<version> update` is gone once it returns. A generated project does not depend on `saasfoundryai-cli`, so its hooks reach the global install, which can be older and lack
-`agents guard`. Once the hooks are in place the update says which CLI they reach, `The guard and capture hooks run /usr/local/bin/saasfoundryai 1.2.1.`, and, when that CLI cannot run them or is older
+`agents guard`. Once the hooks are in place the update says which CLI they reach, `The guard and capture hooks run /usr/local/bin/saasfoundryai 1.3.0.`, and, when that CLI cannot run them or is older
 than the version the project was just updated to, says so for each hook and gives the command to upgrade it (`npm install -D saasfoundryai-cli@<version>` in the project, or
 `npm install -g saasfoundryai-cli@<version>`). `sf status` reports the same until it is done (see [the guard hook](/cli/sf-status#the-guard-hook)). Nothing is said for a project without these hooks.
 
