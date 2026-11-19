@@ -345,6 +345,14 @@ export function resolveHarnessAgents(ids?: readonly string[]): HarnessAgent[] {
   return [...new Set(ids.map((id) => getAgentProfile(id).id))]
 }
 
+/**
+ * The coding agents a harness declares: a harness that records none is the legacy Claude Code setup. One answer for every
+ * caller (routing, status, update), where each used to spell the same fallback.
+ */
+export function declaredAgents(declared?: readonly HarnessAgent[]): readonly HarnessAgent[] {
+  return declared ?? ['claude-code']
+}
+
 export function needsSharedInstructions(ids: string[]): boolean {
   // Validate every requested ID even if an earlier profile already needs a bridge.
   return ids.map(getAgentProfile).some((profile) => profile.sharedInstructions)

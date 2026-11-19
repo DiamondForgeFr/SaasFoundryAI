@@ -4,6 +4,7 @@ import path from 'path'
 
 import { type CliChannel, isCliSourceRepository } from '../cli-channel'
 import type { ManagedFileState } from '../harness/agent-instructions'
+import { declaredAgents as harnessAgents } from '../harness/agent-registry'
 import { inspectTierAgents } from '../harness/agent-support'
 import { captureErrorWindowStart, readCaptureErrors, type CaptureErrorSummary } from '../harness/capture-errors'
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
@@ -404,7 +405,7 @@ async function collectRouting(
     const since = captureErrorWindowStart(now())
     const captureErrors = dir ? await readCaptureErrors(dir, { since }) : { count: 0, since: since.toISOString() }
     // The effective declaration (shared and local) when the instruction files let it be read, otherwise what the manifest says.
-    const tiers = await inspectTierAgents(projectRoot, manifest, declaredAgents ?? harness.agents ?? ['claude-code'])
+    const tiers = await inspectTierAgents(projectRoot, manifest, declaredAgents ?? harnessAgents(harness.agents))
     return {
       gridVersion: ROUTING_GRID_VERSION,
       overrides: routingOverrides(harness.routing),
@@ -421,8 +422,8 @@ async function collectRouting(
       })),
       holds: listLocalHolds(local).map(({ kind, provider, hold }) => ({ kind, provider, reason: hold.reason, since: hold.since })),
       // The CLI each hook reaches is compared with the version that last updated the project (#1228).
-      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, ...(await captureStanding(projectRoot, agent, probe, manifest.version)) }))),
-      guard: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, ...(await guardStanding(projectRoot, agent, guardProbe, manifest.version)) }))),
+      capture: await Promise.all(harnessAgents(harness.agents).map(async (agent) => ({ agent, ...(await captureStanding(projectRoot, agent, probe, manifest.version)) }))),
+      guard: await Promise.all(harnessAgents(harness.agents).map(async (agent) => ({ agent, ...(await guardStanding(projectRoot, agent, guardProbe, manifest.version)) }))),
       shellShape: recordedShellShape(manifest) ?? DEFAULT_SHELL_SHAPE,
       captureErrors
     }
