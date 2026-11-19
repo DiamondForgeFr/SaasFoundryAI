@@ -277,7 +277,7 @@ d'approuver de nouveau le hook.
 
 **La mise à jour nomme le CLI qu'atteindront les hooks.** Les hooks de garde et de capture lancent `node_modules/.bin/saasfoundryai`, puis `saasfoundryai` dans le PATH, jamais le CLI qui a fait la
 mise à jour : un `npx saasfoundryai-cli@<version> update` a disparu une fois terminé. Un projet généré ne dépend pas de `saasfoundryai-cli` : ses hooks atteignent donc l'installation globale, qui peut
-être plus ancienne et ne pas connaître `agents guard`. Une fois les hooks en place, la mise à jour dit quel CLI ils atteignent, `The guard and capture hooks run /usr/local/bin/saasfoundryai 1.2.1.`,
+être plus ancienne et ne pas connaître `agents guard`. Une fois les hooks en place, la mise à jour dit quel CLI ils atteignent, `The guard and capture hooks run /usr/local/bin/saasfoundryai 1.3.0.`,
 et, quand ce CLI ne sait pas les exécuter ou est antérieur à la version vers laquelle le projet vient d'être mis à jour, le dit pour chaque hook et donne la commande pour le mettre à jour
 (`npm install -D saasfoundryai-cli@<version>` dans le projet, ou `npm install -g saasfoundryai-cli@<version>`). `sf status` le signale jusque-là (voir
 [le hook de garde](/fr/cli/sf-status#le-hook-de-garde)). Rien n'est dit pour un projet sans ces hooks.

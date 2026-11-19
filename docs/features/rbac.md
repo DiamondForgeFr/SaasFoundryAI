@@ -170,7 +170,7 @@ caller that touches a system role, or an entity administrator that creates an `A
 
 In 1.2.0 the rule "nobody grants what they do not hold" checked an `ENTITY` role assigned nowhere against the account. An account administrator could no longer create, or extend, an entity-type role
 granting sections that exist only on the entity: `403 You cannot grant what you do not hold where this role applies`. An `ENTITY` role already assigned, or carried by a pending invitation, was checked
-in each entity it is used in, with the same `403` for the account administrator. 1.2.1 lets the account administrator grant what the entity type allows on any `ENTITY` role of its account, used or not
+in each entity it is used in, with the same `403` for the account administrator. 1.3.0 lets the account administrator grant what the entity type allows on any `ENTITY` role of its account, used or not
 (see "Who may change a role" above). The fix lives in `account.service.ts`, merged by `sf update` like the 1.1.1 fix; no module migration is needed.
 
 Role-authoring flows that change behaviour:
@@ -183,7 +183,7 @@ Unchanged: `ACCOUNT` roles, entity administrators, and the platform. A grant tha
 roles, narrow `loadEntityTypeGrants` to the system roles of the role's type when you merge.
 
 In 1.2.0 a pending invitation carrying an `ENTITY` role did not count as a place where the role is used: an entity administrator could edit, toggle or delete a role so far only promised to people
-invited into a sibling entity, and the change reached them on acceptance. 1.2.1 counts the entities of each pending (`SENT`) invitation like assignments (see "Who may change a role" above), in the
+invited into a sibling entity, and the change reached them on acceptance. 1.3.0 counts the entities of each pending (`SENT`) invitation like assignments (see "Who may change a role" above), in the
 same `account.service.ts`; the test mock `service-mocks.ts` gains `invitationEntityLink.findMany`. Flows that change behaviour:
 
 - **Editing, toggling or deleting an `ENTITY` role** (`PATCH /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`, `DELETE /accounts/roles/:roleId`) as an entity administrator, when a
@@ -192,11 +192,11 @@ same `account.service.ts`; the test mock `service-mocks.ts` gains `invitationEnt
   administrator.
 
 In 1.2.0 deleting a custom role that was still assigned answered `400 Failed to delete custom role`: the assignment's foreign key refused the delete, and the confirmation of the web role panel wrongly
-announced that the assignments would be removed. A role carried only by a pending invitation was deleted, and the invitation silently lost it. 1.2.1 refuses both with `409 ROLE_IN_USE` (see "Deleting
+announced that the assignments would be removed. A role carried only by a pending invitation was deleted, and the invitation silently lost it. 1.3.0 refuses both with `409 ROLE_IN_USE` (see "Deleting
 a role still in use" above). The fix lives in `account.service.ts`, the web page `account-roles.tsx`, the new `role-delete-refusal.ts` and `role-delete-refusal-notice.tsx` next to it, and the
 `account` locales, merged by `sf update` like the fixes above; no module migration is needed. A client that read the `400` of a used role now gets `409`.
 
-In 1.2.0 inviting an address that already belonged to an active user answered `201 Invitation sent successfully` and wrote nothing: no invitation, no link, no role, no email. 1.2.1 refuses it with
+In 1.2.0 inviting an address that already belonged to an active user answered `201 Invitation sent successfully` and wrote nothing: no invitation, no link, no role, no email. 1.3.0 refuses it with
 `409 USER_ALREADY_ACTIVE` (see "Inviting an address that already has an active account" below). The fix lives in `invitation.service.ts` and `invitation.controller.ts`, the two invite dialogs, the
 `useInviteUserCreate` hook, the new `utils/invitation-refusal.ts` and the `account` locales, merged by `sf update` like the fixes above; no module migration is needed. A client that read the `201` of
 an active address now gets `409`.
