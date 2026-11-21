@@ -132,3 +132,22 @@ Each profile also declares a `capabilities` block: `routing` (vendor and the eff
 `hooks` (scope, file, guard and capture events, whether the tool must trust a project hook), `worktrees` (`native`, `manual` or `none`) and `limitations`. The routing providers, the tier-agent files and the
 status wording are derived from it, so adding a tool starts as data. A capability the profile lacks is `null` (or `worktrees` other than `native`) and must carry its reason in `limitations`; commands and
 `sf status` name that reason instead of a generic "not supported". Only a file format has code of its own, one renderer per `tierAgents.format`.
+
+### Kimi Code routing
+
+Kimi Code is a routed agent through its profile and the routing grid alone. `sf agents route --task <kind> --provider kimi` names a tier and a candidate (`moonshot/kimi/<model>/<effort>`): `light` is
+`k3` at `low`, `edit` is `k3` at `high`, `build`, `fix` and `plan` are `k3.1-pro` at `high`, and `terminal` is `k3.1-pro` at `max`. Kimi Code expresses three efforts, `low`, `high` and `max`; an
+override at another effort is refused. **Every Kimi route is provisional**: no public benchmark measures it with a cost, so each route says so and carries no score. The `highspeed` aliases are not used,
+because they bill twice.
+
+Three limits come with it:
+
+- **No tier agent yet.** The harness writes no `sf-<tier>` file for Kimi Code (its file format arrives with FR-MAH-022): the route names the tier and the candidate, and the session starts a sub-task on
+  that model and effort.
+- **No hook.** Kimi Code reads its hooks from the user's own configuration only, so the harness installs no guard and no capture hook. `sf status` says `guard unavailable` and `capture unavailable`
+  with that reason; record each delegation with `sf agents outcome record --provider kimi`. The CLI's own guards still refuse an escape hatch.
+- **Sub-tasks in the current worktree only.** Kimi Code has no worktree tool the harness uses, so a delegation to it is limited to sub-tasks of the current worktree until a whole-ticket worktree run is
+  verified.
+
+The agent is named `kimi`, explicitly; no model name or look-alike is read as that agent. A CLI older than this release does not know `kimi` as a routed agent: it refuses
+`sf agents route --provider kimi` and skips, and counts, a ledger line whose provider is `kimi`. Upgrade every clone that shares a ledger before recording Kimi delegations in it.

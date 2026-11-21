@@ -37,14 +37,42 @@ nearest proxy, with no score yet).
 A project can change the grid in `modules.harness.routing`: `kinds` moves a task kind to another tier, and `tiers` changes a tier's candidate for one agent. The manifest schema validates both, and an
 invalid override makes the command fail instead of silently using the grid. The full syntax is in [`sf agents`](/cli/sf-agents#delegation-routing-sf-agents-route).
 
+### Kimi Code
+
+Kimi Code has a candidate in every tier, declared as data in its profile and in the grid. All of them are **provisional**: no public benchmark measures them with a cost, so each route says
+`provisional: No Kimi measurement exists yet` until the maintainers' replay bench replaces it with a measurement. The `highspeed` aliases are not used, because they bill twice.
+
+| Tier       | Task kinds                    | Kimi Code candidate (model, effort) |
+| ---------- | ----------------------------- | ----------------------------------- |
+| `light`    | `exploration`, `prose`        | `k3`, `low`                         |
+| `edit`     | `scoped-edit`                 | `k3`, `high`                        |
+| `build`    | `multi-file-feature`, `tests` | `k3.1-pro`, `high`                  |
+| `fix`      | `bug-fix`, `review`           | `k3.1-pro`, `high`                  |
+| `plan`     | `planning`                    | `k3.1-pro`, `high`                  |
+| `terminal` | `terminal-ci`                 | `k3.1-pro`, `max`                   |
+
+Kimi Code expresses three efforts, `low`, `high` and `max`: an override at any other effort is refused. Three limits come with it:
+
+- **No tier agent yet.** The harness writes no `sf-<tier>` file for Kimi Code until its file format is defined (FR-MAH-022). The route names the tier and the candidate; the session starts a Kimi
+  sub-task on that model and effort.
+- **No hook.** Kimi Code reads its hooks from the user's own configuration, never from the project, so the harness installs neither a guard nor a capture hook. `sf status` says `guard unavailable` and
+  `capture unavailable`, with that reason, and the delegations are recorded by hand with `sf agents outcome record --provider kimi`. The CLI's own guards still refuse an escape hatch.
+- **Sub-tasks in the current worktree only.** Kimi Code has no worktree tool the harness uses, so a delegation to it is limited to sub-tasks of the current worktree until a whole-ticket worktree run
+  is verified.
+
+The agent is named `kimi`, explicitly: no model name or look-alike (`kimi-code`, `k3`, `moonshot`) is read as that agent. A CLI older than this release does not know `kimi` as a routed agent: it
+refuses `sf agents route --provider kimi`, and skips (and counts) a ledger line whose provider is `kimi`, so upgrade every clone that shares a ledger first.
+
 ## The tier agents
 
-For each declared coding agent that the grid routes, the harness writes one subagent per tier. For Claude Code these are `.claude/agents/sf-<tier>.md`, with the model and effort in their frontmatter;
-for Codex they are `.codex/agents/sf-<tier>.toml`. Each description lists the task kinds the tier serves, so Claude Code can pick the right agent from its description alone.
+For each declared coding agent that the grid routes and whose profile declares tier agents, the harness writes one subagent per tier. For Claude Code these are `.claude/agents/sf-<tier>.md`, with the
+model and effort in their frontmatter; for Codex they are `.codex/agents/sf-<tier>.toml`. Each description lists the task kinds the tier serves, so Claude Code can pick the right agent from its
+description alone.
 
 Which agents are routed, which efforts a tier agent can carry, and which folder and format it is written in are not decided by the harness's code: each coding-agent profile declares them in its
 `capabilities` block ([`sf agents`](/cli/sf-agents#the-capability-block-of-a-profile)). A tool whose profile declares no routing has no route and no tier agent, and a command that needs one tells you
-why in the words of that profile, for example that Kimi Code's routing arrives with a later release. The same rule covers every capability a profile lacks: it says why, or the registry refuses it.
+why in the words of that profile, for example that the harness ships no routing candidates for Gemini CLI. A routed tool whose profile declares no tier agents, such as Kimi Code today, has a route and
+no file. The same rule covers every capability a profile lacks: it says why, or the registry refuses it.
 
 The files are generated and tracked. `sf agents enable`, `replace`, `refresh` and `sf update` rewrite an untouched file and leave an edited one beside a `.saasfoundry.new` sidecar.
 [`sf status`](/cli/sf-status#tier-agents) warns when one is missing, edited or outdated. The tier agents only name a model and an effort; they do not carry credentials, and a missing provider account
@@ -112,9 +140,9 @@ The harness does not trust a delegate's own account of its work. It measures thr
   lists the running tasks in the stop, or the delegate writes `SF-DELEGATION: pending route=<id>`) is an interim stop: it keeps its cost, records no outcome and asks nothing, and only the final stop's
   verdict reaches the routing (see [`sf agents`](../cli/sf-agents.md#interim-stops)).
 - **The ledger.** `<git-common-dir>/saasfoundry/delegations.jsonl` is an append-only file that holds the runs (tokens, cost, active time, outcome, checks, tier and candidate), the route records, and
-  the signals. On Claude Code, `SubagentStop` and `PostToolUse` hooks capture each run automatically. Other hosts record by hand with `sf agents outcome record`. A cost is never guessed: a model
-  without a published price keeps its reliability but has no cost until the project declares one. A capture that fails is not silent: it is logged next to the ledger, and `sf status` and
-  `sf agents routing report` count the errors of the last 7 days.
+  the signals. On Claude Code, `SubagentStop` and `PostToolUse` hooks capture each run automatically. Other hosts, Kimi Code included, record by hand with `sf agents outcome record`. A cost is never
+  guessed: a model without a published price keeps its reliability but has no cost until the project declares one. A capture that fails is not silent: it is logged next to the ledger, and `sf status`
+  and `sf agents routing report` count the errors of the last 7 days.
 
 A later verdict is added as a signal, and the original line is never edited. The session marks a delivery that it had to redo with `sf agents outcome mark <ticket> rework`, and a defect that comes
 back from Human Testing or review with `human-defect`. Both writes ask for permission in the coding agent, because they change what the routing does next.
