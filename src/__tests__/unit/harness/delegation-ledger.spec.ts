@@ -572,6 +572,38 @@ describe('the delegation ledger (#1035)', () => {
     })
   })
 
+  // FR-MAH-021: the provider list is the one the profiles declare, so a route and a run for Kimi Code are as valid as any other
+  describe('Kimi Code, a routed agent with no capture hook', () => {
+    const kimiRun = (overrides: Partial<RunInput> = {}) => run({ host: 'manual', provider: 'kimi', tier: 'build', model: 'k3.1-pro', effort: 'high', ...overrides })
+
+    it('keeps a route record for kimi and the run that echoed it, and replays them', async () => {
+      const route = buildRouteRecord({ taskKind: 'multi-file-feature', provider: 'kimi', tier: 'build', trial: false, ticket: 1286, complexity: 'medium', now: new Date(T0) })
+      expect(route).toMatchObject({ provider: 'kimi', tier: 'build', ticket: 1286 })
+      const claimed = buildRunRecord(kimiRun({ route: route.id }))
+      await writeFile(join(dir, 'delegations.jsonl'), `${[route, claimed].map((entry) => JSON.stringify(entry)).join('\n')}\n`)
+      const state = await readLedger(dir)
+      expect(state.skipped).toBe(0)
+      expect(state.routes).toEqual([{ ...route, consumedBy: claimed.id }])
+      expect(state.runs[0]).toMatchObject({ provider: 'kimi', host: 'manual', tier: 'build', candidate: { model: 'k3.1-pro', effort: 'high' }, route: route.id })
+      expect(await findRoute(dir, route.id)).toMatchObject({ id: route.id, provider: 'kimi' })
+    })
+
+    it('leaves a Kimi model without a cost, never a guess, until the project declares its rate', () => {
+      expect(buildRunRecord(kimiRun()).cost).toBeNull()
+      expect(buildRunRecord(kimiRun(), { prices: { 'k3.1-pro': { input: '1.00', output: '2.00' } } }).cost).toEqual({ amount: '0.14000000', currency: 'USD' })
+    })
+
+    it('has no capture hook, so no run names kimi as its host: the session records it by hand', () => {
+      expect(() => buildRunRecord(kimiRun({ host: 'kimi' as never }))).toThrow('host must be claude-code, codex, manual')
+      expect(buildRunRecord(kimiRun()).host).toBe('manual')
+    })
+
+    it('still refuses a provider that is not routed, and names the routed ones', () => {
+      expect(() => buildRunRecord(kimiRun({ provider: 'kimi-code' }))).toThrow('provider must be a routed coding agent (claude-code, codex, kimi)')
+      expect(() => buildRouteRecord({ taskKind: 'tests', provider: 'kimi-code' as never, tier: 'build', trial: false })).toThrow('provider must be a routed coding agent (claude-code, codex, kimi)')
+    })
+  })
+
   describe('where the ledger lives', () => {
     const git = async (cwd: string, ...args: string[]) => (await exec('git', args, { cwd, env: cleanEnv })).stdout.trim()
 

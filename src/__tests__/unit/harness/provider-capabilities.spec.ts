@@ -23,7 +23,8 @@ const routingState = (state: Partial<StatusRoutingState>): StatusRoutingState =>
 
 describe('the registry derives what two lists and a ternary used to say', () => {
   it('routes the agents whose profile declares routing, in registry order, and no other', () => {
-    expect([...ROUTING_PROVIDERS]).toEqual(['claude-code', 'codex'])
+    // FR-MAH-021: Kimi Code is routed by its profile alone, with no tier-agent folder and no hook of its own yet
+    expect([...ROUTING_PROVIDERS]).toEqual(['claude-code', 'codex', 'kimi'])
     expect(agentsWith('routing')).toEqual([...ROUTING_PROVIDERS])
     expect(agentsWith('tierAgents')).toEqual(['claude-code', 'codex'])
     expect(agentsWith('hooks')).toEqual(['claude-code', 'codex'])
@@ -32,6 +33,7 @@ describe('the registry derives what two lists and a ternary used to say', () => 
   it('takes the efforts a host can write from its profile', () => {
     expect(PROVIDER_EFFORTS['claude-code']).toEqual(getAgentProfile('claude-code').capabilities.routing?.efforts)
     expect(PROVIDER_EFFORTS.codex).toEqual(getAgentProfile('codex').capabilities.routing?.efforts)
+    expect(PROVIDER_EFFORTS.kimi).toEqual(['low', 'high', 'max'])
   })
 
   it('derives the tier-agent path pattern from the folders and formats the profiles declare', () => {
@@ -44,7 +46,10 @@ describe('the registry derives what two lists and a ternary used to say', () => 
 
   it('knows what a host may be asked for without throwing for an agent nobody registered', () => {
     expect(hasCapability('codex', 'hooks')).toBe(true)
-    expect(hasCapability('kimi', 'routing')).toBe(false)
+    expect(hasCapability('kimi', 'routing')).toBe(true)
+    expect(hasCapability('kimi', 'tierAgents')).toBe(false)
+    expect(hasCapability('kimi', 'hooks')).toBe(false)
+    expect(hasCapability('gemini-cli', 'routing')).toBe(false)
     expect(hasCapability('cursor', 'hooks')).toBe(false)
     expect(findAgentProfile('cursor')).toBeUndefined()
     expect(capabilityLimitation('cursor', 'routing')).toBeUndefined()
@@ -84,31 +89,80 @@ describe('a missing capability always says why (AC-3)', () => {
   })
 
   it('names the limitation of a provider without routing instead of the generic "No routing"', () => {
-    expect(() => parseRoutingProvider('kimi')).toThrow(/kimi \(Kimi Code\) cannot be routed: Kimi Code has no routing candidates in the grid yet: routing arrives with FR-MAH-021/)
-    expect(() => parseRoutingProvider('kimi')).toThrow('Routed coding agents: claude-code, codex.')
+    expect(() => parseRoutingProvider('gemini-cli')).toThrow(/gemini-cli \(Gemini CLI\) cannot be routed: The harness ships no routing candidates for Gemini CLI/)
+    expect(() => parseRoutingProvider('gemini-cli')).toThrow('Routed coding agents: claude-code, codex, kimi.')
     expect(() => parseRoutingProvider('gemini-cli')).toThrow(capabilityLimitation('gemini-cli', 'routing')!)
-    expect(() => parseRoutingProvider('kimi')).not.toThrow(/No routing for/)
+    expect(() => parseRoutingProvider('gemini-cli')).not.toThrow(/No routing for/)
   })
 
   it('says an agent nobody registered is not registered, and accepts a routed one', () => {
-    expect(() => parseRoutingProvider('cursor')).toThrow("'cursor' is not a registered coding agent. Routed coding agents: claude-code, codex.")
+    expect(() => parseRoutingProvider('cursor')).toThrow("'cursor' is not a registered coding agent. Routed coding agents: claude-code, codex, kimi.")
     expect(parseRoutingProvider('codex')).toBe('codex')
   })
 
-  it('gives each declared agent its own reason when none of them is routed', () => {
-    const error = noRoutedAgentError(['kimi', 'gemini-cli'])
-    expect(error.message).toContain('None of the declared coding agents (kimi, gemini-cli) has routing candidates.')
-    expect(error.message).toContain(capabilityLimitation('kimi', 'routing')!)
-    expect(error.message).toContain(capabilityLimitation('gemini-cli', 'routing')!)
+  // FR-MAH-021: the identity is the explicit id and nothing else, so a name that looks like Kimi is no Kimi
+  it.each(['kimi-code', 'Kimi', 'moonshot', 'k3', 'kimi-k3', 'claude-code-kimi'])('does not read %s as the coding agent kimi', (name) => {
+    expect(() => parseRoutingProvider(name)).toThrow(`'${name}' is not a registered coding agent. Routed coding agents: claude-code, codex, kimi.`)
+    expect(findAgentProfile(name)).toBeUndefined()
+    expect(hasCapability(name, 'routing')).toBe(false)
   })
 
-  it('says why in sf status when a host without hooks is not enforced, and stays silent for an agent with no profile', () => {
+  it('gives each declared agent its own reason when none of them is routed', () => {
+    const error = noRoutedAgentError(['gemini-cli', 'qwen-code'])
+    expect(error.message).toContain('None of the declared coding agents (gemini-cli, qwen-code) has routing candidates.')
+    expect(error.message).toContain(capabilityLimitation('gemini-cli', 'routing')!)
+    expect(error.message).toContain(capabilityLimitation('qwen-code', 'routing')!)
+  })
+
+  it('says why in sf status when a host without hooks has no guard or capture, and stays silent for an agent with no profile', () => {
     const summary = routingSummary(routingState({ capture: [{ agent: 'kimi', state: 'not-enforced' }], guard: [{ agent: 'kimi', state: 'not-enforced' }] }))
-    expect(summary).toContain('kimi capture not enforced (record its delegations with sf agents outcome record; limitation: No Kimi Code guard or capture hook is installed by the harness yet)')
-    expect(summary).toContain(
-      'kimi guard not enforced (the guard hook is for Claude Code and Codex; limitation: No Kimi Code guard or capture hook is installed by the harness yet; an agent here is told'
-    )
+    const reason = capabilityLimitation('kimi', 'hooks')!.replace(/\.$/, '')
+    expect(reason).toContain("Kimi Code reads its hooks from the user's own configuration only")
+    expect(summary).toContain(`kimi capture unavailable (${reason}; record its delegations with sf agents outcome record)`)
+    expect(summary).toContain(`kimi guard unavailable (${reason})`)
+    expect(summary).not.toContain('not enforced')
+    // an agent nobody registered has no profile to give a reason: its wording is the one an enforced-nowhere host always had
     expect(routingSummary(routingState({ capture: [{ agent: 'cursor', state: 'not-enforced' }] }))).toContain('cursor capture not enforced (record its delegations with sf agents outcome record)')
+  })
+
+  it('keeps the wording of a host that has hooks when its hook is not enforced', () => {
+    const summary = routingSummary(
+      routingState({
+        capture: [
+          { agent: 'claude-code', state: 'not-enforced' },
+          { agent: 'codex', state: 'not-enforced' }
+        ],
+        guard: [{ agent: 'codex', state: 'not-enforced' }]
+      })
+    )
+    expect(summary).toContain('claude-code capture not enforced (record its delegations with sf agents outcome record)')
+    expect(summary).toContain('codex guard not enforced (the guard hook is for Claude Code and Codex; an agent here is told to ask the developer, nothing stops it)')
+    expect(summary).not.toContain('unavailable')
+  })
+})
+
+describe('Kimi Code is routed by its profile and the grid alone (FR-MAH-021)', () => {
+  const kimi = getAgentProfile('kimi')
+
+  it('declares routing, and states why it has no tier agent, no hook and no worktree tool', () => {
+    expect(kimi.capabilities.routing).toEqual({ vendor: 'moonshot', efforts: ['low', 'high', 'max'] })
+    expect(kimi.capabilities).toMatchObject({ tierAgents: null, hooks: null, worktrees: 'none' })
+    expect(Object.keys(kimi.capabilities.limitations).sort()).toEqual(['hooks', 'tierAgents', 'worktrees'])
+    expect(kimi.capabilities.limitations.tierAgents).toContain('FR-MAH-022')
+    expect(kimi.capabilities.limitations.hooks).toContain("user's own configuration")
+    expect(kimi.capabilities.limitations.worktrees).toContain('sub-tasks in the current worktree')
+  })
+
+  it('reads AGENTS.md from the project, as its documentation says', () => {
+    expect(kimi).toMatchObject({ instructionFile: 'AGENTS.md', instructions: 'documented' })
+    expect(kimi.sources).toContain('https://www.kimi.com/code/docs/en/kimi-code-cli/customization/agents.html')
+    expect(kimi.runtime).toBe('not-checked')
+  })
+
+  it('writes no file for it and keeps no worktree or hook of its own: only the routing grid changed', () => {
+    expect(renderTierAgents(['kimi'])).toEqual([])
+    expect(agentsWith('hooks')).not.toContain('kimi')
+    expect(agentsWith('tierAgents')).not.toContain('kimi')
   })
 })
 
@@ -131,7 +185,8 @@ describe('the registry refuses a capability block that breaks the rules', () => 
   })
 
   it('requires a reason for what a profile lacks', () => {
-    refused((data) => (data.profiles.kimi.capabilities.limitations = {}), /kimi: missing routing, tierAgents, hooks, worktrees must say why/)
+    refused((data) => (data.profiles.kimi.capabilities.limitations = {}), /kimi: missing tierAgents, hooks, worktrees must say why/)
+    refused((data) => (data.profiles['gemini-cli'].capabilities.limitations = {}), /gemini-cli: missing routing, tierAgents, hooks, worktrees must say why/)
     refused((data) => delete data.profiles.codex.capabilities.limitations.worktrees, /codex: missing worktrees must say why/)
   })
 
@@ -155,8 +210,13 @@ describe('the registry refuses a capability block that breaks the rules', () => 
 
   it('refuses tier agents for a host the grid does not route', () => {
     refused((data) => {
-      data.profiles.kimi.capabilities.tierAgents = { dir: '.kimi/agents', format: 'claude-md', modelBinding: 'call-alias' }
-      delete data.profiles.kimi.capabilities.limitations.tierAgents
-    }, /kimi: tierAgents needs routing/)
+      data.profiles['gemini-cli'].capabilities.tierAgents = { dir: '.gemini/agents', format: 'claude-md', modelBinding: 'call-alias' }
+      delete data.profiles['gemini-cli'].capabilities.limitations.tierAgents
+    }, /gemini-cli: tierAgents needs routing/)
+  })
+
+  it('refuses routing efforts the grid cannot name, and a routed host whose limitation still says it has no routing', () => {
+    refused((data) => (data.profiles.kimi.capabilities.routing.efforts = ['low', 'low']), /kimi: routing.efforts must be a non-empty list of distinct efforts/)
+    refused((data) => (data.profiles.kimi.capabilities.limitations.routing = 'No routing yet.'), /kimi: limitations names routing, which the profile has/)
   })
 })

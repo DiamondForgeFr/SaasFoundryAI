@@ -116,10 +116,13 @@ function hookHosts(): string {
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('')
 }
 
-/** The reason the profile gives for lacking hooks, as a clause for a not-enforced line; empty for an agent with no profile. */
-function noHooksReason(agent: string): string {
-  const reason = capabilityLimitation(agent, 'hooks')
-  return reason ? `; limitation: ${reason.replace(/\.$/, '')}` : ''
+/**
+ * The reason a registered agent's profile gives for lacking hooks (FR-MAH-021), without its final period. Undefined for
+ * an agent whose profile declares hooks, whose hook is then declared but not enforced, and for an agent nobody registered,
+ * which has no profile to give a reason: both keep the "not enforced" wording.
+ */
+function noHooksReason(agent: string): string | undefined {
+  return capabilityLimitation(agent, 'hooks')?.replace(/\.$/, '')
 }
 
 const GUARD_TEXT: Record<NonNullable<StatusRoutingState['guard']>[number]['state'], (entry: HookEntry) => string> = {
@@ -130,7 +133,10 @@ const GUARD_TEXT: Record<NonNullable<StatusRoutingState['guard']>[number]['state
   'declared-outdated-cli': (entry) => `guard hook declared but the CLI it reaches (${hookCliText(entry)}) is older than the project's harness: upgrade it`,
   outdated: () => 'guard hook outdated (run sf agents refresh --scope shared)',
   missing: () => 'guard hook missing (run sf agents refresh --scope shared)',
-  'not-enforced': ({ agent }) => `guard not enforced (the guard hook is for ${hookHosts()}${noHooksReason(agent)}; an agent here is told to ask the developer, nothing stops it)`
+  'not-enforced': ({ agent }) => {
+    const reason = noHooksReason(agent)
+    return reason ? `guard unavailable (${reason})` : `guard not enforced (the guard hook is for ${hookHosts()}; an agent here is told to ask the developer, nothing stops it)`
+  }
 }
 
 /**
@@ -151,7 +157,10 @@ const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (entr
   'declared-outdated-cli': (entry) => `capture hook declared but the CLI it reaches (${hookCliText(entry)}) is older than the project's harness: upgrade it`,
   outdated: () => 'capture hook outdated (run sf agents refresh --scope shared)',
   missing: () => 'capture hook missing (run sf agents refresh --scope shared)',
-  'not-enforced': ({ agent }) => `capture not enforced (record its delegations with sf agents outcome record${noHooksReason(agent)})`
+  'not-enforced': ({ agent }) => {
+    const reason = noHooksReason(agent)
+    return reason ? `capture unavailable (${reason}; record its delegations with sf agents outcome record)` : 'capture not enforced (record its delegations with sf agents outcome record)'
+  }
 }
 
 /** Holds that say something (a kind stuck on a failing tier, a tier that costs more) are named; the ordinary waits are counted. */
