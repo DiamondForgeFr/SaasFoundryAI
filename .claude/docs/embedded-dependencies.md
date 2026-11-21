@@ -51,7 +51,7 @@ code that fails at runtime.
 
 ## Scoped security overrides
 
-The generated API currently needs four transitive security overrides. They live at both actual npm install roots: `scaffolds/overlays/multirepo/api/package.json` for an independent API and
+The generated API currently needs five transitive security overrides. They live at both actual npm install roots: `scaffolds/overlays/multirepo/api/package.json` for an independent API and
 `scaffolds/overlays/monorepo/root/package.json` for npm workspaces. An override inside `apps/api` would be ignored in a monorepo.
 
 | Parent dependency          | Forced dependency      | Why it is pinned                                                                                                                                                 | Remove when                                                                                                                                                             |
@@ -59,11 +59,17 @@ The generated API currently needs four transitive security overrides. They live 
 | `@nestjs/platform-express` | `multer` `2.5.0`       | Keeps the NestJS 11 upload path on the patched Multer release without NestJS 12. `@nestjs/platform-express` 11.2.8 still pins `multer` `2.4.0`.                  | NestJS 11 resolves an equally new patched Multer itself, or the project completes its NestJS 12 migration. **Not met** (checked 2026-11-08).                            |
 | `@nestjs/swagger`          | `js-yaml` `5.5.0`      | `@nestjs/swagger` 11.4.7 pinned `js-yaml` to exactly `5.3.0` (GHSA-r3ph-w7gj-g6xm, fixed in 5.5.0). The next swagger major needs NestJS 12, so there is no bump. | A NestJS 11 `@nestjs/swagger` release declares `js-yaml >= 5.5.0` itself, or the project completes its NestJS 12 migration. **Met**: 11.4.8 declares `js-yaml` `5.5.0`. |
 | `@prisma/config`           | `deepmerge-ts` `8.0.2` | Removes the vulnerable Prisma configuration merge implementation.                                                                                                | The supported Prisma 7 line declares `deepmerge-ts >= 8.0.2` without an override. **Met**: `@prisma/config` 7.10.1 declares `8.0.2`.                                    |
+| `@prisma/config`           | `effect` `3.22.1`      | `@prisma/config` 7.10.1 pins `effect` to exactly `3.20.0` (GHSA-7589-6fvf-x4pw, ReDoS in `Schema.TemplateLiteral`, `effect <= 3.22.0`, fixed in 3.22.1, #1299).  | A supported Prisma 7 release whose `@prisma/config` declares `effect >= 3.22.1` itself. **Not met** (checked 2026-11-21).                                               |
 | `prisma`                   | `mysql2` `3.24.4`      | Patches Prisma's optional MySQL driver even though PostgreSQL is the default.                                                                                    | The supported Prisma line resolves `mysql2 >= 3.24.4` itself. **Met**: `prisma` 7.10.1 declares `mysql2` `3.24.4`.                                                      |
 
 Three of the four removal conditions are met since the 2026-11 refresh (#1110), and all four overrides were **kept on purpose** in that ticket: the lock guard and its tests assert them at both install
 roots. Removing the js-yaml, deepmerge-ts and mysql2 overrides is a follow-up that drops them from both `package.json` files, updates `SECURITY_OVERRIDES` in the lock guard, regenerates both locks and
-repeats the production audit. The multer override stays until `@nestjs/platform-express` declares `multer >= 2.5.0`.
+repeats the production audit. The multer override stays until `@nestjs/platform-express` declares `multer >= 2.5.0`, and the effect override (added after that refresh, #1299) until `@prisma/config`
+declares `effect >= 3.22.1`. `npm audit fix --force` is not an alternative: it proposes Prisma 6.
+
+Existing projects receive a new override through `sf update`: when the CLI version changes, the template refresh rewrites the install root's `package.json` (a sidecar `.saasfoundry.new` when the
+project edited it) and, because `overrides` is a resolution field (`src/commands/update.lockfile.ts`), offers to resolve the lockfile again; a non-interactive run, or a declined offer, prints the
+command to run instead.
 
 The js-yaml override is scoped to swagger on purpose: the API lock holds three js-yaml majors (3.x under the Jest coverage tooling, 4.x for the lint and commit tooling, 5.x for swagger), and a global
 override would force every consumer onto a major it was not written for.
