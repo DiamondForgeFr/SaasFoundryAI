@@ -194,7 +194,8 @@
                     "additionalProperties": false,
                     "properties": {
                       "claude-code": { "$ref": "#/definitions/routingCandidate" },
-                      "codex": { "$ref": "#/definitions/routingCandidate" }
+                      "codex": { "$ref": "#/definitions/routingCandidate" },
+                      "kimi": { "$ref": "#/definitions/routingCandidate" }
                     }
                   }
                 },

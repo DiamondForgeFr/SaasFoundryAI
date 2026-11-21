@@ -17,17 +17,19 @@ describe('compiled sf agents route (#930)', () => {
     return spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', 'route', ...args], { cwd: project, encoding: 'utf8' })
   }
 
-  it('resolves from the shipped grid outside a managed project, for both routed agents', () => {
+  it('resolves from the shipped grid outside a managed project, for every routed agent', () => {
     const result = run('--task', 'bug-fix', '--json')
     expect(result.status).toBe(0)
     const output = JSON.parse(result.stdout)
     expect(output).toMatchObject({ routeVersion: 2, gridVersion: 1, kind: 'bug-fix' })
-    expect(output.routes.map((route: { routeId: unknown }) => route.routeId)).toEqual([null, null])
+    expect(output.routes.map((route: { routeId: unknown }) => route.routeId)).toEqual([null, null, null])
     expect(output.routes.map((route: { provider: string; source: string }) => [route.provider, route.source])).toEqual([
       ['claude-code', 'shipped'],
-      ['codex', 'shipped']
+      ['codex', 'shipped'],
+      ['kimi', 'shipped']
     ])
     expect(output.routes[0]).toMatchObject({ tier: 'fix', candidate: { id: 'anthropic/claude-code/claude-opus-5-5/medium' }, evidence: { status: 'measured' } })
+    expect(output.routes[1]).toMatchObject({ tier: 'fix', candidate: { id: 'openai/codex/gpt-6.1-sol/medium' }, evidence: { status: 'measured' } })
   })
 
   it('returns a project override with its source, and keeps every other kind on the shipped grid (TC-AEX-008)', async () => {
@@ -50,14 +52,16 @@ describe('compiled sf agents route (#930)', () => {
 
   it.each<[string, string[], string]>([
     ['an unknown task kind', ['--task', 'deploy', '--json'], 'Task kinds: exploration'],
-    ['an unrouted agent', ['--task', 'bug-fix', '--provider', 'gemini-cli', '--json'], 'Routed coding agents: claude-code, codex'],
+    ['an unrouted agent', ['--task', 'bug-fix', '--provider', 'gemini-cli', '--json'], 'Routed coding agents: claude-code, codex, kimi'],
     // FR-MAH-020: the refusal names the limitation the agent's profile documents, never a bare "no routing"
     [
-      'an agent whose routing is documented as coming',
-      ['--task', 'bug-fix', '--provider', 'kimi', '--json'],
-      'kimi (Kimi Code) cannot be routed: Kimi Code has no routing candidates in the grid yet: routing arrives with FR-MAH-021'
+      'an agent whose profile says it has no routing',
+      ['--task', 'bug-fix', '--provider', 'gemini-cli', '--json'],
+      'gemini-cli (Gemini CLI) cannot be routed: The harness ships no routing candidates for Gemini CLI'
     ],
     ['an agent no profile registers', ['--task', 'bug-fix', '--provider', 'cursor', '--json'], "'cursor' is not a registered coding agent."],
+    // FR-MAH-021: the identity of Kimi Code is the explicit id `kimi`, never a name that looks like it
+    ['a name that only looks like kimi', ['--task', 'bug-fix', '--provider', 'kimi-code', '--json'], "'kimi-code' is not a registered coding agent. Routed coding agents: claude-code, codex, kimi."],
     ['an invalid override', ['--task', 'prose', '--json'], 'Invalid modules.harness.routing']
   ])('fails closed on %s', async (_, args, message) => {
     await manifest({ version: 4, agents: ['codex'], routing: { kinds: { prose: { tier: 'nowhere' } } } })
@@ -67,13 +71,125 @@ describe('compiled sf agents route (#930)', () => {
   })
 
   it('says why when none of the declared coding agents is routed (FR-MAH-020)', async () => {
-    await manifest({ version: 4, agents: ['kimi'] })
+    await manifest({ version: 4, agents: ['gemini-cli'] })
     const result = run('--task', 'bug-fix', '--json')
     expect(result.status).toBe(1)
     const message = JSON.parse(result.stdout).error as string
-    expect(message).toContain('None of the declared coding agents (kimi) has routing candidates.')
-    expect(message).toContain('kimi (Kimi Code) cannot be routed: Kimi Code has no routing candidates in the grid yet: routing arrives with FR-MAH-021')
-    expect(message).toContain('Routed coding agents: claude-code, codex.')
+    expect(message).toContain('None of the declared coding agents (gemini-cli) has routing candidates.')
+    expect(message).toContain('gemini-cli (Gemini CLI) cannot be routed: The harness ships no routing candidates for Gemini CLI')
+    expect(message).toContain('Routed coding agents: claude-code, codex, kimi.')
+  })
+
+  // FR-MAH-021: Kimi Code is routed by profile and grid data alone; every route is provisional and says so
+  describe('Kimi Code (FR-MAH-021)', () => {
+    const SEEDS: [string, string, string, string][] = [
+      ['exploration', 'light', 'k3', 'low'],
+      ['scoped-edit', 'edit', 'k3', 'high'],
+      ['bug-fix', 'fix', 'k3.1-pro', 'high'],
+      ['multi-file-feature', 'build', 'k3.1-pro', 'high'],
+      ['tests', 'build', 'k3.1-pro', 'high'],
+      ['review', 'fix', 'k3.1-pro', 'high'],
+      ['planning', 'plan', 'k3.1-pro', 'high'],
+      ['terminal-ci', 'terminal', 'k3.1-pro', 'max'],
+      ['prose', 'light', 'k3', 'low']
+    ]
+    const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')))
+
+    it.each(SEEDS)('routes %s to the %s tier on %s at %s effort, provisional, in JSON and in text', (kind, tier, model, effort) => {
+      const json = run('--task', kind, '--provider', 'kimi', '--json')
+      expect(json.status).toBe(0)
+      const { routes } = JSON.parse(json.stdout)
+      expect(routes).toHaveLength(1)
+      expect(routes[0]).toMatchObject({
+        kind,
+        provider: 'kimi',
+        tier,
+        source: 'shipped',
+        candidate: { id: `moonshot/kimi/${model}/${effort}`, model, effort },
+        evidence: { status: 'provisional', score: null, costPerTaskUsd: null }
+      })
+      expect(routes[0].evidence.note).toContain('No Kimi measurement exists yet')
+      const text = run('--task', kind, '--provider', 'kimi', '--no-trial')
+      expect(text.status).toBe(0)
+      expect(text.stdout).toContain(`${kind} → ${tier} (shipped) kimi: ${model}, effort ${effort} — provisional: No Kimi measurement exists yet`)
+    })
+
+    it('routes a project that declares kimi alone, with no flag, and keeps the other agents out of it', async () => {
+      await manifest({ version: 4, agents: ['kimi'] })
+      const result = run('--task', 'planning', '--json')
+      expect(result.status).toBe(0)
+      expect(JSON.parse(result.stdout).routes.map((route: { provider: string }) => route.provider)).toEqual(['kimi'])
+    })
+
+    it('refuses a project override of a Kimi tier at an effort Kimi cannot express, naming the three it can', async () => {
+      await manifest({ version: 4, agents: ['kimi'], routing: { tiers: { light: { kimi: { model: 'k3', effort: 'medium' } } } } })
+      const result = run('--task', 'prose', '--json')
+      expect(result.status).toBe(1)
+      expect(JSON.parse(result.stdout).error).toContain("routing.tiers.light.kimi.effort 'medium' cannot be expressed by kimi (low, high, max)")
+    })
+
+    describe('a recorded delegation', () => {
+      const git = (...args: string[]) => execFileSync('git', args, { cwd: project, env: cleanEnv, stdio: 'pipe' })
+      const ledger = async () =>
+        (await readFile(join(project, '.git', 'saasfoundry', 'delegations.jsonl'), 'utf8'))
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line))
+      const sf = (...args: string[]) => spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', ...args], { cwd: project, encoding: 'utf8', env: cleanEnv })
+
+      beforeEach(async () => {
+        git('init', '-q', '-b', 'main')
+        await manifest({ version: 5, agents: ['kimi'] })
+        git('add', '.saasfoundry.json')
+        git('-c', 'user.email=t@example.com', '-c', 'user.name=T', 'commit', '-q', '-m', 'manifest')
+      })
+
+      it('prints a route id for a kimi route and writes a ledger line that carries provider kimi', async () => {
+        const result = sf('route', '--task', 'multi-file-feature', '--provider', 'kimi', '--no-trial', '--record', '--ticket', '1286', '--complexity', 'medium', '--nature', 'internal')
+        expect(result.status).toBe(0)
+        expect(result.stdout).toMatch(/multi-file-feature → build \(shipped\) kimi: k3\.1-pro, effort high — provisional: .* route=[0-9a-f]{20}\n$/)
+        expect(await ledger()).toEqual([
+          expect.objectContaining({ type: 'route', provider: 'kimi', tier: 'build', taskKind: 'multi-file-feature', ticket: 1286, complexity: 'medium', nature: 'internal' })
+        ])
+      })
+
+      it('records the outcome by hand, kimi having no capture hook, and reports it as its own row', async () => {
+        expect(sf('route', '--task', 'tests', '--provider', 'kimi', '--no-trial', '--record', '--ticket', '1286', '--complexity', 'medium', '--nature', 'internal').status).toBe(0)
+        const recorded = sf(
+          'outcome',
+          'record',
+          '--provider',
+          'kimi',
+          '--tier',
+          'build',
+          '--kind',
+          'tests',
+          '--ticket',
+          '1286',
+          '--outcome',
+          'pass',
+          '--model',
+          'k3.1-pro',
+          '--effort',
+          'high',
+          '--json'
+        )
+        expect(recorded.status).toBe(0)
+        expect(JSON.parse(recorded.stdout)).toMatchObject({ status: 'appended', record: { host: 'manual', provider: 'kimi', tier: 'build', taskKind: 'tests', outcome: 'success' } })
+        expect((await ledger()).map((entry) => [entry.type, entry.provider])).toEqual([
+          ['route', 'kimi'],
+          ['run', 'kimi']
+        ])
+        const report = JSON.parse(sf('routing', 'report', '--json').stdout)
+        expect(report.kinds).toEqual([expect.objectContaining({ kind: 'tests', provider: 'kimi', routedTier: 'build', source: 'shipped' })])
+      })
+
+      it('refuses a capture for kimi: it has no hook, and says which hosts have one', () => {
+        const result = sf('outcome', 'capture', '--host', 'kimi')
+        expect(result.status).not.toBe(0)
+        expect(result.stderr).toContain('--host must be claude-code or codex')
+      })
+    })
   })
 
   // #1105 — the documented form of the command names a ticket and no --complexity: the record used to say "unknown"
