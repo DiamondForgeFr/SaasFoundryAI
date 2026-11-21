@@ -38,11 +38,17 @@ const routingState = (state: Partial<StatusRoutingState>): StatusRoutingState =>
   ...state
 })
 
+/**
+ * The two hosts the golden covers. A routed host that joined later (Kimi Code, FR-MAH-021) is data in the grid and the
+ * profiles, so `providers` and `efforts` are projected onto these two: the golden stays what the commit before the block
+ * recorded, and is not recorded again for a host it never described.
+ */
+const HOSTS = ['claude-code', 'codex'] as const
+
 /** Everything the capability block now derives, for the two hosts it must not change. */
 function snapshot(): Record<string, unknown> {
-  const files = (overrides?: RoutingOverrides) => Object.fromEntries(renderTierAgents(['claude-code', 'codex'], overrides).map((file) => [file.path, file.content]))
-  const routes = (overrides?: RoutingOverrides) =>
-    Object.fromEntries(TASK_KINDS.flatMap((kind) => (['claude-code', 'codex'] as const).map((provider) => [`${kind}/${provider}`, resolveRoute(kind, provider, overrides)])))
+  const files = (overrides?: RoutingOverrides) => Object.fromEntries(renderTierAgents([...HOSTS], overrides).map((file) => [file.path, file.content]))
+  const routes = (overrides?: RoutingOverrides) => Object.fromEntries(TASK_KINDS.flatMap((kind) => HOSTS.map((provider) => [`${kind}/${provider}`, resolveRoute(kind, provider, overrides)])))
   // What the tier-agent path pattern accepts: a file of a tier for the host that owns the folder, and nothing else.
   const paths = [
     '.claude/agents/sf-build.md',
@@ -65,8 +71,8 @@ function snapshot(): Record<string, unknown> {
     }
   }
   return {
-    providers: [...ROUTING_PROVIDERS],
-    efforts: PROVIDER_EFFORTS,
+    providers: ROUTING_PROVIDERS.filter((provider) => (HOSTS as readonly string[]).includes(provider)),
+    efforts: Object.fromEntries(HOSTS.map((host) => [host, PROVIDER_EFFORTS[host]])),
     tierAgents: { shipped: files(), overridden: files(OVERRIDES) },
     tierAgentPath: Object.fromEntries(paths.map((path) => [path, TIER_AGENT_PATH.test(path)])),
     routes: { shipped: routes(), overridden: routes(OVERRIDES) },

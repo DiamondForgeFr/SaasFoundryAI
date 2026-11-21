@@ -3,13 +3,15 @@ import {
   ROUTING_PROVIDERS,
   TASK_KINDS,
   getRoutingGrid,
+  isRoutingProvider,
   listTierAssignments,
   parseTaskKind,
   resolveRoute,
   routingOverrideIssues,
   validateRoutingGrid,
   type RoutingOverrides,
-  type RoutingProvider
+  type RoutingProvider,
+  type TaskKind
 } from '../../../harness/routing-grid'
 
 type Fixture = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -155,5 +157,91 @@ describe('project routing overrides (#930 AC-3, TC-AEX-008)', () => {
   it('names the task kinds when one is unknown', () => {
     expect(parseTaskKind('bug-fix')).toBe('bug-fix')
     expect(() => parseTaskKind('deploy')).toThrow('Task kinds: exploration, scoped-edit')
+  })
+})
+
+// FR-MAH-021: Kimi Code joins the grid as data, through its profile, and every one of its routes waits for a measurement
+describe('Kimi Code in the shipped grid (FR-MAH-021)', () => {
+  const SEEDS: [TaskKind, string, string, string][] = [
+    ['exploration', 'light', 'k3', 'low'],
+    ['scoped-edit', 'edit', 'k3', 'high'],
+    ['bug-fix', 'fix', 'k3.1-pro', 'high'],
+    ['multi-file-feature', 'build', 'k3.1-pro', 'high'],
+    ['tests', 'build', 'k3.1-pro', 'high'],
+    ['review', 'fix', 'k3.1-pro', 'high'],
+    ['planning', 'plan', 'k3.1-pro', 'high'],
+    ['terminal-ci', 'terminal', 'k3.1-pro', 'max'],
+    ['prose', 'light', 'k3', 'low']
+  ]
+
+  it('is a routed provider that the grid is validated against', () => {
+    expect(ROUTING_PROVIDERS).toContain('kimi')
+    expect(isRoutingProvider('kimi')).toBe(true)
+    expect(Object.keys(grid.tiers.light)).toEqual(['claude-code', 'codex', 'kimi'])
+    const data = clone()
+    delete data.tiers.light.kimi
+    expect(() => validateRoutingGrid(data)).toThrow('Invalid routing grid')
+    const withoutEvidence = clone()
+    delete withoutEvidence.kinds.prose.evidence.kimi
+    expect(() => validateRoutingGrid(withoutEvidence)).toThrow('Invalid routing grid')
+  })
+
+  it.each(SEEDS)('routes %s to the %s tier: %s at %s effort, a moonshot/kimi candidate', (kind, tier, model, effort) => {
+    expect(resolveRoute(kind, 'kimi')).toMatchObject({
+      kind,
+      provider: 'kimi',
+      tier,
+      source: 'shipped',
+      excluded: false,
+      candidate: { id: `moonshot/kimi/${model}/${effort}`, model, effort }
+    })
+  })
+
+  it('has no measurement for any kind: every route is provisional, with no score and no cost, and says so', () => {
+    for (const kind of TASK_KINDS) {
+      const evidence = resolveRoute(kind, 'kimi').evidence!
+      expect(evidence).toMatchObject({ status: 'provisional', score: null, costPerTaskUsd: null })
+      expect(evidence.note).toContain('No Kimi measurement exists yet')
+      expect(evidence.note).toContain('highspeed aliases are not used: they bill twice')
+      expect(evidence.url).toMatch(/^https:\/\//)
+    }
+  })
+
+  it('never seeds a highspeed alias, whatever the tier', () => {
+    for (const candidates of Object.values(grid.tiers)) expect(candidates.kimi.model).not.toMatch(/highspeed/i)
+  })
+
+  it('leaves the routes of Claude Code and Codex where they were', () => {
+    expect(resolveRoute('bug-fix', 'claude-code').candidate.id).toBe('anthropic/claude-code/claude-opus-5-5/medium')
+    expect(resolveRoute('bug-fix', 'codex').candidate.id).toBe('openai/codex/gpt-6.1-sol/medium')
+    expect(resolveRoute('bug-fix', 'claude-code').evidence!.status).toBe('measured')
+  })
+
+  it.each(['low', 'high', 'max'])('accepts a project override of a Kimi tier at the effort %s, the three it can express', (effort) => {
+    expect(routingOverrideIssues({ tiers: { light: { kimi: { model: 'k3', effort } } } })).toEqual([])
+  })
+
+  it.each(['minimal', 'medium', 'xhigh', 'ultra'])('refuses a project override of a Kimi tier at the effort %s, which Kimi cannot express', (effort) => {
+    const issues = routingOverrideIssues({ tiers: { light: { kimi: { model: 'k3', effort } } } })
+    expect(issues).toHaveLength(1)
+    expect(issues[0]).toContain(`routing.tiers.light.kimi.effort '${effort}' cannot be expressed by kimi (low, high, max)`)
+    expect(() => resolveRoute('prose', 'kimi', { tiers: { light: { kimi: { model: 'k3', effort } } } } as RoutingOverrides)).toThrow('Invalid modules.harness.routing')
+  })
+
+  it('lets a project replace a Kimi tier, and then no longer claims the shipped evidence', () => {
+    const overrides: RoutingOverrides = { tiers: { light: { kimi: { model: 'k3.1-pro', effort: 'max' } } } }
+    expect(resolveRoute('exploration', 'kimi', overrides)).toMatchObject({ source: 'project', candidate: { id: 'moonshot/kimi/k3.1-pro/max' }, evidence: null })
+    expect(resolveRoute('exploration', 'codex', overrides).source).toBe('shipped')
+  })
+
+  it('groups the kinds Kimi serves by tier, as it does for the other hosts', () => {
+    expect(listTierAssignments('kimi').map((entry) => [entry.tier, entry.candidate.model, entry.candidate.effort, entry.kinds])).toEqual([
+      ['light', 'k3', 'low', ['exploration', 'prose']],
+      ['edit', 'k3', 'high', ['scoped-edit']],
+      ['build', 'k3.1-pro', 'high', ['multi-file-feature', 'tests']],
+      ['fix', 'k3.1-pro', 'high', ['bug-fix', 'review']],
+      ['plan', 'k3.1-pro', 'high', ['planning']],
+      ['terminal', 'k3.1-pro', 'max', ['terminal-ci']]
+    ])
   })
 })

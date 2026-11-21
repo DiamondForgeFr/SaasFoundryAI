@@ -95,8 +95,8 @@ describe('the automatic routing in sf status (#1035)', () => {
         })
       )
       expect(summary).toContain('codex capture hook missing (run sf agents refresh --scope shared)')
-      // FR-MAH-020: a host without hooks says why, in the words of its profile
-      expect(summary).toContain('gemini-cli capture not enforced (record its delegations with sf agents outcome record; limitation: No Gemini CLI guard or capture hook is installed by the harness)')
+      // FR-MAH-020, FR-MAH-021: a host without hooks says why, in the words of its profile, and says it is unavailable
+      expect(summary).toContain('gemini-cli capture unavailable (No Gemini CLI guard or capture hook is installed by the harness; record its delegations with sf agents outcome record)')
     })
 
     it('does not call a hook enforced when nothing can run it, or when the host has not trusted it yet', () => {
@@ -222,6 +222,34 @@ describe('the automatic routing in sf status (#1035)', () => {
         `- routing: grid v${ROUTING_GRID_VERSION}, 0 overrides; shipped grid and shared overrides, no local adjustment; claude-code capture hook missing (run sf agents refresh --scope shared); codex capture hook missing (run sf agents refresh --scope shared); ` +
           'claude-code guard hook missing (run sf agents refresh --scope shared); codex guard hook missing (run sf agents refresh --scope shared)'
       )
+    })
+
+    // FR-MAH-021: Kimi Code is routed and has no hook the harness installs: it says guard and capture are unavailable, and why
+    it('says the guard and the capture of kimi are unavailable with the reason its profile gives, and leaves the lines of Claude Code and Codex as they were', async () => {
+      await manifest({ version: 4, agents: ['claude-code', 'codex', 'kimi'] })
+      const status = await report()
+      expect(status.routing).toMatchObject({
+        tierAgents: notDeposited(['claude-code', 'codex']),
+        capture: [
+          { agent: 'claude-code', state: 'missing' },
+          { agent: 'codex', state: 'missing' },
+          { agent: 'kimi', state: 'not-enforced' }
+        ],
+        guard: [
+          { agent: 'claude-code', state: 'missing' },
+          { agent: 'codex', state: 'missing' },
+          { agent: 'kimi', state: 'not-enforced' }
+        ]
+      })
+      const text = await render(renderAgentFriendly)
+      const reason =
+        "Kimi Code reads its hooks from the user's own configuration only, never from the project, so the harness installs no guard or capture hook for it; the CLI's own guards still refuse an escape hatch"
+      expect(text).toContain('claude-code capture hook missing (run sf agents refresh --scope shared); codex capture hook missing (run sf agents refresh --scope shared); ')
+      expect(text).toContain(`kimi capture unavailable (${reason}; record its delegations with sf agents outcome record); `)
+      expect(text).toContain(`kimi guard unavailable (${reason})`)
+      expect(text).not.toContain('kimi capture not enforced')
+      expect(text).not.toContain('kimi guard not enforced')
+      expect(JSON.parse(await render(renderJson)).routing.guard).toContainEqual({ agent: 'kimi', state: 'not-enforced' })
     })
 
     it('shows the local moves, the holds and the enforced capture in the three outputs', async () => {
