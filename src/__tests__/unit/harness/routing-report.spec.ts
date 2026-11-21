@@ -148,6 +148,21 @@ describe('sf agents routing report (#1035, AC-3)', () => {
       ])
     })
 
+    // FR-MAH-021: a run recorded by hand for Kimi Code is a row of its own, on the Kimi tier, never mixed into another agent's
+    it('lists the runs recorded for kimi as their own rows, with the tier Kimi is routed to', async () => {
+      // Kimi has no price in the catalogue: its runs carry no cost, and the report says which model ran unpriced
+      const kimi = { provider: 'kimi', host: 'manual', model: 'k3.1-pro', effort: 'high', cost: null } as const
+      const all = history(runs(2, { kind: 'tests', ...kimi }), runs(2, { kind: 'tests' }))
+      const report = await buildRoutingReport(state(all, { agents: ['claude-code', 'kimi'] }), NOW, { probe: probe(true) })
+      expect(report.kinds.map((row) => [row.kind, row.provider, row.routedTier, row.source])).toEqual([
+        ['tests', 'claude-code', 'build', 'shipped'],
+        ['tests', 'kimi', 'build', 'shipped']
+      ])
+      expect(report.kinds[0].tiers).toMatchObject([{ tier: 'build', candidate: { model: 'claude-sonnet-5-5', effort: 'xhigh' }, runs: 2, rated: 2 }])
+      expect(report.kinds[1].tiers).toMatchObject([{ tier: 'build', candidate: { model: 'k3.1-pro', effort: 'high' }, runs: 2, rated: 2, cost: { priced: 0 } }])
+      expect(report.unpricedModels).toEqual(['k3.1-pro'])
+    })
+
     it('says which tier the kind is routed to and where that choice comes from', async () => {
       const local: LocalRouting = { ...emptyLocalRouting(), kinds: { 'multi-file-feature': { 'claude-code': { tier: 'fix', from: 'build', action: 'escalate', at: NOW.toISOString(), evidence } } } }
       const report = await buildRoutingReport(state(history(runs(2, { tier: 'build' }), runs(2, { tier: 'fix' })), { local }), NOW, { probe: probe(true) })
