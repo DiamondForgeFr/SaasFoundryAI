@@ -47,7 +47,8 @@ const ORVAL_PATCHED_FLOOR = '8.31.0'
 const SECURITY_OVERRIDES = {
   '@nestjs/platform-express': { multer: '2.5.0' },
   '@nestjs/swagger': { 'js-yaml': '5.5.0' },
-  '@prisma/config': { 'deepmerge-ts': '8.0.2' },
+  // `@prisma/config` 7.10.1 pins `effect` to exactly 3.20.0 (GHSA-7589-6fvf-x4pw, effect <= 3.22.0, fixed in 3.22.1).
+  '@prisma/config': { 'deepmerge-ts': '8.0.2', effect: '3.22.1' },
   prisma: { mysql2: '3.24.4' }
 }
 
@@ -157,7 +158,8 @@ describe('committed multirepo lockfiles', () => {
     expect(api?.manifest.overrides).toEqual(SECURITY_OVERRIDES)
     expect(monorepoRoot.overrides).toEqual(SECURITY_OVERRIDES)
 
-    expect(resolutionDrift(api!.lock, { multer: '2.5.0', 'deepmerge-ts': '8.0.2', mysql2: '3.24.4' })).toEqual([])
+    expect(resolutionDrift(api!.lock, { multer: '2.5.0', 'deepmerge-ts': '8.0.2', effect: '3.22.1', mysql2: '3.24.4' })).toEqual([])
+    expect(resolutionFrom(api!.lock, '@prisma/config', 'effect', '3.22.1')).toEqual([])
     // The lock holds three js-yaml copies, so the swagger one is read from where swagger loads it.
     expect(resolutionFrom(api!.lock, '@nestjs/swagger', 'js-yaml', '5.5.0')).toEqual([])
   })
@@ -203,6 +205,10 @@ describe('committed multirepo lockfiles', () => {
     staleLock.packages['node_modules/multer'].version = '2.4.0'
 
     expect(resolutionDrift(staleLock, { multer: '2.5.0' })).toEqual(['multer: expected only 2.5.0, received 2.4.0'])
+
+    const staleEffect = structuredClone(api.lock)
+    staleEffect.packages['node_modules/effect'].version = '3.20.0'
+    expect(resolutionFrom(staleEffect, '@prisma/config', 'effect', '3.22.1')).toEqual(['@prisma/config -> effect: expected 3.22.1, received 3.20.0'])
   })
 
   it('fails when swagger loads a vulnerable js-yaml, whatever the other copies resolve to', () => {
