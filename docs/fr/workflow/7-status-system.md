@@ -91,6 +91,9 @@ stable.
 3. Après validation, les tests de non-régression nécessaires sont ajoutés et vérifiés.
 4. Le développeur rend alors la PR prête (**Ready for review**) : sur ce parcours, sortir du brouillon lui revient, jamais à l'agent.
 
+Un ticket marqué `ui` n'entre en `Human testing` qu'avec l'enregistrement de sa maquette validée (ou des visuels fournis par le développeur) : voir
+[le garde-fou de maquette UI](/fr/guide/workflow-system#le-garde-fou-de-maquette-ui).
+
 Le développeur s'adresse à la session, qui reste son interlocutrice. Lorsque la délégation est permise, la session ne code pas la correction : un défaut, ou le travail d'IA que la validation laisse
 (tests de non-régression, suites), retourne à l'agent propre au ticket, dans le même worktree, qui remet le ticket en `AI testing`.
 

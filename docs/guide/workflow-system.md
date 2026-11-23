@@ -131,6 +131,45 @@ is then the human gate.
 A recorded list is pinned: a job added to `.molten/project.json` afterwards is not required until the list is recorded again, or cleared with `sf workflow set-local-ci --clear` to follow the pipeline.
 `sf workflow show` and `sf status` print the effective list and where it comes from.
 
+## The UI mockup gate
+
+A ticket that changes the user interface is validated on a mockup before its visual work reaches your review: you see the look first, not in the screenshots of a finished pull request. Three things
+carry the gate, with GitHub Projects as the workflow tool.
+
+- **The `ui` marker.** The session labels a ticket `ui` when it creates it (`create-ticket … --ui`, `create-subtask … --ui`) or later with `set-ui <ticket>`, and `clear-ui <ticket>` removes it. The
+  label is not a nature label and is not reserved to you: the session sets it, `sf new` provisions it, and `set-ui` creates it when the repository lacks it.
+- **The validation record.** Once you have approved a mockup, the session records the mockup's link or path, the date and who approved it. When you supplied the visuals yourself (your own mockup, or
+  an exact target screenshot), it records that and what you supplied instead, and no mockup is made. The record is a ticket comment, written by `record-ui-validation` and read back by
+  `get-ui-validation`.
+- **The guard.** `update-status` refuses a `ui` ticket that has no complete record on its way to your review: `→ In review` under the Solo preset, `→ Human testing` (and `→ In review` for a ticket
+  that skips Human testing) under the Team preset. The refusal names the `record-ui-validation` command to run, and it comes before the guards of the pull request. A ticket without the marker passes
+  exactly as before.
+
+```bash
+WORKFLOW=.claude/skills/sf-workflow/workflow-cli.sh
+
+# mark a new ticket, or an existing one (clear-ui removes the marker)
+$WORKFLOW create-ticket story "Redesign the login screen" --complexity medium --ui
+$WORKFLOW set-ui 42
+
+# record the approval of a mockup, or the visuals you supplied (one of the two)
+$WORKFLOW record-ui-validation 42 --mockup docs/mockups/login.html --approved-by "Ada Lovelace" --date 2026-11-23
+$WORKFLOW record-ui-validation 42 --supplied "an exact target screenshot, login-target.png"
+
+# read the record the guard reads
+$WORKFLOW get-ui-validation 42
+```
+
+`--date` defaults to today. `get-ui-validation` prints the latest complete record as one line of JSON, and nothing when there is none. A comment that only quotes the marker, or that lacks one of its
+fields (the mockup, the approver and the date; or what was supplied and the date), is not a record.
+
+The guard fails open when the ticket's labels cannot be read (an offline `gh`, an expired token), like the nature guard, so that infrastructure trouble does not wedge the workflow. It fails closed
+when the ticket carries the marker and its comments cannot be read: a read that failed is never taken for a ticket with no record. The other workflow tools (Jira, Linear, Notion) refuse the marker and
+record commands with exit code `2`, and their `update-status` does not read a record.
+
+The refusal is lifted by `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`, an [escape hatch](#escape-hatches) that is yours to apply, announced and recorded on the ticket like the others. The guard hook refuses
+an agent that sets it.
+
 ## The first ticket
 
 Create tickets through the CLI, so they land on the board in Backlog with their issue type and complexity label:
@@ -248,6 +287,7 @@ legitimate command and sends the agent back to you, and a hook refuses the agent
 | `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                           | Keeps `srs:*` tickets off the code-path statuses                             |
 | `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                    | Requires a `complexity:` label to leave Backlog                              |
 | `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                        | Routes by `nature:*` (Human testing, In review, bundled-PR to Done)          |
+| `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`                                                     | Requires a `ui` ticket's mockup validation before In review or Human testing |
 | `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                      | Requires every native child to be Done before the parent                     |
 | `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                | Requires a verified, non-Epic native parent for a bundled-PR child           |
 | `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                        | Requires the ticket work to be committed and pushed before AI testing        |
