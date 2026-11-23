@@ -97,6 +97,27 @@ the screenshots of a finished pull request. The gate is driven through `workflow
   [escape-hatches.md](escape-hatches.md)); it is announced and recorded on the ticket like the other environment hatches, and the guard hook refuses an agent that sets it.
 - Only the GitHub Projects adapter carries the marker and the record today: the other adapters refuse these commands with exit code `2`, and their `update-status` does not read a record.
 
+### Working a `ui` ticket
+
+The gate above says when the developer's look is checked; this says how the agent that holds a `ui` ticket works. It is one text for every coding agent (Claude Code, Codex, Kimi Code or any other): it
+names capabilities, never the tool of one host.
+
+1. **Work as a UI/UX professional.** Before you draw anything, load the design and UX skills your host offers (visual design, accessibility review, UX copy, design system, whatever form it gives them)
+   and apply the project's own design tokens and components. A host that offers none works from the checklist.
+2. **Follow the UI checklist**, [ui-checklist.md](ui-checklist.md), which ships next to this file: hierarchy; spacing and design tokens; states (empty, loading, error, disabled); accessibility
+   (contrast, keyboard, focus, labels); copy. Go through it for the mockup, and again before the pull request.
+3. **The mockup floor is one self-contained HTML file**: inline CSS, no build step, no request to the network, so that it opens in any browser from its path. Keep it with the ticket's evidence,
+   committed on the ticket's branch in the folder the project's `AGENTS.md` names (`docs/mockups/` when it names none), and put its path or link in `record-ui-validation --mockup`. A richer surface
+   the host offers (a Claude artifact, a Figma frame) may be added next to it, never in its place: every agent can produce the file, and the developer can open it.
+4. **Show the mockup before the visual implementation.** Spec, model, data and tests may start meanwhile; only the visual part (components, pages, styles) waits for the developer's OK. Where the
+   project shows a mockup (a browser panel of its terminal, a preview server) and which design tokens it uses are stated in the project's own `AGENTS.md`, outside the generated region. With no such
+   statement, give the developer the path of the file to open in a browser.
+5. **When the developer supplies the visuals** (their own mockup, or an exact target screenshot), record that with `record-ui-validation <ticket> --supplied "<what the developer supplied>"`, make no
+   mockup and follow what they supplied.
+6. **A delegated agent holds the visual part.** Only the session talks to the developer. The agent makes the mockup, commits it, reports its path to the session and keeps the visual part on hold. The
+   session shows the mockup; on the developer's OK it records the validation (`record-ui-validation`) and relays the OK to the same agent, in the same worktree (a hand-back, see "Delegated ticket
+   delivery"), which then builds the visual part from the validated mockup. An agent never records an approval the developer did not give.
+
 ## 🧩 Ticket Hierarchy (Epic / Delivery parent / Child ticket)
 
 SaaSFoundry Solo distinguishes an optional grouping Epic from a delivery parent. Every child created by `create-subtask` is a **native GitHub Projects sub-issue**. A child is either a normal child
@@ -186,10 +207,12 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
 | `medium`, `complex`                                                           | `multi-file-feature`, once decomposed (planning stays in the session) |
 
 1. **Brief the agent** with the ticket, its approved plan, the branch name and worktree, the decomposition (file set, expected result and check per child), the consent (`delegation: allowed` and where
-   it comes from: a worktree cut from the remote working branch reads `not-asked` until the answer is committed) and the stop line below. Resolve the tier with `sf agents route` as above, and never
-   name a model (the alias a route prints excepted). The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree
-   (In progress status document). When the host names the worktree branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent
-   pushes to it (`git push origin HEAD:<ticket branch>`): `create-pr` accepts that branch when `origin` holds it at the local `HEAD`, found on its own or passed as `--head <ticket branch>`.
+   it comes from: a worktree cut from the remote working branch reads `not-asked` until the answer is committed) and the stop line below. For a ticket marked `ui` the brief carries one more clause:
+   **hold the visual part until the session relays the developer's OK, and follow the validated mockup** ("Working a `ui` ticket" in the UI mockup gate above). When the developer has already approved
+   the mockup, the brief names it instead and there is nothing to hold. Resolve the tier with `sf agents route` as above, and never name a model (the alias a route prints excepted). The agent that
+   receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (In progress status document). When the host names the worktree
+   branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent pushes to it (`git push origin HEAD:<ticket branch>`): `create-pr`
+   accepts that branch when `origin` holds it at the local `HEAD`, found on its own or passed as `--head <ticket branch>`.
 2. **The agent's line.** It follows the In progress and AI Testing status documents, which hold the test strategy (the affected tests while it works, the full suites once at the end of AI testing; the
    brief does not restate it): it delivers the children, posts the test plan, runs the automated and heavy checks, posts the `## Test report` comment and opens the draft PR, then stops with the ticket
    still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human Testing route, the session on the other) and never records the delegation consent.

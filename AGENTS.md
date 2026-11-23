@@ -245,6 +245,15 @@ retry, the developer renews the access, or local work on a branch the developer 
 soon as the remote answers) and let the developer choose. Never pick a workaround alone, and never
 leave commits that are on no remote, under no ticket and in no pull request without saying so.
 
+## UI work: mockup display and design tokens
+
+A ticket labelled `ui` follows "Working a `ui` ticket" in the workflow skill: a one-file HTML mockup
+that the developer sees before the visual work starts. How this project shows a mockup to the
+developer (for example the browser panel of its terminal, or a preview server) and which design
+tokens it uses are stated by the project itself, in this file, outside this generated region. Read
+them before you draw anything. When the project states neither, give the developer the path of the
+mockup file to open in a browser, and use the tokens its code already defines.
+
 ## Coding-agent identity and onboarding
 
 At session initialization, use the coding-agent identity explicitly supplied by the current

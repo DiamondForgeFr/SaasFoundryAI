@@ -21,6 +21,7 @@ import {
   resolveInstructionFile,
   STATUS_OUTPUT_INSTRUCTIONS,
   TICKET_FIRST_INSTRUCTIONS,
+  UI_WORK_INSTRUCTIONS,
   withGeneratedInstructions
 } from '../../../harness/agent-instructions'
 import { REGION_HEADINGS } from '../../../harness/claude-md-migration'
@@ -867,6 +868,37 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
     }
     expect(COMMON_INSTRUCTIONS).not.toContain('## Ticket first, and an unreachable tool')
     expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## Ticket first, and an unreachable tool')
+  })
+
+  // #1306 — the way of working on a ui ticket is in the workflow skill; what only the project knows stays in its own AGENTS.md.
+  it('says where a project states its mockup display and design tokens, in the generated region only', () => {
+    expect(GENERATED_INSTRUCTIONS).toContain(UI_WORK_INSTRUCTIONS.trimEnd())
+    const flat = UI_WORK_INSTRUCTIONS.replace(/\s+/g, ' ')
+    for (const rule of [
+      '## UI work: mockup display and design tokens',
+      'A ticket labelled `ui` follows "Working a `ui` ticket" in the workflow skill',
+      'How this project shows a mockup to the developer',
+      'which design tokens it uses are stated by the project itself, in this file, outside this generated region',
+      'Read them before you draw anything',
+      'give the developer the path of the mockup file to open in a browser'
+    ]) {
+      expect(flat).toContain(rule)
+    }
+    // One text for every coding agent: no host, no tool of one host
+    expect(flat).not.toMatch(/Claude|Codex|Kimi|MoltenTerm|Figma|artifact|\.claude\/|mcp__/i)
+    expect(GENERATED_INSTRUCTIONS).not.toMatch(/MoltenTerm/)
+    expect(COMMON_INSTRUCTIONS).not.toContain('## UI work: mockup display and design tokens')
+    expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## UI work: mockup display and design tokens')
+    expect(ADOPTION_COMMON_INSTRUCTIONS).not.toContain('## UI work: mockup display and design tokens')
+  })
+
+  it('refreshes the UI work section into an AGENTS.md whose generated region predates it, and keeps what the project wrote around it', () => {
+    const older = `# Mine\n\n## Design tokens\nTokens live in src/tokens.css.\n\n${GENERATED_REGION_START}\n## File edits and shell calls\nold text\n${GENERATED_REGION_END}\n`
+    const refreshed = withGeneratedInstructions(older)
+    expect(refreshed).toContain('## UI work: mockup display and design tokens')
+    expect(refreshed).toContain('## Design tokens\nTokens live in src/tokens.css.')
+    // The project's statement sits before the region, which only points to it
+    expect(refreshed?.indexOf('Tokens live in src/tokens.css.')).toBeLessThan(refreshed?.indexOf('## UI work: mockup display and design tokens') ?? -1)
   })
 
   // #1155 — a .molten/project.json with no job is no pipeline: AI Testing falls back to the npm suite.
