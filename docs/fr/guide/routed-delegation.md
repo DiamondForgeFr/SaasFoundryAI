@@ -147,7 +147,9 @@ Lorsque la délégation est `allowed`, un ticket qui dépasse le changement triv
    | `medium` et `complex`, une fois décomposés                     | `multi-file-feature` |
 
 2. **Un agent en arrière-plan reçoit le ticket** dans son propre worktree Git, sur la branche `feature/<N>-<description>` créée depuis la branche de travail distante (ou la branche nommée par l'hôte,
-   poussée vers la branche du ticket). Le brief énonce l'accord, le type de tâche, l'enregistrement de route ainsi que le résultat attendu et la vérification attendue.
+   poussée vers la branche du ticket). Le brief énonce l'accord, le type de tâche, l'enregistrement de route ainsi que le résultat attendu et la vérification attendue. Pour un ticket marqué `ui`, il
+   ajoute une clause : tenir la partie visuelle jusqu'à ce que la session relaie l'accord du développeur, et suivre la maquette validée (voir
+   [Comment un agent travaille un ticket `ui`](/fr/guide/workflow-system#comment-un-agent-travaille-un-ticket-ui)).
 3. **L'agent construit le ticket de In progress jusqu'à la fin d'AI testing** : le code, le plan de test, les vérifications automatisées, le pipeline local, le rapport et la pull request en brouillon.
    Il ne transmet pas le ticket à un autre agent.
 4. **L'agent s'arrête au rapport vert.** Il laisse le ticket en AI testing et la pull request en brouillon. Il n'exécute jamais `ready-pr`, ne fusionne jamais, n'enregistre jamais le consentement à la

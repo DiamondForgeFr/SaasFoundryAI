@@ -140,7 +140,8 @@ When delegation is `allowed`, a ticket that is more than a trivial change (one k
    | `medium` and `complex`, once decomposed                       | `multi-file-feature` |
 
 2. **A background agent receives the ticket** in its own Git worktree, on the branch `feature/<N>-<description>` cut from the remote working branch (or the branch the host named, pushed to the ticket
-   branch). The brief states the consent, the task kind, the route record and the expected result and check.
+   branch). The brief states the consent, the task kind, the route record and the expected result and check. For a ticket marked `ui` it adds one clause: hold the visual part until the session relays
+   the developer's OK, and follow the validated mockup (see [How an agent works a `ui` ticket](/guide/workflow-system#how-an-agent-works-a-ui-ticket)).
 3. **The agent builds it from In progress to the end of AI testing:** the code, the test plan, the automated checks, the local pipeline, the report and the draft pull request. It does not hand the
    ticket on.
 4. **The agent stops at the green report.** It leaves the ticket in AI testing and the pull request as a draft. It never runs `ready-pr`, never merges, never records the delegation consent and never
