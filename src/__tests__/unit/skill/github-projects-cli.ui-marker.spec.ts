@@ -379,6 +379,20 @@ describe('github-projects-cli.sh — the ui marker and the mockup validation rec
       expect(result.stdout).toBe('')
     })
 
+    // jq 1.8 (the GitHub runner) fails `null | rtrimstr(...)`, and the first line of a comment with no text is null (#1305)
+    it.each([
+      ['an empty comment', ''],
+      ['a comment with no body', null],
+      ['a comment of blank lines', '\n\n']
+    ])('reads past %s to the record that follows', async (_label, body) => {
+      await serveComments(body, mockupRecord())
+
+      const result = await run(['get-ui-validation', '12'])
+
+      expect(result.code).toBe(0)
+      expect(JSON.parse(result.stdout)).toMatchObject({ kind: 'mockup', mockup: 'docs/mockups/login.html' })
+    })
+
     it.each([
       ['a mockup with no approver', `${MARKER}\n- Kind: mockup\n- Mockup: m.html\n- Approved on: 2026-11-23\n`],
       ['a mockup with no date', `${MARKER}\n- Kind: mockup\n- Mockup: m.html\n- Approved by: Ada\n`],
