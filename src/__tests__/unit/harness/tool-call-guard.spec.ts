@@ -89,7 +89,13 @@ describe('evaluateToolCall', () => {
       ['eval', `eval "SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog"`],
       ['two levels of bash -c', `bash -c "bash -c 'SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog'"`],
       ['a heredoc fed to bash', 'bash <<EOF\nSF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog\nEOF'],
-      ['a here-string fed to bash', 'bash <<< "SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog"']
+      ['a here-string fed to bash', 'bash <<< "SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog"'],
+      // #1305 — every name under the prefix is a hatch, the UI mockup one included: no list of names to keep up to date
+      ['the UI mockup hatch in front of the script', `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1 SF_WORKFLOW_BYPASS_REASON="screens agreed in a call" ${WORKFLOW} update-status 1305 "In review"`],
+      ['the UI mockup hatch, exported', 'export SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1'],
+      ['the UI mockup hatch behind env', `env SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1 ${WORKFLOW} update-status 1305 "Human testing"`],
+      ['the UI mockup hatch in bash -c', `bash -c 'SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1 ${WORKFLOW} update-status 1305 "In review"'`],
+      ['the UI mockup hatch, quoted', `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD="1" ${BOARD} update-status 1305 "In review"`]
     ])('refuses %s', (_name, command) => {
       expect(rule(call(command))).toBe('bypass-variable')
       expect(rule(delegated(command))).toBe('bypass-variable')
@@ -105,7 +111,16 @@ describe('evaluateToolCall', () => {
       ['a heredoc fed to cat', 'cat <<EOF\nSF_WORKFLOW_BYPASS_NATURE_GUARD=1 is documented\nEOF'],
       ['a commit message from a heredoc', "git commit -F - <<'EOF'\nfix: SF_WORKFLOW_BYPASS_NATURE_GUARD=1\nEOF"],
       ['a test name', `npx jest -t "bypasses the guard when SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1"`],
-      ['an ordinary command', 'npm test']
+      ['an ordinary command', 'npm test'],
+      // #1305 — the commands the ui gate asks an agent to run are not hatches: the marker is not a nature label
+      ['the UI mockup hatch named as an argument', 'grep -rn SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD docs'],
+      ['the UI mockup hatch written in a commit message', `git commit -m "docs(#1305): SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1 is the developer's call"`],
+      ['marking a ticket ui', `${WORKFLOW} set-ui 1305`],
+      ['clearing the ui marker', `${WORKFLOW} clear-ui 1305`],
+      ['creating a ui ticket', `${BOARD} create-ticket story "Redesign the login" --ui --complexity medium`],
+      ['creating a ui subtask', `${WORKFLOW} create-subtask 1304 "Settings page" --ui`],
+      ['recording a mockup validation', `${WORKFLOW} record-ui-validation 1305 --mockup docs/mockups/login.html --approved-by "Ada" --date 2026-11-23`],
+      ['recording supplied visuals', `${WORKFLOW} record-ui-validation 1305 --supplied "their mockup"`]
     ])('allows %s', (_name, command) => {
       expect(rule(call(command))).toBeUndefined()
       expect(rule(delegated(command))).toBeUndefined()
@@ -270,6 +285,14 @@ describe('evaluateToolCall', () => {
       expect(reason).toContain('`! <command>`')
       expect(reason).toContain('.claude/skills/sf-workflow/escape-hatches.md')
       expect(reason).toContain('git commit -F')
+    })
+
+    it('name the UI mockup hatch an agent set, and send it to the developer (#1305)', () => {
+      const reason = reasonOf(call(`SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1 ${WORKFLOW} update-status 1305 "In review"`))
+      expect(reason).toContain('Refused by the SaaSFoundry guard hook')
+      expect(reason).toContain('SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD')
+      expect(reason).toContain("developer's decision")
+      expect(reason).toContain('.claude/skills/sf-workflow/escape-hatches.md')
     })
 
     it('point a Codex agent to the terminal of the developer and to the .agents catalogue', () => {

@@ -30,8 +30,8 @@ This file lists every hatch the workflow scripts accept, what each one switches 
 7. **The automated listener ignores them.** The pull-request listener (`sync-pr-review`: Ready for review and merge events) runs `update-status` with every `SF_WORKFLOW_BYPASS_*` variable cleared, so
    a variable present in a CI environment never reaches it.
 
-Guards run in this order on `update-status`: SRS, complexity, Epic derived status, nature, incomplete children, bundled-PR parent, pushed commits, PR existence, local CI, PR merged. A refusal exits
-with code `2`.
+Guards run in this order on `update-status`: SRS, complexity, Epic derived status, nature, UI mockup, incomplete children, bundled-PR parent, pushed commits, PR existence, local CI, PR merged. A
+refusal exits with code `2`.
 
 ## Quick reference
 
@@ -40,6 +40,7 @@ with code `2`.
 | `SF_WORKFLOW_BYPASS_SRS_GUARD=1`            | SRS drafting guard (`srs:*` tickets stay off the code path)         | `update-status` to AI testing, Human testing, In review                                    |
 | `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`     | Complexity label required                                           | `update-status` to any status except Backlog                                               |
 | `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`         | Nature axis (Human testing / In review routing)                     | `update-status` from AI testing to In review or Done                                       |
+| `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`      | A `ui` ticket needs a recorded mockup validation before review      | `update-status` to In review (Solo); to Human testing or In review (Team)                  |
 | `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`       | Parent Done requires every native child Done                        | `update-status` to Done                                                                    |
 | `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1` | Bundled-PR child must have a verified, non-Epic native parent       | `update-status` to Done for `nature:bundled-pr` tickets                                    |
 | `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`         | Ticket work committed and pushed to origin                          | `update-status` to AI testing                                                              |
@@ -172,6 +173,20 @@ The hook is a guardrail against the ordinary path the refusals used to teach, no
   Normally the developer adds the label on the ticket and no hatch is needed. An agent never labels its own ticket: whether it skips Human testing is the developer's call, and the hook refuses it.
 - **Illegitimate:** skipping Human testing on user-facing work because the tests are green; sending a bundled child to Done without a verified parent PR.
 - **Record:** ticket comment naming the facts that justify the routing, and the label to add.
+
+### UI mockup guard: `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD`
+
+- **Protects:** a ticket that changes the user interface carries the `ui` label (`create-ticket --ui`, `create-subtask --ui`, `set-ui`), and reaches the developer's review only once the validation of
+  its mockup is recorded on it: the mockup's link or path, who approved it and when, or the visuals the developer supplied themselves (their own mockup, an exact target screenshot). The record is a
+  ticket comment written by `record-ui-validation` and read back by the guard (`get-ui-validation`). A ticket without the `ui` label is not read any further. The marker is not a nature label: the
+  session sets it, and so does the developer.
+- **Applies to:** `update-status <ticket> "In review"` under Solo; `"Human testing"`, and `"In review"` for a ticket that skips it, on a workflow that declares Human testing. Fails open when the
+  labels cannot be read (offline, auth); fails closed when the ticket carries the label and its comments cannot be read, because "no record" must never be read from a failure.
+- **Legitimate:** the developer's approval exists but the record cannot be written (the comment is refused, an outage) and you can show the approval. Normally the session asks the developer to
+  validate a mockup, or to supply the visuals, and records it: no hatch is needed.
+- **Illegitimate:** skipping the validation because the implementation is done, the mockup is "obvious" or the deadline is close; clearing the marker (`clear-ui`) of a ticket that does change the
+  interface so that the guard no longer reads it; an agent applying it.
+- **Record:** automatic, a ticket comment naming the variable and `SF_WORKFLOW_BYPASS_REASON`. Complete it with what the developer validated and where it can be seen.
 
 ### Children guard: `SF_WORKFLOW_BYPASS_CHILDREN_GUARD`
 
@@ -326,6 +341,7 @@ These are switches you may meet in the same scripts. They do not weaken a guard.
 | ------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------- |
 | no `complexity:` label                | `detect-complexity`, then `retag <ticket> <level>`                            | the label cannot be written at all                      |
 | lacks `nature:internal`               | take the ticket through Human testing, or ask the developer if it is internal | the label cannot be applied and routing is justified    |
+| `ui` ticket, no mockup validation     | ask the developer to validate a mockup, then `record-ui-validation <ticket>`  | the approval exists and the record cannot be written    |
 | work not committed or not pushed      | commit it, then `git push` (the message names the command)                    | `origin` is down and the work is safe elsewhere         |
 | no open PR / wrong draft state        | `create-pr`, `ready-pr`, or rename the branch to the convention               | the PR exists on a branch that cannot be renamed        |
 | no verified merged PR                 | wait for the merge, then `update-status <ticket> Done`                        | the work is on the working branch without a matching PR |

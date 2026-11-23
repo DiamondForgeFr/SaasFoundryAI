@@ -35,6 +35,16 @@ describe('compiled sf agents guard', () => {
     expect(result.stdout.trim().split('\n')).toHaveLength(1)
   })
 
+  // #1305 — the hatch of the UI mockup gate is refused like every other SF_WORKFLOW_BYPASS_* name, on both hosts
+  it.each([['claude-code'], ['codex']])('prints the deny decision for the UI mockup hatch (%s)', (host) => {
+    const result = guard(host, event('SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1 .claude/skills/sf-workflow/workflow-cli.sh update-status 1305 "In review"'))
+
+    expect(result.status).toBe(0)
+    const decision = JSON.parse(result.stdout).hookSpecificOutput
+    expect(decision).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'deny' })
+    expect(decision.permissionDecisionReason).toContain('SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD')
+  })
+
   it('prints the same shape for Codex', () => {
     const result = guard('codex', event('SF_WORKFLOW_BYPASS_NATURE_GUARD=1 prog'))
 
