@@ -136,6 +136,45 @@ Sans `Human testing` (preset Solo, ou ticket `nature:internal`), l'agent ouvre a
 Une liste enregistrée est figée : un job ajouté ensuite à `.molten/project.json` n'est exigé qu'une fois la liste enregistrée de nouveau, ou effacée avec `sf workflow set-local-ci --clear` pour suivre
 le pipeline. `sf workflow show` et `sf status` affichent la liste effective et sa provenance.
 
+## Le garde-fou de maquette UI
+
+Un ticket qui modifie l'interface utilisateur est validé sur une maquette avant que son travail visuel n'arrive à votre revue : vous voyez d'abord le rendu, pas dans les captures d'une pull request
+terminée. Trois éléments portent ce garde-fou, avec GitHub Projects comme outil de workflow.
+
+- **Le marqueur `ui`.** La session pose le label `ui` sur un ticket à sa création (`create-ticket … --ui`, `create-subtask … --ui`) ou plus tard avec `set-ui <ticket>`, et `clear-ui <ticket>` le
+  retire. Ce label n'est pas un label de nature et ne vous est pas réservé : la session le pose, `sf new` le provisionne, et `set-ui` le crée quand le dépôt ne l'a pas.
+- **L'enregistrement de validation.** Une fois la maquette approuvée par vous, la session consigne le lien ou le chemin de la maquette, la date et la personne qui l'a approuvée. Quand vous avez fourni
+  vous-même les visuels (votre propre maquette, ou une capture exacte de la cible), elle consigne cela et ce que vous avez fourni, et aucune maquette n'est produite. L'enregistrement est un
+  commentaire du ticket, écrit par `record-ui-validation` et relu par `get-ui-validation`.
+- **Le garde-fou.** `update-status` refuse un ticket `ui` sans enregistrement complet sur le chemin de votre revue : `→ In review` avec le preset Solo, `→ Human testing` (et `→ In review` pour un
+  ticket qui saute Human testing) avec le preset Équipe. Le refus nomme la commande `record-ui-validation` à lancer, et il vient avant les garde-fous de la pull request. Un ticket sans le marqueur
+  passe exactement comme avant.
+
+```bash
+WORKFLOW=.claude/skills/sf-workflow/workflow-cli.sh
+
+# marquer un nouveau ticket, ou un ticket existant (clear-ui retire le marqueur)
+$WORKFLOW create-ticket story "Refondre l'écran de connexion" --complexity medium --ui
+$WORKFLOW set-ui 42
+
+# consigner l'approbation d'une maquette, ou les visuels que vous avez fournis (l'un des deux)
+$WORKFLOW record-ui-validation 42 --mockup docs/mockups/login.html --approved-by "Ada Lovelace" --date 2026-11-23
+$WORKFLOW record-ui-validation 42 --supplied "une capture exacte de la cible, login-target.png"
+
+# relire l'enregistrement que lit le garde-fou
+$WORKFLOW get-ui-validation 42
+```
+
+`--date` vaut la date du jour par défaut. `get-ui-validation` affiche l'enregistrement complet le plus récent sur une seule ligne de JSON, et rien quand il n'y en a pas. Un commentaire qui ne fait que
+citer le marqueur, ou auquel manque un champ (la maquette, l'approbateur et la date ; ou ce qui a été fourni et la date), n'est pas un enregistrement.
+
+Le garde-fou laisse passer quand les labels du ticket sont illisibles (un `gh` hors ligne, un jeton expiré), comme le garde-fou de nature, pour qu'un incident d'infrastructure ne bloque pas le
+workflow. Il refuse quand le ticket porte le marqueur et que ses commentaires sont illisibles : une lecture en échec n'est jamais prise pour un ticket sans enregistrement. Les autres outils de
+workflow (Jira, Linear, Notion) refusent les commandes du marqueur et de l'enregistrement avec le code de sortie `2`, et leur `update-status` ne lit aucun enregistrement.
+
+Le refus est levé par `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`, une [échappatoire](#echappatoires) qui vous revient, annoncée et consignée sur le ticket comme les autres. Le hook de garde refuse l'agent
+qui l'active.
+
 ## Le premier ticket
 
 Créez les tickets avec le CLI : ils arrivent sur le tableau en Backlog, avec leur type et leur étiquette de complexité :
@@ -255,6 +294,7 @@ qui active tout de même une échappatoire ([plus bas](#qui-applique-une-echappa
 | `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                            | Garde les tickets `srs:*` hors des statuts du parcours de code                                   |
 | `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                     | Exige un label `complexity:` pour quitter Backlog                                                |
 | `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                         | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)                       |
+| `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`                                                      | Exige la validation de maquette d'un ticket `ui` avant In review ou Human testing                |
 | `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                       | Exige que chaque enfant natif soit Done avant le parent                                          |
 | `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                 | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR                |
 | `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                         | Exige que le travail du ticket soit commité et poussé avant AI testing                           |
