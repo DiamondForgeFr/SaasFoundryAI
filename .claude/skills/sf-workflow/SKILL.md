@@ -75,6 +75,28 @@ legitimate and illegitimate uses, and the record to leave. An agent never sets o
 call that sets a hatch, labels the nature of its own ticket, or (for a delegated agent) merges or marks a pull request ready. The developer applies a hatch with `!` in Claude Code or from their own
 terminal, at the primary checkout.
 
+## 🖼️ UI mockup gate (the `ui` marker)
+
+Orthogonal to complexity and nature. A ticket that changes the user interface is validated on a mockup before its visual work reaches the developer's review: the developer sees the look first, not in
+the screenshots of a finished pull request. The gate is driven through `workflow-cli.sh`:
+
+| Part                | Command                                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The marker          | `create-ticket … --ui` and `create-subtask … --ui` label a new ticket `ui`; `set-ui <ticket>` marks an existing one and `clear-ui <ticket>` removes the marker            |
+| The validation      | `record-ui-validation <ticket> --mockup <link-or-path> --approved-by <name> [--date YYYY-MM-DD]`, once the developer has approved the mockup                              |
+| Or supplied visuals | `record-ui-validation <ticket> --supplied "<what the developer supplied>"`, when the developer gave their own mockup or an exact target screenshot, and no mockup is made |
+| The read-back       | `get-ui-validation <ticket>` prints the latest complete record as one line of JSON, and nothing when there is none: it is what the guard reads                            |
+
+- **The marker is the label `ui`.** It is not a nature label and is not reserved to the developer: the session sets it, as does the developer (`sf new` provisions the label, and `set-ui` creates it
+  when it is missing). Only `ui` counts; `ui-kit` or `no-ui` are other labels.
+- **The record is a ticket comment** that starts with `<!-- sf-ui-validation:v1 -->`, followed by `- Field: value` lines: `Kind: mockup` with `Mockup`, `Approved by` and `Approved on`, or
+  `Kind: supplied by the developer` with `Supplied` and `Recorded on`. A comment that only quotes the marker, or that lacks a field, is not a record. The latest complete record wins.
+- **UI mockup guard** (enforced by `update-status`) — a `ui` ticket with no complete record is refused on its way to the developer's review: `→ In review` under Solo (no Human testing status), and
+  `→ Human testing` (also `→ In review` for a ticket that skips it) on a workflow that declares Human testing. The refusal names the `record-ui-validation` command to run. A ticket without the marker
+  passes exactly as before. The guard fails open when the labels cannot be read, and closed when the ticket carries the marker and its comments cannot be read. Escape hatch: the developer's (see
+  [escape-hatches.md](escape-hatches.md)); it is announced and recorded on the ticket like the other environment hatches, and the guard hook refuses an agent that sets it.
+- Only the GitHub Projects adapter carries the marker and the record today: the other adapters refuse these commands with exit code `2`, and their `update-status` does not read a record.
+
 ## 🧩 Ticket Hierarchy (Epic / Delivery parent / Child ticket)
 
 SaaSFoundry Solo distinguishes an optional grouping Epic from a delivery parent. Every child created by `create-subtask` is a **native GitHub Projects sub-issue**. A child is either a normal child

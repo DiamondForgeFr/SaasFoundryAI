@@ -144,7 +144,7 @@ export interface LabelDef {
 
 /**
  * Canonical workflow label catalogue — the single source of truth for the
- * labels the workflow guards depend on. The `complexity:*` / `nature:*` tables
+ * labels the workflow guards depend on. The `complexity:*` / `nature:*` / `ui` tables
  * in `scaffolds/docs/github-labels.md` and the github-projects SKILL.md mirror
  * this list (prose copies); this constant is what actually gets created.
  *
@@ -162,7 +162,9 @@ export function buildWorkflowLabels(opts: { srs: boolean }): LabelDef[] {
     // Nature — Human Testing / In Review optionality (managed by sf-workflow)
     { name: 'nature:user-facing', color: '0E8A16', description: 'Workflow: ticket has user-visible impact, requires Human Testing' },
     { name: 'nature:internal', color: 'C5DEF5', description: 'Workflow: refactor/scaffolding/non-terminal story, Human Testing optional' },
-    { name: 'nature:bundled-pr', color: 'FBCA04', description: 'Workflow: bundled child commit on delivery parent branch, skips In Review' }
+    { name: 'nature:bundled-pr', color: 'FBCA04', description: 'Workflow: bundled child commit on delivery parent branch, skips In Review' },
+    // UI — a ticket that changes the user interface needs a validated mockup before review (managed by sf-workflow, #1305)
+    { name: 'ui', color: '5319E7', description: 'Workflow: ticket changes the user interface; a validated mockup is required before review' }
   ]
 
   if (opts.srs) {

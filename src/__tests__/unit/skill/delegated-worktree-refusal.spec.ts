@@ -80,6 +80,7 @@ esac
     it.each([
       ['an escape hatch in the environment', ['update-status', '42', 'In review'], { SF_WORKFLOW_BYPASS_NATURE_GUARD: '1' }],
       ['an escape hatch, with its reason', ['update-status', '42', 'Done'], { SF_WORKFLOW_BYPASS_PR_MERGED_GUARD: '1', SF_WORKFLOW_BYPASS_REASON: 'hotfix' }],
+      ['the UI mockup hatch (#1305)', ['update-status', '42', 'In review'], { SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD: '1' }],
       ['the skip flag of the local CI on update-status', ['update-status', '42', 'Human testing', '--skip-local-ci', 'runner offline'], {}],
       ['the skip flag before the ticket', ['update-status', '--skip-local-ci', 'runner offline', '42', 'Human testing'], {}],
       ['the skip flag on create-pr', ['create-pr', '42', '--skip-local-ci', 'x'], {}],
