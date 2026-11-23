@@ -1439,6 +1439,8 @@ cmd_get_ui_validation() {
     echo "Error: could not read the comments of #${ticket}." >&2
     return 1
   }
+  # The first line of an empty body is `// ""`: `"" | split("\n")` is [], and since jq 1.8 `null | rtrimstr(...)` is
+  # an error (1.7 passed null through), which would fail the whole read on a comment with no text.
   record=$(printf '%s' "$payload" | jq -c --arg marker "$UI_VALIDATION_MARKER" --arg mockup "$UI_VALIDATION_KIND_MOCKUP" --arg supplied "$UI_VALIDATION_KIND_SUPPLIED" '
     def fields:
       [ split("\n")[] | rtrimstr("\r") | select(startswith("- ")) | ltrimstr("- ")
@@ -1446,7 +1448,7 @@ cmd_get_ui_validation() {
         | {key: .[0:$i], value: (.[($i + 2):] | gsub("^\\s+|\\s+$"; ""))} ] | from_entries;
     def given($name): ((.[$name] // "") != "");
     if type == "array" and all(.[]; type == "array") then
-      [ .[][] | (.body // "") | select((split("\n")[0] | rtrimstr("\r")) == $marker) | fields
+      [ .[][] | (.body // "") | select(((split("\n")[0] // "") | rtrimstr("\r")) == $marker) | fields
         | if .Kind == $mockup and given("Mockup") and given("Approved by") and given("Approved on")
             then {kind: "mockup", mockup: .Mockup, approvedBy: .["Approved by"], date: .["Approved on"]}
           elif .Kind == $supplied and given("Supplied") and given("Recorded on")
