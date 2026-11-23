@@ -191,10 +191,11 @@ journal.
 
 ### Agents de palier
 
-Les agents de délégation que [`sf agents refresh`](./sf-agents.md#agents-de-palier) écrit sous `.claude/agents/` et `.codex/agents/` portent chacun un modèle et un effort. Modifiez-en un, supprimez-en
-un, ou passez à un CLI dont la grille est plus récente : une délégation s'exécute alors sur une route que le routage ne dit plus, sans que rien ne le signale dans l'hôte. `tierAgents` compare chaque
-agent de palier des agents de développement déclarés que la grille route à ce qu'un refresh écrirait maintenant, d'après la grille que ce CLI livre et `modules.harness.routing`. Il se contente de lire
-les fichiers : il n'exécute aucun code du projet et n'écrit rien. `--json` les liste sous `routing.tierAgents` sous la forme `{ path, state }`.
+Les agents de délégation que [`sf agents refresh`](./sf-agents.md#agents-de-palier) écrit sous `.claude/agents/`, `.codex/agents/` et `.kimi-code/agents/` portent chacun un modèle et un effort (un
+fichier Kimi Code n'en porte aucun : la route nomme l'alias de modèle que passe un appel, et `sf status` ne lit pas votre configuration Kimi Code). Modifiez-en un, supprimez-en un, ou passez à un CLI
+dont la grille est plus récente : une délégation s'exécute alors sur une route que le routage ne dit plus, sans que rien ne le signale dans l'hôte. `tierAgents` compare chaque agent de palier des
+agents de développement déclarés que la grille route à ce qu'un refresh écrirait maintenant, d'après la grille que ce CLI livre et `modules.harness.routing`. Il se contente de lire les fichiers : il
+n'exécute aucun code du projet et n'écrit rien. `--json` les liste sous `routing.tierAgents` sous la forme `{ path, state }`.
 
 | État       | Signification                                                                                                                                                                                                                                                                                                          | Remédiation                                                                                                                                                                                                                                                       |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

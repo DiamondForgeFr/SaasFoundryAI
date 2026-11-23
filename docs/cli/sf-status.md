@@ -183,10 +183,11 @@ It only reads the log: nothing is written, and a log that is missing or unreadab
 
 ### Tier agents
 
-The delegation agents that [`sf agents refresh`](./sf-agents.md#tier-agents) writes under `.claude/agents/` and `.codex/agents/` each carry a model and an effort. Edit one, delete one, or move to a
-CLI with a newer grid, and a delegation runs on a route the routing no longer says, with nothing in the host to tell. `tierAgents` compares every tier agent of the declared coding agents the grid
-routes with what a refresh would write now, from the grid this CLI ships and `modules.harness.routing`. It only reads the files: it runs no project code and writes nothing. `--json` lists them under
-`routing.tierAgents` as `{ path, state }`.
+The delegation agents that [`sf agents refresh`](./sf-agents.md#tier-agents) writes under `.claude/agents/`, `.codex/agents/` and `.kimi-code/agents/` each carry a model and an effort (a Kimi Code
+file carries neither: the route names the model alias a call passes, and `sf status` does not read your Kimi Code configuration). Edit one, delete one, or move to a CLI with a newer grid, and a
+delegation runs on a route the routing no longer says, with nothing in the host to tell. `tierAgents` compares every tier agent of the declared coding agents the grid routes with what a refresh would
+write now, from the grid this CLI ships and `modules.harness.routing`. It only reads the files: it runs no project code and writes nothing. `--json` lists them under `routing.tierAgents` as
+`{ path, state }`.
 
 | State      | Meaning                                                                                                                                                                                                                                                                 | Remediation                                                                                                                                                                                                                              |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

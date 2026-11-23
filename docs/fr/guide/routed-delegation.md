@@ -53,15 +53,42 @@ donc `provisional: No Kimi measurement exists yet` jusqu'à ce que le banc de re
 | `plan`     | `planning`                    | `k3.1-pro`, `high`                  |
 | `terminal` | `terminal-ci`                 | `k3.1-pro`, `max`                   |
 
-Kimi Code exprime trois efforts, `low`, `high` et `max` : une surcharge à tout autre effort est refusée. Trois limites en découlent :
+Kimi Code exprime trois efforts, `low`, `high` et `max` : une surcharge à tout autre effort est refusée. Kimi Code se distingue des deux autres hôtes de trois façons :
 
-- **Pas encore d'agent de palier.** Le harness n'écrit aucun fichier `sf-<palier>` pour Kimi Code tant que son format de fichier n'est pas défini (FR-MAH-022). La route nomme le palier et le candidat
-  ; la session lance une sous-tâche Kimi sur ce modèle et cet effort.
-- **Pas de hook.** Kimi Code lit ses hooks dans la configuration de l'utilisateur, jamais dans le projet : le harness n'installe donc ni garde ni hook de capture. `sf status` dit `guard unavailable`
-  et `capture unavailable`, avec cette raison, et les délégations s'enregistrent à la main avec `sf agents outcome record --provider kimi`. Les gardes propres au CLI refusent toujours une
-  échappatoire.
+- **Des agents de palier sans modèle, et un alias par appel.** Le harness écrit `.kimi-code/agents/sf-<palier>.md` pour chaque palier, comme pour les autres hôtes, mais Kimi Code ne lie aucun modèle
+  dans un fichier d'agent. Un appel à son outil `Agent` passe `model: <alias>`, une clé du pool `[secondary_model.models]` de **votre propre** `~/.kimi-code/config.toml` (ou de
+  `$KIMI_CODE_HOME/config.toml`). La route nomme donc l'alias à côté du candidat, et la session le recopie :
+
+  ```bash
+  sf agents route --task bug-fix --provider kimi
+  # bug-fix → fix (shipped) kimi: k3.1-pro, effort high, alias sf-k3-1-pro-high — provisional: …
+  ```
+
+  L'alias porte le nom du candidat, jamais celui du palier : il suit donc une surcharge du candidat d'un palier, un déplacement automatique, un essai ou une reprise. Un point dans le nom du modèle
+  s'écrit `-` :
+
+  | Alias              | Candidat (modèle, effort) | Paliers                |
+  | ------------------ | ------------------------- | ---------------------- |
+  | `sf-k3-low`        | `k3`, `low`               | `light`                |
+  | `sf-k3-high`       | `k3`, `high`              | `edit`                 |
+  | `sf-k3-1-pro-high` | `k3.1-pro`, `high`        | `build`, `fix`, `plan` |
+  | `sf-k3-1-pro-max`  | `k3.1-pro`, `max`         | `terminal`             |
+
+  C'est l'unique exception à « ne nommez jamais de modèle » : la session passe l'alias exactement comme la route l'imprime, et n'en compose jamais un.
+
+- **Déclarer les alias est votre affaire.** sf n'écrit jamais `~/.kimi-code`. Il lit les noms des clés de votre pool et, quand l'alias d'une route y manque, imprime sur stderr le TOML à coller ;
+  `sf agents enable`, `replace` et `refresh` impriment la même chose pour tous les alias de palier, dans un avertissement. Collez d'abord les tables `[models.<alias>]` (chacune porte le
+  `default_effort` de son alias, et le `provider` et la taille de contexte recopiés de votre entrée du même modèle quand il y en a une), puis les lignes sous votre table `[secondary_model.models]`
+  existante. Ne répétez pas cet en-tête. Si `[secondary_model].default_effort` est défini, il l'emporte sur l'effort de chaque alias : retirez-le pour laisser chaque alias à son propre effort. Avec un
+  pool d'une seule entrée, Kimi Code ne propose pas le paramètre `model` : gardez-en au moins deux.
 - **Sous-tâches du worktree courant seulement.** Kimi Code n'a pas d'outil de worktree que le harness utilise : une délégation à Kimi se limite donc à des sous-tâches du worktree courant, tant qu'une
-  exécution de ticket entier dans un worktree n'est pas vérifiée.
+  exécution de ticket entier dans un worktree n'est pas vérifiée. Chacun de ses agents de palier reçoit une sous-tâche et jamais un ticket entier, et la session livre le ticket elle-même. Quand une
+  route est refusée, ou qu'une délégation ne peut pas démarrer, la session exécute l'étape elle-même : elle ne lance jamais le CLI d'un autre agent de code (`claude`, `codex` ou tout autre), ni une
+  session en arrière-plan d'un autre hôte, pour déléguer malgré tout.
+
+Une limite de plus : **pas de hook.** Kimi Code lit ses hooks dans la configuration de l'utilisateur, jamais dans le projet : le harness n'installe donc ni garde ni hook de capture. `sf status` dit
+`guard unavailable` et `capture unavailable`, avec cette raison, et les délégations s'enregistrent à la main avec `sf agents outcome record --provider kimi`. Les gardes propres au CLI refusent
+toujours une échappatoire. Que Kimi Code résolve `subagent_type: "sf-<palier>"` et respecte l'alias d'un appel est déclaré d'après sa documentation et non vérifié (`runtime: not-checked`).
 
 L'agent s'appelle `kimi`, explicitement : aucun nom de modèle ni nom qui lui ressemble (`kimi-code`, `k3`, `moonshot`) n'est lu comme cet agent. Un CLI antérieur à cette release ne connaît pas `kimi`
 comme agent routé : il refuse `sf agents route --provider kimi`, et ignore (en la comptant) une ligne de registre dont le fournisseur est `kimi` ; mettez donc à jour chaque clone qui partage un
@@ -70,17 +97,18 @@ registre avant d'y enregistrer des délégations Kimi.
 ## Les agents de palier
 
 Pour chaque agent de développement déclaré que la grille route et dont le profil déclare des agents de palier, le harness écrit un sous-agent par palier. Pour Claude Code, ce sont les fichiers
-`.claude/agents/sf-<palier>.md`, avec le modèle et l'effort dans leur frontmatter ; pour Codex, ce sont `.codex/agents/sf-<palier>.toml`. Chaque description liste les types de tâches servis par le
-palier, afin que Claude Code choisisse le bon agent à partir de sa seule description.
+`.claude/agents/sf-<palier>.md`, avec le modèle et l'effort dans leur frontmatter ; pour Codex, ce sont `.codex/agents/sf-<palier>.toml` ; pour Kimi Code, ce sont `.kimi-code/agents/sf-<palier>.md`,
+qui ne nomment aucun modèle (l'appel passe [l'alias que la route nomme](#kimi-code)). Chaque description liste les types de tâches servis par le palier, afin que Claude Code choisisse le bon agent à
+partir de sa seule description ; un fichier Kimi les met dans `whenToUse`.
 
 Les agents routés, les efforts qu'un agent de palier peut porter, son dossier et son format de fichier ne sont pas décidés par le code du harness : chaque profil d'agent de développement les déclare
 dans son bloc `capabilities` ([`sf agents`](/fr/cli/sf-agents#le-bloc-de-capacites-d-un-profil)). Un outil dont le profil ne déclare aucun routage n'a ni route ni agent de palier, et une commande qui
-en a besoin dit pourquoi avec les mots de ce profil, par exemple que le harness ne livre aucun candidat de routage pour Gemini CLI. Un outil routé dont le profil ne déclare aucun agent de palier,
-comme Kimi Code aujourd'hui, a une route et aucun fichier. La même règle vaut pour toute capacité qui manque à un profil : il dit pourquoi, ou le registre le refuse.
+en a besoin dit pourquoi avec les mots de ce profil, par exemple que le harness ne livre aucun candidat de routage pour Gemini CLI. Un outil routé dont le profil ne déclare aucun agent de palier a une
+route et aucun fichier. La même règle vaut pour toute capacité qui manque à un profil : il dit pourquoi, ou le registre le refuse.
 
 Les fichiers sont générés et suivis par Git. `sf agents enable`, `replace`, `refresh` et `sf update` réécrivent un fichier non modifié et laissent un fichier édité à côté d'un sidecar
-`.saasfoundry.new`. [`sf status`](/fr/cli/sf-status#agents-de-palier) signale un fichier absent, modifié ou périmé. Les agents de palier ne désignent qu'un modèle et un effort ; ils ne portent aucun
-identifiant, et l'absence d'un compte fournisseur fait échouer la délégation au lieu de basculer silencieusement sur un autre modèle.
+`.saasfoundry.new`. [`sf status`](/fr/cli/sf-status#agents-de-palier) signale un fichier absent, modifié ou périmé. Les agents de palier ne désignent qu'un modèle et un effort (Kimi Code : un alias) ;
+ils ne portent aucun identifiant, et l'absence d'un compte fournisseur, ou d'un alias que votre pool ne déclare pas, fait échouer la délégation au lieu de basculer silencieusement sur un autre modèle.
 
 ## Accord
 

@@ -253,7 +253,7 @@ tier-agent folders and formats, the hook files and the wording of `sf status` ar
 | Field         | Says                                                                                                                                                                                                                                                                   |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `routing`     | `{ vendor, efforts }`: the grid has candidates for the tool, filed under this vendor, and a tier-agent file of the tool can express these efforts. `null` without                                                                                                      |
-| `tierAgents`  | `{ dir, format, modelBinding }`: the project folder of the tool's subagent files, their file format (`claude-md`, `codex-toml`) and whether the model is written in the file (`file`) or chosen per call (`call-alias`). `null` without. Needs `routing`               |
+| `tierAgents`  | `{ dir, format, modelBinding }`: the project folder of the tool's subagent files, their file format (`claude-md`, `codex-toml`, `kimi-md`) and whether the model is written in the file (`file`) or chosen per call (`call-alias`). `null` without. Needs `routing`    |
 | `hooks`       | `{ scope, file, guardEvent, captureEvent, needsTrust }`: the file that declares the tool's hooks (`project` or `user` scope), the events of the guard and the capture hook, and whether the tool runs a project hook only once the developer trusts it. `null` without |
 | `worktrees`   | `native` (the tool isolates a delegate in a worktree itself), `manual` (the session opens it with Git) or `none`                                                                                                                                                       |
 | `limitations` | The reason for every capability the tool lacks, keyed by capability name                                                                                                                                                                                               |
@@ -279,8 +279,9 @@ sf agents route --task terminal-ci --provider codex
 
 The CLI ships a versioned allocation grid. Each task kind (`exploration`, `scoped-edit`, `bug-fix`, `multi-file-feature`, `tests`, `review`, `planning`, `terminal-ci`, `prose`) names a tier, and each
 tier names a candidate (model and effort) for Claude Code, for Codex and for Kimi Code. The output gives the tier, the candidate as a canonical `provider/runtime/model/effort` id, the source of the
-decision (`shipped` or `project`) and the evidence behind a shipped entry. The command works outside a managed project; inside one, it answers for the declared coding agents that have routing
-candidates. A coding agent without routing is refused with the limitation its profile documents (see [the capability block](#the-capability-block-of-a-profile)), never with a bare "no routing".
+decision (`shipped` or `project`) and the evidence behind a shipped entry. A host whose tier-agent file binds no model, Kimi Code, also gets the model alias the call passes (see
+[Kimi Code](#kimi-code)). The command works outside a managed project; inside one, it answers for the declared coding agents that have routing candidates. A coding agent without routing is refused
+with the limitation its profile documents (see [the capability block](#the-capability-block-of-a-profile)), never with a bare "no routing".
 
 Every shipped entry cites its evidence. A `measured` entry carries the public benchmark, its date, its score and its cost per task: it is the cheapest candidate within 5 points of the best measured
 score at no more than half its cost, compared within one source. A `provisional` entry names the nearest proxy and has no score: no public benchmark measures that kind with a cost, and the
@@ -318,7 +319,8 @@ reported on stderr and the shared routing answers.
 
 ### Kimi Code
 
-Kimi Code is routed by its profile and the grid alone (`routing: { vendor: "moonshot", efforts: ["low", "high", "max"] }`): no command and no renderer has a branch for it. Its candidates are
+Kimi Code is routed by its profile and the grid (`routing: { vendor: "moonshot", efforts: ["low", "high", "max"] }`), and writes tier agents from its profile too
+(`tierAgents: { dir: ".kimi-code/agents", format: "kimi-md", modelBinding: "call-alias" }`): no command has a branch for it, and only its file format has a renderer. Its candidates are
 `moonshot/kimi/<model>/<effort>`:
 
 | Tier       | Task kinds                    | Candidate (model, effort) |
@@ -333,13 +335,44 @@ Kimi Code is routed by its profile and the grid alone (`routing: { vendor: "moon
 - **Every Kimi route is provisional.** No public benchmark measures these candidates with a cost, so each entry has no score and no cost, and `sf agents route` says so in its evidence
   (`provisional: No Kimi measurement exists yet; …`). The maintainers' replay bench replaces them with measurements. The `highspeed` aliases are not used: they bill twice.
 - **Efforts.** Kimi Code expresses `low`, `high` and `max`. A project override of a Kimi tier at any other effort (`minimal`, `medium`, `xhigh`, `ultra`) is refused, naming the three it accepts.
-- **No tier agent yet.** The harness writes no `sf-<tier>` file for Kimi Code until FR-MAH-022 defines its file format (the model is not written in the file). A Kimi route names a tier and the
-  candidate to run; the session delegates to a Kimi sub-task on that model and effort by hand.
+- **Tier agents, and the model alias a route names.** `sf agents refresh` writes `.kimi-code/agents/sf-<tier>.md` for every tier: a Markdown file whose frontmatter has `name`, `description`,
+  `whenToUse` and an explicit `tools` list (the same for every tier, ending with `mcp__*` so the MCP tools of the session reach the delegate), and whose body is `${base_prompt}` (the default Kimi Code
+  system prompt) followed by the instructions every tier agent carries. **The file names no model and no effort**: Kimi Code binds no model in an agent file. A call to the `Agent` tool passes
+  `model: <alias>`, a key of your own `[secondary_model.models]` pool, so the route names the alias, and the session copies it:
+
+  ```text
+  bug-fix → fix (shipped) kimi: k3.1-pro, effort high, alias sf-k3-1-pro-high — provisional: …  route=<id>
+  ```
+
+  `--json` adds `alias` to the route and `aliasPool` (`present`, `missing` or `unknown`: whether your pool declares it). Both fields are optional and additive, so `routeVersion` stays 2; a Claude Code
+  or Codex route carries neither. The alias is named after the candidate, not the tier (`sf-<model>-<effort>`, with a dot in the model name written as `-`), so it follows an override of the tier's
+  candidate, and two tiers on one candidate share one alias:
+
+  | Alias              | Candidate (model, effort) | Tiers                  |
+  | ------------------ | ------------------------- | ---------------------- |
+  | `sf-k3-low`        | `k3`, `low`               | `light`                |
+  | `sf-k3-high`       | `k3`, `high`              | `edit`                 |
+  | `sf-k3-1-pro-high` | `k3.1-pro`, `high`        | `build`, `fix`, `plan` |
+  | `sf-k3-1-pro-max`  | `k3.1-pro`, `max`         | `terminal`             |
+
+- **sf never writes your Kimi Code configuration.** Your `~/.kimi-code/config.toml` (or `$KIMI_CODE_HOME/config.toml`) holds your credentials and your pool, and belongs to you. The CLI only **reads**
+  it, to learn the key names of `[secondary_model.models]` and, when a snippet needs them, the `provider`, `max_context_size` and `capabilities` of your entry for the same model; it never reads a
+  value such as an `api_key` into anything it prints. When an alias is missing from your pool, `sf agents route` prints the TOML to paste on stderr, and `sf agents enable`, `replace` and `refresh` say
+  the same in a warning (and in the `report.warnings` of `--json`). The snippet gives the `[models.<alias>]` tables first, because a pool key that points at no entry makes Kimi Code fail at start,
+  then the lines to add **under your existing** `[secondary_model.models]` table, never a second header for it. A pool you have not declared yet gets the `[secondary_model]` and
+  `[secondary_model.models]` tables whole, with a placeholder for the `default_model` that must be one of its keys. A config that cannot be read (not a file, not UTF-8 text, larger than 1 MiB) is
+  `unknown`: the route still names the alias, and the snippet is printed as if nothing were declared. If `[secondary_model].default_effort` is set it outranks the effort of every alias, and the CLI
+  says so. With a single-entry pool Kimi Code does not advertise the `model` parameter at all.
+- **A sub-task line, not a whole-ticket line.** The profile says `worktrees: none`, so each Kimi tier agent carries "Sub-tasks only" in place of the whole-ticket delivery line the Claude Code and
+  Codex ones have: it works on the sub-task the brief hands it, in the current worktree, and stops and says so if it is handed a whole ticket. This is decided from the profile data, with no branch for
+  Kimi Code in the renderer. The session delivers the ticket itself and delegates sub-tasks only.
+- **Not checked in a real session.** The profile keeps `runtime: not-checked`: that Kimi Code resolves `subagent_type: "sf-<tier>"` and honours the alias on a call is declared from its documentation,
+  not verified here.
 - **No hook.** Kimi Code reads its hooks from the user's own configuration only, never from the project, so the harness installs no guard and no capture hook. `sf status` says
   `kimi guard unavailable (…)` and `kimi capture unavailable (…; record its delegations with sf agents outcome record)`. The CLI's own guards still refuse an escape hatch; nothing stops an agent from
   setting one before it reaches them.
 - **Sub-tasks in the current worktree only.** Kimi Code has no worktree tool the harness uses (`worktrees: none`), so a delegation to Kimi is limited to sub-tasks of the current worktree until a
-  whole-ticket worktree run is verified.
+  whole-ticket worktree run is verified. A refused or failed route never sends the session to another host's CLI (see [Delegated ticket delivery](#delegated-ticket-delivery-sf-agents-delegation)).
 - **Recording by hand.** A delegation to Kimi is recorded with `sf agents outcome record --provider kimi …` (host `manual`: rated for the report, never moves the routing), and its models are unpriced
   until the project declares a price in `modules.harness.routing.adjust.prices`.
 - **Identity.** The agent is `kimi`, declared explicitly (`sf agents enable kimi`). No path infers it from a model name, and `kimi-code`, `moonshot` or `k3` are refused as unregistered.
@@ -351,10 +384,11 @@ provider is `kimi` as an invalid line, which it skips and counts. Upgrade the CL
 
 The harness turns the grid into one subagent per tier for each declared coding agent the grid routes and whose profile declares tier agents, so a delegation can pick a cheaper tier by name:
 
-| Agent         | File                           | Model and effort                     |
-| ------------- | ------------------------------ | ------------------------------------ |
-| `claude-code` | `.claude/agents/sf-<tier>.md`  | `model` and `effort` frontmatter     |
-| `codex`       | `.codex/agents/sf-<tier>.toml` | `model` and `model_reasoning_effort` |
+| Agent         | File                             | Model and effort                                                                                  |
+| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `claude-code` | `.claude/agents/sf-<tier>.md`    | `model` and `effort` frontmatter                                                                  |
+| `codex`       | `.codex/agents/sf-<tier>.toml`   | `model` and `model_reasoning_effort`                                                              |
+| `kimi`        | `.kimi-code/agents/sf-<tier>.md` | None in the file: the call passes the alias `sf agents route` names (see [Kimi Code](#kimi-code)) |
 
 Each description lists the task kinds the tier serves and the tier to use for every other kind: `sf-fix` is for `bug-fix` and `review`, and sends `scoped-edit` to `sf-edit`. The files follow the
 routing of the manifest; a move the automatic adjustment made in this clone stays local until it is promoted. Each agent also asks its delegate to close with the `SF-DELEGATION` line (see
@@ -366,7 +400,13 @@ Tier agents are hash-tracked like the other agent deposits. `sf agents enable`, 
 any kind, keeps its file until you remove it. An adopted project receives none. [`sf status`](./sf-status.md#tier-agents) compares every tier agent with what a refresh would write and warns about a
 missing, an edited or an outdated one, with the command that fixes it.
 
-Claude Code chooses a subagent from its description. Codex delegates when you ask or when the instructions say so, and reads a project's `.codex/agents` only once you trust the project.
+Claude Code chooses a subagent from its description. Codex delegates when you ask or when the instructions say so, and reads a project's `.codex/agents` only once you trust the project. Kimi Code
+reads `.kimi-code/agents` of the project (review it like a script in a repository you do not know: an agent file is prompt configuration); its description says the model is chosen by the alias a call
+passes, and its `whenToUse` lists the kinds the tier serves. A file format and a model binding go together: `kimi-md` writes no model and so declares `modelBinding: call-alias`, and the registry
+refuses a profile that pairs a format with the other binding.
+
+Local onboarding of Kimi Code (`sf agents enable kimi`, the default scope) writes the six files as untracked, excluded files and leaves every tracked file and the manifest as they were; the text of
+`AGENTS.md` that mentions the alias is static, so it does not depend on which agent a clone declared. `--scope shared` writes the same files for review and records their baselines in the manifest.
 
 The generated instructions say so. When a workflow step names a task kind (`exploration` for the analysis, `review` for the adversarial review, `scoped-edit` or `multi-file-feature` for a delegated
 subtask), they tell every agent to run `sf agents route --task <kind> --provider <current-agent>` (with `--ticket <n> --record` when the delegation is measured) and delegate to the `sf-<tier>` agent
@@ -421,7 +461,12 @@ The generated instructions then tell every agent what to do with the effective a
 The consent covers ticket delivery only. Any other parallel writing stream is proposed to the developer first, and the answer comes before writers start.
 
 A coding agent whose profile has no worktree support (`worktrees: none`, Kimi Code today) cannot run a whole ticket in a worktree of its own. For it, delegation is limited to sub-tasks of the current
-worktree, in the session that holds it, until a whole-ticket worktree run is verified; the profile says so (`limitations.worktrees`).
+worktree, in the session that holds it, until a whole-ticket worktree run is verified; the profile says so (`limitations.worktrees`). The generated instructions say the same, statically, whatever
+agents the project declares: such a host delivers the tickets in the session, one after the other, and delegates sub-tasks only, through its own native sub-agent tool.
+
+A refused or failed route is never worked around. When `sf agents route` refuses an agent, or a delegation cannot start, the step runs in the session; the session never starts another coding agent's
+CLI (`claude`, `codex`, or any other) or a background session of another host to delegate anyway, since such a session is one the harness does not route, record or guard. The generated instructions
+and the workflow skill state this rule, so it holds for every agent and does not depend on the declared ones.
 
 A delegated agent never merges and, on a ticket that goes through Human Testing, never runs `ready-pr`: it stops at the green report with the draft pull request, and the developer takes the pull
 request out of draft. The session collects the Human Testing feedback and hands a defect, or the AI work the validation leaves (non-regression tests, follow-ups), back to the ticket's own agent in the

@@ -269,13 +269,13 @@ Au-delà de la façon dont un outil charge les instructions et les skills, chaqu
 qu'un outil sait écrire, les dossiers et formats des agents de palier, les fichiers de hooks et les formulations de `sf status` en sont tous lus : aucune autre source ne nomme Claude Code ou Codex
 pour les décider, si bien qu'un nouvel outil commence par être une modification de données.
 
-| Champ         | Dit                                                                                                                                                                                                                                                                     |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `routing`     | `{ vendor, efforts }` : la grille a des candidats pour l'outil, rangés sous ce fournisseur, et un fichier d'agent de palier de l'outil sait exprimer ces efforts. `null` sinon                                                                                          |
-| `tierAgents`  | `{ dir, format, modelBinding }` : le dossier du projet où l'outil lit ses sous-agents, leur format de fichier (`claude-md`, `codex-toml`) et si le modèle est écrit dans le fichier (`file`) ou choisi à chaque appel (`call-alias`). `null` sinon. Exige `routing`     |
-| `hooks`       | `{ scope, file, guardEvent, captureEvent, needsTrust }` : le fichier qui déclare les hooks de l'outil (portée `project` ou `user`), les événements du hook de garde et du hook de capture, et si l'outil n'exécute un hook de projet qu'une fois approuvé. `null` sinon |
-| `worktrees`   | `native` (l'outil isole lui-même un délégué dans un worktree), `manual` (la session l'ouvre avec Git) ou `none`                                                                                                                                                         |
-| `limitations` | La raison de chaque capacité qui manque à l'outil, indexée par nom de capacité                                                                                                                                                                                          |
+| Champ         | Dit                                                                                                                                                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `routing`     | `{ vendor, efforts }` : la grille a des candidats pour l'outil, rangés sous ce fournisseur, et un fichier d'agent de palier de l'outil sait exprimer ces efforts. `null` sinon                                                                                                 |
+| `tierAgents`  | `{ dir, format, modelBinding }` : le dossier du projet où l'outil lit ses sous-agents, leur format de fichier (`claude-md`, `codex-toml`, `kimi-md`) et si le modèle est écrit dans le fichier (`file`) ou choisi à chaque appel (`call-alias`). `null` sinon. Exige `routing` |
+| `hooks`       | `{ scope, file, guardEvent, captureEvent, needsTrust }` : le fichier qui déclare les hooks de l'outil (portée `project` ou `user`), les événements du hook de garde et du hook de capture, et si l'outil n'exécute un hook de projet qu'une fois approuvé. `null` sinon        |
+| `worktrees`   | `native` (l'outil isole lui-même un délégué dans un worktree), `manual` (la session l'ouvre avec Git) ou `none`                                                                                                                                                                |
+| `limitations` | La raison de chaque capacité qui manque à l'outil, indexée par nom de capacité                                                                                                                                                                                                 |
 
 **La règle d'une capacité manquante.** Un profil auquel une capacité manque (un bloc `null`, ou `worktrees` autre que `native`) doit dire pourquoi dans `limitations`, et ne dit rien d'une capacité
 qu'il a : le registre refuse un profil qui enfreint l'une ou l'autre moitié. Toute commande qui a besoin de la capacité nomme alors cette raison au lieu d'un simple « pas de routage ».
@@ -300,9 +300,10 @@ sf agents route --task terminal-ci --provider codex
 
 Le CLI livre une grille d'allocation versionnée. Chaque type de tâche (`exploration`, `scoped-edit`, `bug-fix`, `multi-file-feature`, `tests`, `review`, `planning`, `terminal-ci`, `prose`) désigne un
 palier, et chaque palier désigne un candidat (modèle et niveau de raisonnement) pour Claude Code, pour Codex et pour Kimi Code. La sortie donne le palier, le candidat sous la forme d'un identifiant
-canonique `provider/runtime/model/effort`, l'origine de la décision (`shipped` ou `project`) et la preuve qui fonde une entrée livrée. La commande fonctionne hors d'un projet géré ; dans un projet,
-elle répond pour les agents de code déclarés qui disposent de candidats. Un agent de code sans routage est refusé avec la limitation que documente son profil (voir
-[le bloc de capacités](#le-bloc-de-capacites-d-un-profil)), jamais avec un simple « pas de routage ».
+canonique `provider/runtime/model/effort`, l'origine de la décision (`shipped` ou `project`) et la preuve qui fonde une entrée livrée. Un hôte dont le fichier d'agent de palier ne lie aucun modèle,
+Kimi Code, reçoit aussi l'alias de modèle que l'appel passe (voir [Kimi Code](#kimi-code)). La commande fonctionne hors d'un projet géré ; dans un projet, elle répond pour les agents de code déclarés
+qui disposent de candidats. Un agent de code sans routage est refusé avec la limitation que documente son profil (voir [le bloc de capacités](#le-bloc-de-capacites-d-un-profil)), jamais avec un simple
+« pas de routage ».
 
 Chaque entrée livrée cite sa preuve. Une entrée `measured` porte le benchmark public, sa date, son score et son coût par tâche : c'est le candidat le moins cher à moins de 5 points du meilleur score
 mesuré pour au plus la moitié de son coût, comparé au sein d'une même source. Une entrée `provisional` nomme l'indicateur le plus proche et n'a pas de score : aucun benchmark public ne mesure ce type
@@ -340,8 +341,9 @@ sans `--complexity` (ou `--nature`), la valeur est lue dans les étiquettes du t
 
 ### Kimi Code
 
-Kimi Code est routé par son profil et par la grille seuls (`routing: { vendor: "moonshot", efforts: ["low", "high", "max"] }`) : aucune commande ni aucun moteur de rendu n'a de branche pour lui. Ses
-candidats sont `moonshot/kimi/<modèle>/<effort>` :
+Kimi Code est routé par son profil et par la grille (`routing: { vendor: "moonshot", efforts: ["low", "high", "max"] }`), et écrit aussi ses agents de palier à partir de son profil
+(`tierAgents: { dir: ".kimi-code/agents", format: "kimi-md", modelBinding: "call-alias" }`) : aucune commande n'a de branche pour lui, et seul son format de fichier a un moteur de rendu. Ses candidats
+sont `moonshot/kimi/<modèle>/<effort>` :
 
 | Palier     | Types de tâche                | Candidat (modèle, effort) |
 | ---------- | ----------------------------- | ------------------------- |
@@ -356,13 +358,45 @@ candidats sont `moonshot/kimi/<modèle>/<effort>` :
   (`provisional: No Kimi measurement exists yet; …`). Le banc de rejeu des mainteneurs les remplace par des mesures. Les alias `highspeed` ne sont pas utilisés : ils facturent deux fois.
 - **Efforts.** Kimi Code exprime `low`, `high` et `max`. Une surcharge de projet d'un palier Kimi à tout autre effort (`minimal`, `medium`, `xhigh`, `ultra`) est refusée, et nomme les trois qu'elle
   accepte.
-- **Pas encore d'agent de palier.** Le harness n'écrit aucun fichier `sf-<tier>` pour Kimi Code tant que FR-MAH-022 n'a pas défini son format de fichier (le modèle n'y est pas écrit). Une route Kimi
-  nomme un palier et le candidat à lancer ; la session délègue à la main une sous-tâche Kimi sur ce modèle et cet effort.
+- **Des agents de palier, et l'alias de modèle qu'une route nomme.** `sf agents refresh` écrit `.kimi-code/agents/sf-<palier>.md` pour chaque palier : un fichier Markdown dont le frontmatter porte
+  `name`, `description`, `whenToUse` et une liste `tools` explicite (la même pour tous les paliers, terminée par `mcp__*` pour que les outils MCP de la session atteignent le délégué), et dont le corps
+  est `${base_prompt}` (le prompt système par défaut de Kimi Code) suivi des instructions que porte chaque agent de palier. **Le fichier ne nomme ni modèle ni effort** : Kimi Code ne lie aucun modèle
+  dans un fichier d'agent. Un appel à l'outil `Agent` passe `model: <alias>`, une clé de votre propre pool `[secondary_model.models]` ; la route nomme donc l'alias, et la session le recopie :
+
+  ```text
+  bug-fix → fix (shipped) kimi: k3.1-pro, effort high, alias sf-k3-1-pro-high — provisional: …  route=<id>
+  ```
+
+  `--json` ajoute `alias` à la route et `aliasPool` (`present`, `missing` ou `unknown` : votre pool le déclare-t-il). Les deux champs sont optionnels et additifs, donc `routeVersion` reste 2 ; une
+  route Claude Code ou Codex n'en porte aucun. L'alias porte le nom du candidat, pas celui du palier (`sf-<modèle>-<effort>`, un point dans le nom du modèle s'écrivant `-`) : il suit donc une
+  surcharge du candidat d'un palier, et deux paliers sur un même candidat partagent un alias :
+
+  | Alias              | Candidat (modèle, effort) | Paliers                |
+  | ------------------ | ------------------------- | ---------------------- |
+  | `sf-k3-low`        | `k3`, `low`               | `light`                |
+  | `sf-k3-high`       | `k3`, `high`              | `edit`                 |
+  | `sf-k3-1-pro-high` | `k3.1-pro`, `high`        | `build`, `fix`, `plan` |
+  | `sf-k3-1-pro-max`  | `k3.1-pro`, `max`         | `terminal`             |
+
+- **sf n'écrit jamais votre configuration Kimi Code.** Votre `~/.kimi-code/config.toml` (ou `$KIMI_CODE_HOME/config.toml`) contient vos identifiants et votre pool, et vous appartient. Le CLI ne fait
+  que le **lire**, pour connaître les noms des clés de `[secondary_model.models]` et, quand un extrait en a besoin, le `provider`, le `max_context_size` et les `capabilities` de votre entrée du même
+  modèle ; il ne lit jamais une valeur comme une `api_key` dans ce qu'il imprime. Quand un alias manque à votre pool, `sf agents route` imprime sur stderr le TOML à coller, et `sf agents enable`,
+  `replace` et `refresh` disent la même chose dans un avertissement (et dans `report.warnings` de `--json`). L'extrait donne d'abord les tables `[models.<alias>]`, car une clé du pool qui ne pointe
+  vers aucune entrée fait échouer Kimi Code au démarrage, puis les lignes à ajouter **sous votre table** `[secondary_model.models]` existante, jamais un second en-tête. Un pool que vous n'avez pas
+  encore déclaré reçoit les tables `[secondary_model]` et `[secondary_model.models]` en entier, avec un espace réservé pour le `default_model`, qui doit être l'une de ses clés. Une configuration
+  illisible (pas un fichier, pas du texte UTF-8, plus de 1 Mio) est `unknown` : la route nomme quand même l'alias, et l'extrait s'imprime comme si rien n'était déclaré. Si
+  `[secondary_model].default_effort` est défini, il l'emporte sur l'effort de chaque alias, et le CLI le dit. Avec un pool d'une seule entrée, Kimi Code n'annonce pas du tout le paramètre `model`.
+- **Une ligne de sous-tâche, pas une ligne de ticket entier.** Le profil dit `worktrees: none` : chaque agent de palier Kimi porte donc « Sub-tasks only » à la place de la ligne de livraison de ticket
+  entier de ceux de Claude Code et de Codex. Il travaille sur la sous-tâche que le brief lui confie, dans le worktree courant, et s'arrête en le disant si on lui confie un ticket entier. C'est décidé
+  à partir des données du profil, sans branche pour Kimi Code dans le moteur de rendu. La session livre le ticket elle-même et ne délègue que des sous-tâches.
+- **Non vérifié dans une vraie session.** Le profil garde `runtime: not-checked` : que Kimi Code résolve `subagent_type: "sf-<palier>"` et respecte l'alias d'un appel est déclaré d'après sa
+  documentation, non vérifié ici.
 - **Pas de hook.** Kimi Code lit ses hooks dans la configuration de l'utilisateur seulement, jamais dans le projet : le harness n'installe donc ni garde ni hook de capture. `sf status` dit
   `kimi guard unavailable (…)` et `kimi capture unavailable (… ; record its delegations with sf agents outcome record)`. Les gardes propres au CLI refusent toujours une échappatoire ; rien n'empêche
   un agent d'en poser une avant d'y arriver.
 - **Sous-tâches du worktree courant seulement.** Kimi Code n'a pas d'outil de worktree que le harness utilise (`worktrees: none`) : une délégation à Kimi se limite donc à des sous-tâches du worktree
-  courant, tant qu'une exécution de ticket entier dans un worktree n'est pas vérifiée.
+  courant, tant qu'une exécution de ticket entier dans un worktree n'est pas vérifiée. Une route refusée ou en échec n'envoie jamais la session vers le CLI d'un autre hôte (voir
+  [Livraison déléguée des tickets](#livraison-deleguee-des-tickets-sf-agents-delegation)).
 - **Enregistrement à la main.** Une délégation à Kimi s'enregistre avec `sf agents outcome record --provider kimi …` (hôte `manual` : évaluée dans le rapport, elle ne déplace jamais le routage), et
   ses modèles ne sont pas valorisés tant que le projet ne déclare pas de prix dans `modules.harness.routing.adjust.prices`.
 - **Identité.** L'agent est `kimi`, déclaré explicitement (`sf agents enable kimi`). Aucun chemin ne l'infère d'un nom de modèle, et `kimi-code`, `moonshot` ou `k3` sont refusés comme non enregistrés.
@@ -375,10 +409,11 @@ le fournisseur est `kimi` comme une ligne invalide, qu'il ignore et compte. Mett
 Le harness traduit la grille en un sous-agent par palier pour chaque agent de développement déclaré que la grille route et dont le profil déclare des agents de palier : une délégation peut ainsi
 choisir un palier moins cher par son nom.
 
-| Agent         | Fichier                        | Modèle et effort                    |
-| ------------- | ------------------------------ | ----------------------------------- |
-| `claude-code` | `.claude/agents/sf-<tier>.md`  | frontmatter `model` et `effort`     |
-| `codex`       | `.codex/agents/sf-<tier>.toml` | `model` et `model_reasoning_effort` |
+| Agent         | Fichier                          | Modèle et effort                                                                                         |
+| ------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `claude-code` | `.claude/agents/sf-<tier>.md`    | frontmatter `model` et `effort`                                                                          |
+| `codex`       | `.codex/agents/sf-<tier>.toml`   | `model` et `model_reasoning_effort`                                                                      |
+| `kimi`        | `.kimi-code/agents/sf-<tier>.md` | Aucun dans le fichier : l'appel passe l'alias que nomme `sf agents route` (voir [Kimi Code](#kimi-code)) |
 
 Chaque description liste les types de tâche que sert le palier et le palier à utiliser pour chacun des autres : `sf-fix` sert `bug-fix` et `review`, et renvoie `scoped-edit` vers `sf-edit`. Les
 fichiers suivent le routage du manifeste ; un déplacement que l'ajustement automatique a fait dans ce clone reste local tant qu'il n'est pas promu. Chaque agent demande aussi à son délégué de terminer
@@ -392,7 +427,13 @@ ou un palier qui ne sert plus aucun type, garde son fichier jusqu'à ce que vous
 de palier à ce qu'un refresh écrirait et signale d'un `warn` celui qui manque, qui a été modifié ou qui est périmé, avec la commande qui le corrige.
 
 Claude Code choisit un sous-agent d'après sa description. Codex délègue quand vous le demandez ou quand les instructions le prévoient, et ne lit les `.codex/agents` d'un projet qu'une fois ce projet
-approuvé (trusted).
+approuvé (trusted). Kimi Code lit les `.kimi-code/agents` du projet (relisez-les comme un script d'un dépôt que vous ne connaissez pas : un fichier d'agent est de la configuration de prompt) ; sa
+description dit que le modèle est choisi par l'alias que passe un appel, et son `whenToUse` liste les types de tâche que sert le palier. Un format de fichier et une liaison de modèle vont ensemble :
+`kimi-md` n'écrit aucun modèle et déclare donc `modelBinding: call-alias`, et le registre refuse un profil qui associe un format à l'autre liaison.
+
+L'onboarding local de Kimi Code (`sf agents enable kimi`, portée par défaut) écrit les six fichiers comme fichiers non suivis et exclus, et laisse intacts tous les fichiers suivis et le manifeste ; le
+texte de `AGENTS.md` qui mentionne l'alias est statique, il ne dépend donc pas de l'agent qu'un clone a déclaré. `--scope shared` écrit les mêmes fichiers pour relecture et consigne leurs références
+dans le manifeste.
 
 Les instructions générées le prévoient. Quand une étape du workflow nomme un type de tâche (`exploration` pour l'analyse, `review` pour la revue contradictoire, `scoped-edit` ou `multi-file-feature`
 pour une sous-tâche déléguée), elles demandent à chaque agent de lancer `sf agents route --task <kind> --provider <current-agent>` (avec `--ticket <n> --record` quand la délégation est mesurée) et de
@@ -450,7 +491,13 @@ Les instructions générées indiquent ensuite à chaque agent quoi faire de la 
 L'accord couvre la livraison des tickets, et rien d'autre. Tout autre flux d'écriture parallèle est d'abord proposé au développeur, dont la réponse précède le démarrage des rédacteurs.
 
 Un agent de code dont le profil n'a pas de worktree (`worktrees: none`, Kimi Code aujourd'hui) ne peut pas exécuter un ticket entier dans un worktree à lui. Pour lui, la délégation se limite aux
-sous-tâches du worktree courant, dans la session qui le détient, tant qu'une exécution de ticket entier dans un worktree n'est pas vérifiée ; le profil le dit (`limitations.worktrees`).
+sous-tâches du worktree courant, dans la session qui le détient, tant qu'une exécution de ticket entier dans un worktree n'est pas vérifiée ; le profil le dit (`limitations.worktrees`). Les
+instructions générées disent la même chose, de façon statique, quels que soient les agents que déclare le projet : un tel hôte livre les tickets dans la session, l'un après l'autre, et ne délègue que
+des sous-tâches, par son propre outil natif de sous-agents.
+
+Une route refusée ou en échec n'est jamais contournée. Quand `sf agents route` refuse un agent, ou qu'une délégation ne peut pas démarrer, l'étape s'exécute dans la session ; la session ne lance
+jamais le CLI d'un autre agent de code (`claude`, `codex` ou tout autre), ni une session en arrière-plan d'un autre hôte, pour déléguer malgré tout : une telle session n'est ni routée, ni enregistrée,
+ni gardée par le harness. Les instructions générées et la skill de workflow énoncent cette règle, qui vaut donc pour tous les agents et ne dépend pas de ceux qui sont déclarés.
 
 Un agent délégué ne fusionne jamais et, sur un ticket qui passe par Human Testing, ne lance jamais `ready-pr` : il s'arrête au rapport vert avec la pull request en brouillon, et c'est le développeur
 qui la sort du brouillon. La session recueille les retours de Human Testing et confie un défaut, ou le travail d'IA que la validation laisse (tests de non-régression, suites), à l'agent propre au

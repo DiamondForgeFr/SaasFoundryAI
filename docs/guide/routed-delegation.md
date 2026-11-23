@@ -51,14 +51,40 @@ Kimi Code has a candidate in every tier, declared as data in its profile and in 
 | `plan`     | `planning`                    | `k3.1-pro`, `high`                  |
 | `terminal` | `terminal-ci`                 | `k3.1-pro`, `max`                   |
 
-Kimi Code expresses three efforts, `low`, `high` and `max`: an override at any other effort is refused. Three limits come with it:
+Kimi Code expresses three efforts, `low`, `high` and `max`: an override at any other effort is refused. Kimi Code works differently from the other two hosts in three ways:
 
-- **No tier agent yet.** The harness writes no `sf-<tier>` file for Kimi Code until its file format is defined (FR-MAH-022). The route names the tier and the candidate; the session starts a Kimi
-  sub-task on that model and effort.
-- **No hook.** Kimi Code reads its hooks from the user's own configuration, never from the project, so the harness installs neither a guard nor a capture hook. `sf status` says `guard unavailable` and
-  `capture unavailable`, with that reason, and the delegations are recorded by hand with `sf agents outcome record --provider kimi`. The CLI's own guards still refuse an escape hatch.
+- **Tier agents without a model, and an alias per call.** The harness writes `.kimi-code/agents/sf-<tier>.md` for every tier, like the other hosts, but Kimi Code binds no model in an agent file. A
+  call to its `Agent` tool passes `model: <alias>`, a key of the `[secondary_model.models]` pool in **your own** `~/.kimi-code/config.toml` (or `$KIMI_CODE_HOME/config.toml`). So the route names the
+  alias next to the candidate, and the session copies it:
+
+  ```bash
+  sf agents route --task bug-fix --provider kimi
+  # bug-fix → fix (shipped) kimi: k3.1-pro, effort high, alias sf-k3-1-pro-high — provisional: …
+  ```
+
+  The alias is named after the candidate, never the tier, so it follows an override of a tier's candidate, an automatic move, a trial or a retry. A dot in the model name is written as `-`:
+
+  | Alias              | Candidate (model, effort) | Tiers                  |
+  | ------------------ | ------------------------- | ---------------------- |
+  | `sf-k3-low`        | `k3`, `low`               | `light`                |
+  | `sf-k3-high`       | `k3`, `high`              | `edit`                 |
+  | `sf-k3-1-pro-high` | `k3.1-pro`, `high`        | `build`, `fix`, `plan` |
+  | `sf-k3-1-pro-max`  | `k3.1-pro`, `max`         | `terminal`             |
+
+  This is the one exception to "never name a model": the session passes the alias exactly as the route prints it, and never composes one.
+
+- **Declaring the aliases is yours.** sf never writes `~/.kimi-code`. It reads the key names of your pool and, when a route's alias is missing, prints on stderr the TOML to paste; `sf agents enable`,
+  `replace` and `refresh` print the same for every tier alias, as a warning. Paste the `[models.<alias>]` tables first (each carries the `default_effort` of its alias, and the `provider` and context
+  size copied from your entry of the same model when there is one), then the lines under your existing `[secondary_model.models]` table. Do not repeat that header. If
+  `[secondary_model].default_effort` is set, it outranks the effort of every alias: remove it to let each alias run at its own. With a one-entry pool Kimi Code does not offer the `model` parameter, so
+  keep at least two.
 - **Sub-tasks in the current worktree only.** Kimi Code has no worktree tool the harness uses, so a delegation to it is limited to sub-tasks of the current worktree until a whole-ticket worktree run
-  is verified.
+  is verified. Each of its tier agents is handed a sub-task and never a whole ticket, and the session delivers the ticket itself. When a route is refused, or a delegation cannot start, the session
+  runs the step itself: it never starts another coding agent's CLI (`claude`, `codex`, or any other) or a background session of another host to delegate anyway.
+
+One more limit: **no hook.** Kimi Code reads its hooks from the user's own configuration, never from the project, so the harness installs neither a guard nor a capture hook. `sf status` says
+`guard unavailable` and `capture unavailable`, with that reason, and the delegations are recorded by hand with `sf agents outcome record --provider kimi`. The CLI's own guards still refuse an escape
+hatch. Whether Kimi Code resolves `subagent_type: "sf-<tier>"` and honours the alias on a call is declared from its documentation and not checked (`runtime: not-checked`).
 
 The agent is named `kimi`, explicitly: no model name or look-alike (`kimi-code`, `k3`, `moonshot`) is read as that agent. A CLI older than this release does not know `kimi` as a routed agent: it
 refuses `sf agents route --provider kimi`, and skips (and counts) a ledger line whose provider is `kimi`, so upgrade every clone that shares a ledger first.
@@ -66,17 +92,17 @@ refuses `sf agents route --provider kimi`, and skips (and counts) a ledger line 
 ## The tier agents
 
 For each declared coding agent that the grid routes and whose profile declares tier agents, the harness writes one subagent per tier. For Claude Code these are `.claude/agents/sf-<tier>.md`, with the
-model and effort in their frontmatter; for Codex they are `.codex/agents/sf-<tier>.toml`. Each description lists the task kinds the tier serves, so Claude Code can pick the right agent from its
-description alone.
+model and effort in their frontmatter; for Codex they are `.codex/agents/sf-<tier>.toml`; for Kimi Code they are `.kimi-code/agents/sf-<tier>.md`, which name no model (the call passes the
+[alias the route names](#kimi-code)). Each description lists the task kinds the tier serves, so Claude Code can pick the right agent from its description alone; a Kimi file puts them in `whenToUse`.
 
 Which agents are routed, which efforts a tier agent can carry, and which folder and format it is written in are not decided by the harness's code: each coding-agent profile declares them in its
 `capabilities` block ([`sf agents`](/cli/sf-agents#the-capability-block-of-a-profile)). A tool whose profile declares no routing has no route and no tier agent, and a command that needs one tells you
-why in the words of that profile, for example that the harness ships no routing candidates for Gemini CLI. A routed tool whose profile declares no tier agents, such as Kimi Code today, has a route and
-no file. The same rule covers every capability a profile lacks: it says why, or the registry refuses it.
+why in the words of that profile, for example that the harness ships no routing candidates for Gemini CLI. A routed tool whose profile declares no tier agents has a route and no file. The same rule
+covers every capability a profile lacks: it says why, or the registry refuses it.
 
 The files are generated and tracked. `sf agents enable`, `replace`, `refresh` and `sf update` rewrite an untouched file and leave an edited one beside a `.saasfoundry.new` sidecar.
-[`sf status`](/cli/sf-status#tier-agents) warns when one is missing, edited or outdated. The tier agents only name a model and an effort; they do not carry credentials, and a missing provider account
-makes the delegation fail, it does not fall back silently.
+[`sf status`](/cli/sf-status#tier-agents) warns when one is missing, edited or outdated. The tier agents only name a model and an effort (Kimi Code: an alias); they do not carry credentials, and a
+missing provider account, or an alias your pool does not declare, makes the delegation fail, it does not fall back silently.
 
 ## Consent
 
