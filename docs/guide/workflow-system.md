@@ -170,6 +170,24 @@ record commands with exit code `2`, and their `update-status` does not read a re
 The refusal is lifted by `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`, an [escape hatch](#escape-hatches) that is yours to apply, announced and recorded on the ticket like the others. The guard hook refuses
 an agent that sets it.
 
+### How an agent works a `ui` ticket
+
+The workflow skill gives every coding agent (Claude Code, Codex, Kimi Code or any other) the same instructions for a `ui` ticket. They name capabilities, never the tool of one host:
+
+- **Design skills.** The agent loads the design and UX skills its host offers before it draws anything, and works as a UI/UX professional, with the project's design tokens and components.
+- **A short checklist.** `ui-checklist.md` ships next to the skill's `SKILL.md`: hierarchy; spacing and design tokens; states (empty, loading, error, disabled); accessibility (contrast, keyboard,
+  focus, labels); copy.
+- **One HTML file as the mockup.** The floor is a single self-contained HTML file: inline CSS, no build step, and it opens in any browser. It is kept with the ticket's evidence (committed on the
+  ticket's branch, in `docs/mockups/` unless your `AGENTS.md` names another folder), and its path or link goes into `record-ui-validation`. A richer surface the host offers, such as a Claude artifact
+  or a Figma frame, may be added next to it, never in its place.
+- **You see it first.** The mockup is shown to you before the visual implementation. The spec, the model, the data and the tests may start meanwhile; only the visual part waits for your OK. When you
+  supply the visuals yourself, the session records that with `record-ui-validation --supplied` and no mockup is made.
+- **A delegated agent waits for your OK.** The brief of a delegated `ui` ticket says to hold the visual part until the session relays your OK, and to follow the validated mockup. The session is the
+  one that shows you the mockup and records your approval; an agent never records an approval you did not give.
+
+Where your project shows a mockup (for example the browser panel of your terminal) and which design tokens it uses are yours to state, in your own `AGENTS.md` and outside its generated region. The
+generated region tells the agents to look there; without a statement, the agent gives you the mockup file's path to open in a browser.
+
 ## The first ticket
 
 Create tickets through the CLI, so they land on the board in Backlog with their issue type and complexity label:

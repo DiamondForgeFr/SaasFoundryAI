@@ -175,6 +175,25 @@ workflow (Jira, Linear, Notion) refusent les commandes du marqueur et de l'enreg
 Le refus est levé par `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`, une [échappatoire](#echappatoires) qui vous revient, annoncée et consignée sur le ticket comme les autres. Le hook de garde refuse l'agent
 qui l'active.
 
+### Comment un agent travaille un ticket `ui`
+
+Le skill de workflow donne à tout agent de code (Claude Code, Codex, Kimi Code ou un autre) les mêmes instructions pour un ticket `ui`. Elles nomment des capacités, jamais l'outil d'un seul hôte :
+
+- **Les skills de design.** L'agent charge les skills de design et d'UX que son hôte propose avant de dessiner quoi que ce soit, et travaille en professionnel de l'UI/UX, avec les design tokens et les
+  composants du projet.
+- **Une courte checklist.** `ui-checklist.md` est livrée à côté du `SKILL.md` du skill : hiérarchie ; espacements et design tokens ; états (vide, chargement, erreur, désactivé) ; accessibilité
+  (contraste, clavier, focus, libellés) ; texte.
+- **Un fichier HTML comme maquette.** Le socle est un seul fichier HTML autonome : CSS en ligne, aucune étape de build, et il s'ouvre dans n'importe quel navigateur. Il est conservé avec les preuves
+  du ticket (commité sur la branche du ticket, dans `docs/mockups/` sauf si votre `AGENTS.md` nomme un autre dossier), et son chemin ou son lien va dans `record-ui-validation`. Une surface plus riche
+  que l'hôte propose, comme un artefact Claude ou un cadre Figma, peut s'y ajouter, jamais s'y substituer.
+- **Vous le voyez d'abord.** La maquette vous est montrée avant l'implémentation visuelle. La spécification, le modèle, les données et les tests peuvent démarrer entre-temps ; seule la partie visuelle
+  attend votre accord. Quand vous fournissez vous-même les visuels, la session le consigne avec `record-ui-validation --supplied` et aucune maquette n'est produite.
+- **Un agent délégué attend votre accord.** Le brief d'un ticket `ui` délégué dit de tenir la partie visuelle jusqu'à ce que la session relaie votre accord, et de suivre la maquette validée. C'est la
+  session qui vous montre la maquette et consigne votre approbation ; un agent ne consigne jamais une approbation que vous n'avez pas donnée.
+
+Où votre projet montre une maquette (par exemple le panneau navigateur de votre terminal) et quels design tokens il utilise, c'est à vous de l'indiquer, dans votre propre `AGENTS.md` et hors de sa
+région générée. La région générée renvoie les agents à cet endroit ; sans indication, l'agent vous donne le chemin du fichier de maquette à ouvrir dans un navigateur.
+
 ## Le premier ticket
 
 Créez les tickets avec le CLI : ils arrivent sur le tableau en Backlog, avec leur type et leur étiquette de complexité :
