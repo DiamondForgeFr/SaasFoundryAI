@@ -66,6 +66,8 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - [ ] **Move ticket to "In Progress"** via `workflow-cli.sh update-status <ticket> "In progress"`
 - [ ] **Delegated implementation** — name the task kind (`scoped-edit`, `multi-file-feature`, `bug-fix`, `tests`, `prose`) and state the file set, expected result and check in the child body; a child
       that cannot state them is split or kept in the session (SKILL.md → Delegation routing)
+- [ ] **A `ui` ticket** — it needs a validated mockup before it reaches the developer's review: follow SKILL.md → "Working a `ui` ticket" (the UI checklist, the one-file HTML mockup, the visual part
+      held until the developer's OK). The brief of a delegated agent carries that hold
 - [ ] **Per normal child:** branch → code → PR → verify merge → close the child; per bundled child: one atomic commit on the parent's branch → validate → close the child
 - [ ] **Parent implementation done:** `npm run build`, then `npm run lint` → the tests the change affects (the full suites run once, at AI Testing) → commit and push. Child tickets may continue
       through their own lifecycle. `update-status <ticket> "AI testing"` enforces the push: its pushed-commits guard refuses tracked changes that are not committed and commits `origin` does not have,

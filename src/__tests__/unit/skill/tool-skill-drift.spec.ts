@@ -22,6 +22,11 @@ const PAIRS = [
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/workflow-cli.sh'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/workflow-cli.sh')
   },
+  {
+    name: 'sf-workflow ui-checklist.md',
+    inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/ui-checklist.md'),
+    scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/ui-checklist.md')
+  },
   // Note: sf-workflow/SKILL.md intentionally NOT in this drift set.
   // The scaffolded copy carries `{{WORKFLOW_NAME}}` / `{{TOOL}}` / `{{STATUSES_LIST}}`
   // placeholders that `workflow-skill.installer.ts` substitutes at project creation —

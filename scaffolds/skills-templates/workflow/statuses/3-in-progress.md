@@ -68,6 +68,8 @@ These stay in the `In progress` board column but flow through a **separate lifec
 - [ ] **Create child tickets** — `workflow-cli.sh create-subtask <parent> "<title>" ["<body>"]` (auto-links as a native sub-issue); mark bundled children with `nature:bundled-pr`
 - [ ] **Delegated implementation** — name the task kind (`scoped-edit`, `multi-file-feature`, `bug-fix`, `tests`, `prose`) and state the file set, expected result and check in the child body; a child
       that cannot state them is split or kept in the session (SKILL.md → Delegation routing)
+- [ ] **A `ui` ticket** — it needs a validated mockup before it reaches the developer's review: follow SKILL.md → "Working a `ui` ticket" (the UI checklist, the one-file HTML mockup, the visual part
+      held until the developer's OK). The brief of a delegated agent carries that hold
 - [ ] **Per normal child:** branch → code → PR → verify merge → `update-status <child> Done`; per bundled child: one atomic commit on the parent's branch → validate → `update-status <child> Done`
 - [ ] **Test strategy** — while you work, run the tests the change affects: the related tests of the touched files (the runner's related-tests option, or the project's own selection when it declares
       one), not the full suites, and not after every iteration. The full suites run once, at the end of AI Testing. After a rebase, rerun the affected tests, not everything, unless the rebase brought

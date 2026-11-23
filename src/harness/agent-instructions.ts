@@ -290,6 +290,22 @@ leave commits that are on no remote, under no ticket and in no pull request with
 `
 
 /**
+ * Where a project states how it shows a mockup and which design tokens it uses (#1306). The way of
+ * working on a `ui` ticket lives in the workflow skill; what only the project knows lives in its own
+ * AGENTS.md, outside this region. It names no host tool, so it reads the same for every agent. In the
+ * generated region only, like the status rules: the bridges are recognised by released bytes.
+ */
+export const UI_WORK_INSTRUCTIONS = `## UI work: mockup display and design tokens
+
+A ticket labelled \`ui\` follows "Working a \`ui\` ticket" in the workflow skill: a one-file HTML mockup
+that the developer sees before the visual work starts. How this project shows a mockup to the
+developer (for example the browser panel of its terminal, or a preview server) and which design
+tokens it uses are stated by the project itself, in this file, outside this generated region. Read
+them before you draw anything. When the project states neither, give the developer the path of the
+mockup file to open in a browser, and use the tokens its code already defines.
+`
+
+/**
  * How to touch files and the shell so the host can check each call (#947). An interpreter
  * heredoc that writes files cannot be analysed and asks the developer every time, even in
  * bypass mode; sub-agents see no memory of that, only these instructions.
@@ -338,6 +354,7 @@ ${AGENT_TOOLING_HYGIENE}
 ${PROFILE_TRANSITION_INSTRUCTIONS.replace('--claude-friendly', '--agent-friendly')}
 ${STATUS_OUTPUT_INSTRUCTIONS}
 ${TICKET_FIRST_INSTRUCTIONS}
+${UI_WORK_INSTRUCTIONS}
 ${SELF_ONBOARDING_INSTRUCTIONS}
 ${CAPABILITIES.trimEnd().replaceAll('--claude-friendly', '--agent-friendly')}
 ${GENERATED_REGION_END}`
