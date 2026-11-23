@@ -6,6 +6,85 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Non publié]
 
+## [1.3.0] - 2026-11-23
+
+Kimi Code fonctionne désormais comme agent de code aux côtés de Claude Code et de Codex, avec son propre routage et ses agents de palier. Le garde-fou refuse les lignes shell qu'il ne peut pas
+vérifier (substitutions, boucles, enchaînements, heredocs d'interpréteur) et indique comment les découper, et un ticket d'interface ne peut pas passer en revue développeur tant que sa maquette n'est
+pas validée.
+
+### Ajouts
+
+#### Agents de code
+
+- Chaque profil d'agent de code déclare ses capacités (routage, agents de palier, hooks, worktrees) et la raison de chacune qui lui manque. Les fournisseurs du routage, leurs niveaux d'effort, les
+  formats des agents de palier et les libellés de `sf status` en sont déduits ; la sortie de Claude Code et de Codex est inchangée
+  ([#1285](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1285)).
+- Kimi Code (`kimi`) est routé sur tous les types de tâche, à titre provisoire tant qu'il n'est pas mesuré, et ses délégations sont consignées dans le registre. `sf status` indique lesquelles de ses
+  capacités ne sont pas disponibles, et pourquoi ([#1286](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1286)).
+- `sf agents refresh` écrit les agents de palier de Kimi Code dans `.kimi-code/agents/`, et chaque route Kimi nomme l'alias de modèle à passer. sf affiche la configuration des alias à coller et
+  n'écrit jamais dans `~/.kimi-code` ([#1287](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1287)).
+
+#### Workflow
+
+- Un ticket peut être marqué comme changement d'interface (`--ui`, `set-ui`, `clear-ui`). `record-ui-validation` enregistre la maquette validée, ou le fait que le développeur a fourni les visuels, et
+  `update-status` refuse un ticket d'interface qui n'en a pas au moment de passer en revue développeur. `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD` est le contournement réservé au développeur
+  ([#1305](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1305)).
+- Tous les agents de code reçoivent les mêmes consignes pour un ticket d'interface : charger les skills de design de leur hôte, suivre la checklist UI fournie, montrer une maquette HTML autonome avant
+  le travail visuel, et mettre en attente la partie visuelle d'un ticket délégué jusqu'au feu vert du développeur ([#1306](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1306)).
+- Le garde-fou refuse une ligne shell qui n'est pas une commande simple et indique le découpage à faire. `sf agents shell-guard <refuse|warn|off|status>` enregistre le mode, `sf status` l'affiche et
+  `sf update` le signale ([#1251](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1251), [#1253](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1253),
+  [#1254](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1254), [#1255](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1255),
+  [#1256](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1256)).
+- Les hooks git refusent les tickets fictifs (`#TBD`) et les branches sans numéro de ticket : un agent ne peut plus livrer du travail hors du workflow
+  ([#1232](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1232)).
+
+### Modifications
+
+- `sf status` nomme le preset de workflow et la CLI qu'atteignent les hooks de garde et de capture, et signale celle qui est trop ancienne pour les exécuter. `sf workflow show` liste les statuts par
+  leur nom ([#1228](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1228), [#1249](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1249)).
+- `sf new` fait un seul premier commit qui contient le harness et le manifeste ([#969](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/969)).
+- Quand `sf update` change la version épinglée de Prisma ou la génération du client API, il régénère les clients commités ; quand il change des versions épinglées sur un lockfile existant, il propose
+  de résoudre à nouveau le lockfile ([#1246](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1246), [#1264](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1264),
+  [#1229](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1229)).
+- `sf workflow use` retire les fichiers et références de workflow du preset précédent et conserve chaque champ de workflow déclaré
+  ([#1248](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1248), [#1233](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1233)).
+- Dans les applications générées, inviter un utilisateur déjà actif et supprimer un rôle encore attribué sont refusés avec une 409 qui en donne la raison
+  ([#988](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/988), [#1221](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1221)).
+
+### Sécurité
+
+- L'API générée impose `effect` 3.22.1 sous `@prisma/config`, ce qui règle l'audit de production (GHSA-7589-6fvf-x4pw) ([#1299](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1299)).
+
+### Corrections
+
+#### CLI et workflow
+
+- `sf update` fonctionne sur un harness dont le `projectName` contient des majuscules ([#966](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/966)).
+- `sf feedback bug --auto-repro` joint un extrait du manifeste borné et expurgé, au lieu de dépasser la limite de taille des tickets GitHub sur les projets complets
+  ([#972](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/972)).
+- Une nouvelle exécution de `sf srs spawn` ne prévoit que les nouvelles Stories, et un Epic existant garde son jalon ([#986](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/986),
+  [#1119](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1119)).
+- Le skill de commentaires de PR liste les fils de revue avec de vraies commandes `gh`, puis y répond et les résout ([#1005](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1005)).
+- Le tableau des options de `sf new` du skill tool-saasfoundry correspond à la vraie commande ([#968](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/968)).
+- Un agent délégué qui termine son tour pendant que son propre travail d'arrière-plan tourne est consigné comme intermédiaire, et non comme un échec, et le registre conserve chaque ligne concurrente
+  ([#1241](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1241), [#1240](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1240)).
+
+#### Projets générés
+
+- Les hooks git générés fonctionnent sous `sh` (dash) et sur une HEAD détachée ([#1238](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1238),
+  [#1227](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1227)).
+- La CI générée construit l'application web avant ses tests de bout en bout et passe dès le premier commit ([#979](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/979)).
+- Le build web prend en compte chaque fichier qu'il lit, si bien qu'un build en cache n'est jamais périmé ([#1262](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1262)).
+- Le serveur de développement web importe les exports nommés de shared-config ([#981](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/981)).
+- Les administrateurs de compte peuvent créer des rôles de type d'entité et étendre un rôle attribué jusqu'à ce que son type d'entité autorise ; les invitations en attente comptent parmi les endroits
+  où un rôle est utilisé ([#1230](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1230), [#1245](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1245),
+  [#1222](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1222)).
+- L'utilisateur de test e2e n'accorde plus de permissions aux rôles système partagés ([#987](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/987)).
+
+#### Documentation
+
+- Le bouton du sélecteur d'apparence de la doc est carré comme son rail ([#1226](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1226)).
+
 ## [1.2.0] - 2026-11-12
 
 Version de fiabilité et de sécurité. Les applications générées contrôlent l'accès plus strictement : un utilisateur désactivé perd aussitôt l'accès à l'API, et un rôle ne donne de droits que là où il
