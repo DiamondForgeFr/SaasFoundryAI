@@ -228,8 +228,9 @@ describe('the automatic routing in sf status (#1035)', () => {
     it('says the guard and the capture of kimi are unavailable with the reason its profile gives, and leaves the lines of Claude Code and Codex as they were', async () => {
       await manifest({ version: 4, agents: ['claude-code', 'codex', 'kimi'] })
       const status = await report()
+      // FR-MAH-022: Kimi Code writes tier agents (not hooks), so its six files are compared with the grid like the others
       expect(status.routing).toMatchObject({
-        tierAgents: notDeposited(['claude-code', 'codex']),
+        tierAgents: notDeposited(['claude-code', 'codex', 'kimi']),
         capture: [
           { agent: 'claude-code', state: 'missing' },
           { agent: 'codex', state: 'missing' },

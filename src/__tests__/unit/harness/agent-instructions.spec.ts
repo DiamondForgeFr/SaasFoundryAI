@@ -343,6 +343,50 @@ describe('shared agent instructions', () => {
     }
   })
 
+  // FR-MAH-022: the alias a Kimi route prints is the one thing a delegation names besides the tier, and a refused route is never worked around
+  it('names the model alias a route prints as the one exception to naming no model (FR-MAH-022)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(/never name a\s+model or an effort yourself\. The one exception is a route that prints `alias <name>`/)
+      expect(instructions).toMatch(/pass that alias, copied from the route and never composed, as\s+the `model` of the delegation call/)
+    }
+  })
+
+  it('never lets a refused or failed route start another coding agent, and keeps a host without worktrees to sub-tasks (FR-MAH-022)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(
+        /run the\s+step in the session: a refused or failed route is never worked around by starting another coding\s+agent's CLI \(`claude`, `codex`, or any other\) or a background session of another host/
+      )
+      expect(instructions).toMatch(/a host\s+with no worktree support delegates sub-tasks only, through its own native sub-agent tool/)
+    }
+    expect(GENERATED_INSTRUCTIONS).toMatch(
+      /`sf agents catalog --json`\s+says `worktrees: none`, as for Kimi Code\): it cannot open a worktree for a delegate, so it\s+delivers the tickets in the session, one after the other, and delegates sub-tasks only, in the\s+current worktree/
+    )
+  })
+
+  it('states both rules statically, whatever coding agents the project declares', async () => {
+    for (const agents of [['claude-code'], ['kimi'], ['codex', 'kimi']] as const) {
+      const project = await mkdtemp(join(tmpdir(), 'sf-static-rules-'))
+      try {
+        await writeFile(join(project, 'AGENTS.md'), `# Project\n\n${GENERATED_REGION_START}\n${GENERATED_REGION_END}\n`)
+        await installAgentInstructions({ targetPath: project, agents: [...agents] })
+        const text = await readFile(join(project, 'AGENTS.md'), 'utf8')
+        expect(text).toContain('The one exception is a route that prints `alias <name>`')
+        expect(text).toContain("a refused or failed route is never worked around by starting another coding\nagent's CLI")
+        expect(text).toContain('`worktrees: none`, as for Kimi Code')
+      } finally {
+        await rm(project, { recursive: true, force: true })
+      }
+    }
+  })
+
+  it('keeps the rules short in a projected skill, which opens far more often than the instructions', async () => {
+    await install()
+    const shared = await get('.agents/skills/sf-git-commit/SKILL.md')
+    expect(shared).toContain('The one exception is a route that prints `alias <name>`')
+    expect(shared).toContain('a refused or failed route is never worked around')
+    expect(shared).not.toContain('`worktrees: none`, as for Kimi Code')
+  })
+
   it('teaches every shared instruction surface to preview additive full-profile transitions', () => {
     for (const instructions of [COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
       expect(instructions).toContain('sf status --claude-friendly --no-network')

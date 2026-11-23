@@ -35,6 +35,7 @@ AGENTS.md
 GEMINI.md
 .claude/rules/claude-code.md
 .claude/agents/sf-*.md
+.kimi-code/agents/sf-*.md
 
 # MoltenTerm pipeline file: MoltenTerm writes it with its own 4-space layout (#943)
 .molten/project.json

@@ -209,6 +209,42 @@ describe('checkout-local agent support', () => {
     expect(await get('.saasfoundry.json')).toBe(before)
     expect(await git('status', '--porcelain')).toBe('')
   })
+  // FR-MAH-022, AC-2: local onboarding of Kimi Code writes only untracked, excluded files, and the AGENTS.md text is static
+  it('writes the Kimi Code tier agents locally as untracked excluded files, with no tracked change and no manifest edit', async () => {
+    const tiers = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.kimi-code/agents/sf-${tier}.md`)
+    const before = await get('.saasfoundry.json')
+    const index = await git('ls-files', '--stage')
+    const result = await enable(['kimi'])
+    expect(result.scope).toBe('local')
+    expect(result.manifestChanged).toBe(false)
+    expect(result.localAgents).toEqual(['kimi'])
+    expect(result.report.conflicts).toEqual([])
+    expect(result.report.written.filter((path) => path.startsWith('.kimi-code/agents/')).sort()).toEqual(tiers)
+    for (const path of tiers) expect(await get(path)).toContain('${base_prompt}')
+    expect(await get('.saasfoundry.json')).toBe(before)
+    expect(await git('ls-files', '--stage')).toBe(index)
+    expect(await git('status', '--porcelain')).toBe('')
+    expect(await git('ls-files', '--others', '--exclude-standard')).toBe('')
+    for (const path of tiers) expect(await git('check-ignore', path)).toBe(path)
+    const hashes = (await privateState()).fileHashes as Record<string, string>
+    for (const path of tiers) expect(hashes[path]).toMatch(/^[0-9a-f]{64}$/)
+    // the instructions are static: the AGENTS.md of a local kimi is the one of a local codex, so no tracked text depends on the host
+    expect(await get('AGENTS.md')).toContain('The one exception is a route that prints `alias <name>`')
+    const again = await refreshAgents({ targetPath: root })
+    expect(again.report.written.filter((path) => path.startsWith('.kimi-code/'))).toEqual([])
+    expect(await git('status', '--porcelain')).toBe('')
+  })
+
+  it('promotes the Kimi Code tier agents into reviewable shared files with their baselines in the manifest', async () => {
+    await enable(['kimi'])
+    const result = await enableAgents({ targetPath: root, agents: ['kimi'], scope: 'shared' })
+    expect(result.sharedAgents).toContain('kimi')
+    const hashes = JSON.parse(await get('.saasfoundry.json')).fileHashes as Record<string, string>
+    expect(Object.keys(hashes).filter((path) => path.startsWith('.kimi-code/'))).toHaveLength(6)
+    expect(Object.keys((await privateState()).fileHashes).filter((path) => path.startsWith('.kimi-code/'))).toEqual([])
+    expect(await git('status', '--porcelain')).toContain('.kimi-code/')
+  })
+
   it('replaces local declarations without exposing previous private adapter files', async () => {
     await enable(['gemini-cli'])
     const gemini = await get('GEMINI.md')

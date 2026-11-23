@@ -126,6 +126,25 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     expect(await readFile(join(projectDir, 'AGENTS.md'), 'utf8')).toBe('Team instructions, no generated region.\n')
   })
 
+  // FR-MAH-022 — `sf update` refreshes the tier agents of every declared host, Kimi Code included, with their baselines in the manifest
+  it('writes the Kimi Code tier agents of a harness that declares kimi, and tracks their baselines', async () => {
+    const hashes = await installTrackedHarness()
+    await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true, agents: ['claude-code', 'kimi'] } }, workflow: { tool: 'none' }, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true })
+
+    const manifest = await readManifest()
+    for (const tier of ['light', 'edit', 'build', 'fix', 'plan', 'terminal']) {
+      const path = `.kimi-code/agents/sf-${tier}.md`
+      const written = await readFile(join(projectDir, path), 'utf8')
+      expect(written).toContain('name: sf-' + tier)
+      expect(written).not.toMatch(/^model:/m)
+      expect(manifest.fileHashes[path]).toBe(hashFileContent(written))
+    }
+    expect(existsSync(join(projectDir, '.codex/agents'))).toBe(false)
+    expect(await readFile(join(projectDir, '.claude/agents/sf-fix.md'), 'utf8')).toContain('model: claude-opus-5-5')
+  })
+
   // #831 — the v1 harness deposited the stack's integration rules on every project
   it('migrates a v1 harness: removes the untouched integration rules, and the refresh does not bring them back', async () => {
     await installHarness({ targetPath: projectDir, projectName: 'acme', version: FRESH_VERSION, stackPresent: true })

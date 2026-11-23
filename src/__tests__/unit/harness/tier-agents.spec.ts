@@ -6,7 +6,7 @@ import { join } from 'path'
 import { ADOPTION_COMMON_INSTRUCTIONS, GENERATED_REGION_END, GENERATED_REGION_START, installAgentInstructions } from '../../../harness/agent-instructions'
 import { listTierAssignments, type RoutingOverrides } from '../../../harness/routing-grid'
 import { parseDelegationLine } from '../../../harness/delegation-capture'
-import { BACKGROUND_WORK_LINE, DELEGATION_REPORT_LINE, TIER_AGENT_PATH, WHOLE_TICKET_LINE, renderTierAgents } from '../../../harness/tier-agents'
+import { BACKGROUND_WORK_LINE, DELEGATION_REPORT_LINE, SUBTASK_ONLY_LINE, TIER_AGENT_PATH, WHOLE_TICKET_LINE, modelAlias, renderTierAgents } from '../../../harness/tier-agents'
 import { CHECKS } from '../../../execution/calibration'
 import { hashFileContent } from '../../../utils'
 
@@ -118,8 +118,9 @@ describe('tier agent rendering (#929)', () => {
   })
 
   it('renders only for declared hosts the grid routes (AC-2)', () => {
-    expect(renderTierAgents(['gemini-cli', 'kimi'])).toEqual([])
+    expect(renderTierAgents(['gemini-cli', 'qwen-code', 'generic'])).toEqual([])
     expect(renderTierAgents(['codex', 'gemini-cli']).every((file) => file.path.startsWith('.codex/'))).toBe(true)
+    expect(renderTierAgents(['kimi', 'gemini-cli']).every((file) => file.path.startsWith('.kimi-code/agents/'))).toBe(true)
   })
 
   it('reflects project overrides and marks their origin', () => {
@@ -136,6 +137,148 @@ describe('tier agent rendering (#929)', () => {
     const overrides: RoutingOverrides = { tiers: { terminal: { 'claude-code': { model: 'claude-haiku-5-5', effort: 'max' } } } }
     expect(listTierAssignments('claude-code', overrides).find((entry) => entry.tier === 'terminal')?.excludedFor).toEqual(['terminal-ci'])
     expect(renderTierAgents(['claude-code'], overrides).find((file) => file.path.endsWith('sf-terminal.md'))?.content).toContain('although the grid excludes this candidate')
+  })
+})
+
+/** The body of a Kimi Code agent file: what follows its frontmatter, which is a template (`${base_prompt}` is the one placeholder). */
+function kimiBody(content: string): string {
+  const match = /^---\n[\s\S]*?\n---\n([\s\S]*)$/.exec(content)
+  if (!match) throw new Error('no frontmatter')
+  return match[1]
+}
+
+describe('Kimi Code tier agents (FR-MAH-022)', () => {
+  const files = renderTierAgents(['kimi'])
+  const kimiFile = (tier: string) => files.find((file) => file.path === `.kimi-code/agents/sf-${tier}.md`)!
+
+  it('renders one Markdown file per tier, in .kimi-code/agents, from the same grid as the other hosts', () => {
+    expect(files.map((file) => file.path)).toEqual(TIERS.map((tier) => `.kimi-code/agents/sf-${tier}.md`))
+    for (const file of files) expect(file.path).toMatch(TIER_AGENT_PATH)
+    expect(files.map((file) => String(frontmatter(file.content).name))).toEqual(TIERS.map((tier) => `sf-${tier}`))
+  })
+
+  it('declares name, description, whenToUse and an explicit tools list, and no model and no effort', () => {
+    for (const file of files) {
+      const meta = frontmatter(file.content)
+      expect(Object.keys(meta).sort()).toEqual(['description', 'name', 'tools', 'whenToUse'])
+      expect(meta).not.toHaveProperty('model')
+      expect(meta).not.toHaveProperty('effort')
+      // the file names no model at all: the alias the call passes does
+      for (const candidate of listTierAssignments('kimi').map((assignment) => assignment.candidate.model)) expect(file.content).not.toContain(candidate)
+      expect(file.content).not.toMatch(/\b(?:low|high|max) effort\b/)
+    }
+    const tools = frontmatter(kimiFile('build').content).tools as string[]
+    expect(tools).toEqual(['Read', 'Write', 'Edit', 'Grep', 'Glob', 'ReadMediaFile', 'Bash', 'WebSearch', 'FetchURL', 'TodoList', 'Skill', 'TaskList', 'TaskOutput', 'TaskStop', 'WaitFor', 'mcp__*'])
+    // a delegate never hands work on, asks the developer or schedules work
+    for (const forbidden of ['Agent', 'AgentSwarm', 'AskUserQuestion', 'NotifyUser', 'ExitPlanMode']) expect(tools).not.toContain(forbidden)
+    expect(tools.some((tool) => tool.startsWith('Cron'))).toBe(false)
+  })
+
+  it('has the same tools for every tier', () => {
+    const lists = new Set(files.map((file) => JSON.stringify(frontmatter(file.content).tools)))
+    expect(lists.size).toBe(1)
+  })
+
+  it('says what a tier serves and which tier to use instead, and how the model is chosen', () => {
+    const meta = frontmatter(kimiFile('build').content)
+    expect(meta.description).toBe('SaaSFoundry build tier delegate. Pass the model alias that sf agents route names for the task.')
+    expect(meta.whenToUse).toContain('Use for multi-file-feature (a feature spread over several files), tests (writing or repairing tests).')
+    expect(meta.whenToUse).toContain(
+      'Do not use for exploration, prose (use sf-light); scoped-edit (use sf-edit); bug-fix, review (use sf-fix); planning (use sf-plan); terminal-ci (use sf-terminal).'
+    )
+  })
+
+  it('puts the origin in a YAML comment of the frontmatter, so it is not part of the prompt', () => {
+    const content = kimiFile('fix').content
+    expect(content.split('\n').slice(0, 2)).toEqual(['---', expect.stringMatching(/^# Generated by SaaSFoundry from the routing grid v1\. Change modules\.harness\.routing/)])
+    expect(kimiBody(content)).not.toContain('Generated by SaaSFoundry')
+  })
+
+  it('makes its body ${base_prompt} followed by the instructions, and holds no other placeholder', () => {
+    for (const file of files) {
+      const body = kimiBody(file.content)
+      expect(body.startsWith('${base_prompt}\n\n')).toBe(true)
+      expect(body.slice('${base_prompt}'.length)).not.toContain('${')
+      expect(body).toContain('Follow the project instructions in AGENTS.md')
+      expect(file.content.match(/\$\{/g)).toHaveLength(1)
+    }
+  })
+
+  it('tells the delegate that its last message is the whole handoff', () => {
+    for (const file of files) expect(kimiBody(file.content)).toContain('Your last message is the whole result the coordinating agent receives')
+  })
+
+  it('carries the delegation report and the background-work lines every tier agent has', () => {
+    for (const file of files) {
+      const body = kimiBody(file.content)
+      expect(body).toContain(DELEGATION_REPORT_LINE)
+      expect(body).toContain(BACKGROUND_WORK_LINE)
+    }
+  })
+
+  // the host opens no worktree for a delegate: its profile says `worktrees: none`, and the prompt is decided from that data
+  it('hands a Kimi delegate sub-tasks only, and the other hosts a whole ticket', () => {
+    for (const file of files) {
+      const body = kimiBody(file.content)
+      expect(body).toContain(SUBTASK_ONLY_LINE)
+      expect(body).not.toContain(WHOLE_TICKET_LINE)
+      expect(body).toContain('Do not change ticket, board or pull-request state: the coordinating agent owns the workflow.')
+      expect(body).not.toContain('unless the brief hands you a whole ticket')
+    }
+    for (const host of ['claude-code', 'codex'] as const) {
+      for (const file of renderTierAgents([host])) {
+        expect(file.content).toContain(WHOLE_TICKET_LINE)
+        expect(file.content).not.toContain(SUBTASK_ONLY_LINE)
+      }
+    }
+    expect(SUBTASK_ONLY_LINE).toContain('Sub-tasks only')
+    expect(SUBTASK_ONLY_LINE).toContain('Never record the delegation consent')
+    expect(SUBTASK_ONLY_LINE).toContain('never run `ready-pr`')
+    expect(SUBTASK_ONLY_LINE).toContain('stop and say that this host delivers it in the session')
+    expect(SUBTASK_ONLY_LINE).not.toContain('"""')
+  })
+
+  it('leaves the files of the other hosts byte-identical when Kimi Code is declared as well', () => {
+    const others = renderTierAgents(['claude-code', 'codex'])
+    expect(renderTierAgents(['claude-code', 'kimi', 'codex']).filter((file) => !file.path.startsWith('.kimi-code/'))).toEqual(others)
+  })
+
+  it('follows the routing the project declares: the same tier, a file that does not change with the candidate', () => {
+    const overrides: RoutingOverrides = { tiers: { build: { kimi: { model: 'k3.2', effort: 'max' } } } }
+    const base = kimiFile('build').content
+    const moved = renderTierAgents(['kimi'], overrides).find((file) => file.path.endsWith('sf-build.md'))!.content
+    // the model is the alias a call passes, never a line of the file: only the origin changes, since the project now routes the tier
+    expect(moved).toContain('Generated by SaaSFoundry from the modules.harness.routing')
+    expect(moved.replace('from the modules.harness.routing', 'from the routing grid v1')).toBe(base)
+    expect(moved).not.toContain('k3.2')
+  })
+
+  describe('the alias a call passes', () => {
+    it('is sf-<model>-<effort>, with no dot, named after the candidate and not the tier', () => {
+      expect(modelAlias({ model: 'k3', effort: 'low' })).toBe('sf-k3-low')
+      expect(modelAlias({ model: 'k3.1-pro', effort: 'high' })).toBe('sf-k3-1-pro-high')
+      expect(modelAlias({ model: 'k3.1-pro', effort: 'max' })).toBe('sf-k3-1-pro-max')
+      expect(modelAlias({ model: 'K3.1_Pro:beta', effort: 'high' })).toBe('sf-k3-1-pro-beta-high')
+    })
+
+    it('is a bare TOML key for every candidate of the grid', () => {
+      for (const assignment of listTierAssignments('kimi')) expect(modelAlias(assignment.candidate)).toMatch(/^sf-[a-z0-9]+(?:-[a-z0-9]+)*-(?:low|high|max)$/)
+    })
+
+    it('follows an override of the tier candidate, and two tiers on one candidate share one alias', () => {
+      const shipped = Object.fromEntries(listTierAssignments('kimi').map((assignment) => [assignment.tier, modelAlias(assignment.candidate)]))
+      expect(shipped).toEqual({
+        light: 'sf-k3-low',
+        edit: 'sf-k3-high',
+        build: 'sf-k3-1-pro-high',
+        fix: 'sf-k3-1-pro-high',
+        plan: 'sf-k3-1-pro-high',
+        terminal: 'sf-k3-1-pro-max'
+      })
+      const overrides: RoutingOverrides = { tiers: { build: { kimi: { model: 'k3.2', effort: 'max' } } } }
+      expect(listTierAssignments('kimi', overrides).find((assignment) => assignment.tier === 'build')).toMatchObject({ candidate: { model: 'k3.2', effort: 'max' } })
+      expect(modelAlias(listTierAssignments('kimi', overrides).find((assignment) => assignment.tier === 'build')!.candidate)).toBe('sf-k3-2-max')
+    })
   })
 })
 
@@ -159,6 +302,25 @@ describe('tier agent deposits (#929)', () => {
     const second = await installAgentInstructions({ targetPath: root, agents: ['claude-code', 'codex'], manifest: { fileHashes: first.fileHashes } })
     expect(tierPaths(second.written)).toEqual([])
     expect(tierPaths(second.unchanged)).toHaveLength(12)
+  })
+
+  it('deposits hash-tracked Kimi Code tier agents for a declared kimi, and keeps an edited one behind a sidecar (FR-MAH-022, AC-1)', async () => {
+    const paths = TIERS.map((tier) => `.kimi-code/agents/sf-${tier}.md`)
+    const first = await installAgentInstructions({ targetPath: root, agents: ['kimi'] })
+    expect(tierPaths(first.written)).toEqual(paths)
+    for (const path of paths) expect(first.fileHashes[path]).toBe(hashFileContent(await get(path)))
+    expect(first.fileHashes['.kimi-code/agents/sf-build.md']).toBe(hashFileContent(renderTierAgents(['kimi']).find((file) => file.path.endsWith('sf-build.md'))!.content))
+    // the Claude Code and Codex folders stay untouched when only kimi is declared
+    expect(first.written.filter((path) => path.startsWith('.claude/agents/') || path.startsWith('.codex/agents/'))).toEqual([])
+    const second = await installAgentInstructions({ targetPath: root, agents: ['kimi'], manifest: { fileHashes: first.fileHashes } })
+    expect(tierPaths(second.written)).toEqual([])
+    expect(tierPaths(second.unchanged)).toEqual(paths)
+
+    await writeFile(join(root, '.kimi-code/agents/sf-fix.md'), '---\nname: sf-fix\ndescription: mine\n---\n')
+    const third = await installAgentInstructions({ targetPath: root, agents: ['kimi'], manifest: { fileHashes: first.fileHashes } })
+    expect(third.conflicts).toEqual(['.kimi-code/agents/sf-fix.md'])
+    expect(await get('.kimi-code/agents/sf-fix.md')).toContain('description: mine')
+    expect(await get('.kimi-code/agents/sf-fix.md.saasfoundry.new')).toBe(renderTierAgents(['kimi']).find((file) => file.path.endsWith('sf-fix.md'))!.content)
   })
 
   it('refreshes an untouched tier agent when the routing changes, and keeps an edited one behind a sidecar', async () => {

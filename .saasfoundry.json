@@ -108,7 +108,7 @@
   "modules": {
     "harness": {
       "version": 5,
-      "agents": ["claude-code", "codex"],
+      "agents": ["claude-code", "codex", "kimi"],
       "managed": true,
       "delegation": {
         "ticketDelivery": "allowed",
@@ -124,12 +124,12 @@
     "GEMINI.md": "bc151271e752fb7d81079960549699344f07dc69c33508d296d888987a34b8f9",
     ".agents/skills/sf-integration-rules/backend.md": "65dad96f9e53683b2a36f18e11f270a9da841258d8910b704bc7ac5131df718d",
     ".agents/skills/sf-integration-rules/frontend.md": "6a07fcdb592f4fcddddef37a44796a477364f6bdea72a55ff0ada343c11f2112",
-    ".agents/skills/sf-integration-rules/SKILL.md": "bf622828ed963d99133a17276ec61f05ea1770984a7e81ad4f769226c6bd86ce",
+    ".agents/skills/sf-integration-rules/SKILL.md": "cafccceb5666d120e9854eecf77da405700a0af13830d4e14be758847f796056",
     ".agents/skills/sf-integration-rules/topology.md": "6963e6bfae2de4febd56027cc456de1ebe604515da868cb857828245a54282ca",
     ".agents/skills/sf-srs/data/clustering-rules.json": "3110294b18bf3229a320ea70f5878d18c1e874b8bbc511e61ee0c948dcf0bfee",
     ".agents/skills/sf-srs/scripts/detect-eval-signals.sh": "59bdb4d7757b91d9b7c833350f28c5d609c323fd19fe804c61a9c3a89032c481",
     ".agents/skills/sf-srs/scripts/srs-cli.sh": "2c4d6d8654dd54dfd49ee3901c5714447fcfb8042739a1a06a52fbcf943fb406",
-    ".agents/skills/sf-srs/SKILL.md": "cd705e7159e55e758ee5fa234b23485ec9f8e8eb616d11c8e05ebbeccde810aa",
+    ".agents/skills/sf-srs/SKILL.md": "c713a2fc0860737cad0adf3a7608913948aea75d3d638607fa89e1fecabcf670",
     ".agents/skills/sf-srs/templates/examples/example-epic.md": "353c7ab168a78283a0051f48b91775550b218ff25bf9e87ff9b668fdefa9864f",
     ".agents/skills/sf-srs/templates/examples/example-epic.spec.json": "028ec65c05b42717ad94ef207263754625431ad3ce2b482d0439dd994acbc52d",
     ".agents/skills/sf-srs/templates/examples/example-three-levels.spec.json": "710c232072e333a0fb6918629e25d3caa73952ea2bf4d11b284703cd0fbcb41c",
@@ -140,7 +140,7 @@
     ".agents/skills/sf-srs/templates/tickets/examples/task.md": "d3e00d8872d580137055917cce2729d1100a36e5cc9e655b0612333ea84c6364",
     ".agents/skills/sf-srs/templates/tickets/README.md": "86a02da6116ff743c16415bfe0288abf46cd67a7b3424571a245a693768f873f",
     ".agents/skills/sf-tool-github-projects/github-projects-cli.sh": "5ee3a414651ad26514fbc23bbaafe48e75b3272a14c4f01fd1c81c00ac6e5ad2",
-    ".agents/skills/sf-tool-github-projects/SKILL.md": "0bd39708894b2254063c121ef8710554b55fec057ecec383348c57b66a1bd7f8",
+    ".agents/skills/sf-tool-github-projects/SKILL.md": "096c5f23284f424bcfc132b5806dcc2c55c1147561ae0c55e828ec02738d6637",
     ".agents/skills/sf-workflow/complexity/bug.yml": "ede99f1f666c405ad4a9b80a1ece8b4edbd0834d5dc6a8fc846ca7895981ebbe",
     ".agents/skills/sf-workflow/complexity/complex.yml": "efe47d05f43b67c4245de5ce0a83c1ad3d010e9052a696bbd4af6168e80909a0",
     ".agents/skills/sf-workflow/complexity/low.yml": "b0052bfedaad3cd31fdea553bce7264e9bcdc4422d9567bae3669a991b302de0",
@@ -151,7 +151,7 @@
     ".agents/skills/sf-workflow/scripts/detect-complexity.sh": "ffc15a241693cdc74e8ea83293feee6f3f15c2979b57d768704b6363f71a75d9",
     ".agents/skills/sf-workflow/scripts/examine.sh": "54a0e9e90f529a2de21db25a938be2563104695d42663c92b45eb7867db4ae06",
     ".agents/skills/sf-workflow/scripts/plan.sh": "cec9907f9800b41a22251352ef8cc2d589a6e55212f75ce743dcbc1f7a9cbac6",
-    ".agents/skills/sf-workflow/SKILL.md": "8dcf72bbe262eefd15dc3baf6eb621427bb899996bd99e482b8c270758027abc",
+    ".agents/skills/sf-workflow/SKILL.md": "1189d84c8e6782c87fdf8f94863562b139672dde9c2fc90a58f759f5bc5cf183",
     ".agents/skills/sf-workflow/statuses/1-backlog.md": "3b746f01e6c15a8db3260b8272289e9104552eb9f8c52a8f90f1eaf84a425f09",
     ".agents/skills/sf-workflow/workflow-cli.sh": "f937d1014ed34eac511597ff575ab736af3a659bb4dfe5bff23625818f12fecf",
     ".claude/rules/claude-code.md": "2eafdde282421c15bfea3645b722ac0dfffbe0c5c04c3ce7fe3763b341717178",
@@ -173,7 +173,13 @@
     ".agents/skills/sf-workflow/statuses/2c-spawning.md": "b82ff50dd8d2bb7adc82fbd5a01c396f6afcb618e92e8d3b2d8746eebef7d873",
     ".agents/skills/sf-workflow/statuses/3-ai-testing.md": "7f6638a6d6c44bbd99657846b7567c979c464ebe339de91886c45dcbe865f7aa",
     ".agents/skills/sf-workflow/statuses/4-in-review.md": "f373fb90a007f4388c6bf3573d5e9f89598a784cb75792d35b79d0602ad327a6",
-    ".agents/skills/sf-workflow/statuses/5-done.md": "13f0767a26e391ade5b2494ef23b626e5d98a75672b216304b17d55dd3940684"
+    ".agents/skills/sf-workflow/statuses/5-done.md": "13f0767a26e391ade5b2494ef23b626e5d98a75672b216304b17d55dd3940684",
+    ".kimi-code/agents/sf-light.md": "a583205cebba7163d9d1b082409a466888f07b419b3df398f91cc028f9a2a4a1",
+    ".kimi-code/agents/sf-edit.md": "611b69fc0fbc6a6343c3639f26d3775852744c7a56f01b45f77f8d61222bcaf6",
+    ".kimi-code/agents/sf-build.md": "266eaba9fe053a4b485de29a732eff6c911610cd6d702181c4e05be1fd8097e9",
+    ".kimi-code/agents/sf-fix.md": "6c7e14cf248f9fefea85a6ddb52b1525d671475bf0621750ee4c6b0222386a6d",
+    ".kimi-code/agents/sf-plan.md": "af377817ca70a819dc0f6438b0327e6a1f48a325d908871f18300ef95e43f9b5",
+    ".kimi-code/agents/sf-terminal.md": "9fa668b69c3ece4f895ff012d18ac497eec2741dd741aea29fb1ea4a5a3621f7"
   },
   "manifestVersion": 4
 }

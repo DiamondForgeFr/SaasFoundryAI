@@ -9,7 +9,8 @@ import { collectAgentDiagnostics, type DiagnosticCheck } from '../harness/agent-
 import { readProjectRouting } from '../harness/project-routing'
 import { COMPLEXITIES, NATURES, type Complexity, type Nature } from '../harness/delegation-ledger'
 import { getRoutingGrid, isRoutingProvider, noRoutedAgentError, parseRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, tierRank, type RoutingProvider } from '../harness/routing-grid'
-import { issueRoutes, loadRoutingState } from '../harness/routing-runtime'
+import { issueRoutes, loadRoutingState, type IssuedRoute } from '../harness/routing-runtime'
+import { aliasAdvice, aliasSpecs, aliasStatus, readAliasPool, type AliasAdvice, type AliasPool } from '../harness/kimi-alias-pool'
 import { resolveRouteFacts, type RouteFacts } from '../harness/ticket-labels'
 import { registerGuardCommand } from './agents.guard'
 import { registerOutcomeCommands } from './agents.outcome'
@@ -86,10 +87,15 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
     nature: facts?.nature ?? null,
     retryOf: options.retryOf ?? null
   })
+  // A host that binds no model in its agent file (Kimi Code) names an alias per route: the developer's pool is read to say
+  // whether the alias is declared, and never written (FR-MAH-022).
+  const pool = routes.some((route) => route.alias) ? await readAliasPool() : undefined
+  writeAliasAdvice(routes, pool)
   if (options.json) {
     const grid = getRoutingGrid()
     const recorded = facts ? { complexity: facts.complexity, complexitySource: facts.complexitySource, nature: facts.nature, natureSource: facts.natureSource } : {}
-    process.stdout.write(JSON.stringify({ routeVersion: 2, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes, ...recorded }, null, 2) + '\n')
+    const withPool = routes.map((route) => (route.alias && pool ? { ...route, aliasPool: aliasStatus(pool, route.alias) } : route))
+    process.stdout.write(JSON.stringify({ routeVersion: 2, gridVersion: grid.gridVersion, gridUpdated: grid.updated, kind, routes: withPool, ...recorded }, null, 2) + '\n')
     return
   }
   // What the record carries about the ticket goes before the route lines: the route line ends the output, as it always did.
@@ -115,9 +121,52 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
             : 'project choice, no shipped evidence'
     const label = route.trial ? `${route.source}, trial` : route.source
     const id = route.routeId ? ` route=${route.routeId}` : ''
-    process.stdout.write(`${route.kind} → ${route.tier} (${label}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort} — ${evidence}${id}\n`)
+    const alias = route.alias ? `, alias ${route.alias}` : ''
+    process.stdout.write(`${route.kind} → ${route.tier} (${label}) ${route.provider}: ${route.candidate.model}, effort ${route.candidate.effort}${alias} — ${evidence}${id}\n`)
     if (route.excluded)
       process.stderr.write(`Warning: ${route.provider} ${route.candidate.model} (${route.candidate.effort}) is on the exclusion list for ${route.kind}: public scores collapse there.\n`)
+  }
+}
+
+/**
+ * What a route says about the model alias of a host that binds the model per call, on stderr: the pool of the developer's
+ * Kimi Code configuration is read-only, so an alias that is not declared there comes with the TOML to paste, never with a write.
+ */
+function writeAliasAdvice(routes: readonly IssuedRoute[], pool: AliasPool | undefined): void {
+  if (!pool) return
+  for (const route of routes) {
+    if (!route.alias) continue
+    const advice = aliasAdvice(pool, [{ alias: route.alias, model: route.candidate.model, effort: route.candidate.effort, tiers: [route.tier] }])
+    for (const warning of advice.warnings) process.stderr.write(`Warning: ${warning}\n`)
+    if (!advice.snippet) continue
+    const cause =
+      aliasStatus(pool, route.alias) === 'unknown'
+        ? `sf cannot tell whether the model alias ${route.alias} is declared in ${pool.source}`
+        : `the model alias ${route.alias} is not declared in ${pool.source}, so a Kimi Code Agent call with it fails`
+    process.stderr.write(`Warning: ${cause}. Declare it by pasting this (sf never writes your Kimi Code configuration):\n${advice.snippet}`)
+  }
+}
+
+/**
+ * The Kimi Code aliases the declared tier agents need, once a setup command wrote them: a warning that carries the TOML to
+ * paste when the developer's pool lacks one, so an `sf agents refresh` ends with what to do, not with a delegation that fails.
+ */
+async function kimiAliasWarnings(configuredAgents: readonly string[], conflicts: readonly string[]): Promise<string[]> {
+  // A refused setup wrote no tier agent: nothing yet asks for an alias.
+  if (!configuredAgents.includes('kimi') || conflicts.length) return []
+  try {
+    const specs = aliasSpecs((await readManifest(process.cwd()))?.modules?.harness?.routing)
+    const pool = await readAliasPool()
+    const advice: AliasAdvice = aliasAdvice(pool, specs)
+    const aliases = advice.needed.map((spec) => spec.alias).join(', ')
+    return [
+      ...advice.warnings,
+      ...(advice.snippet
+        ? [`Kimi Code model aliases of the sf-<tier> agents to declare in ${pool.source}: ${aliases}. A delegation that passes an alias which is not declared fails.\n${advice.snippet.trimEnd()}`]
+        : [])
+    ]
+  } catch (error) {
+    return [`Kimi Code model aliases not checked: ${error instanceof Error ? error.message : String(error)}`]
   }
 }
 
@@ -287,6 +336,8 @@ export async function agentsCommand(
     }
     const params = { targetPath: process.cwd(), scope: options.scope }
     const result = action === 'enable' ? await enableAgents({ ...params, agents }) : action === 'replace' ? await replaceAgents({ ...params, agents }) : await refreshAgents(params)
+    // The tier agents of Kimi Code name no model: say which aliases the developer's own pool still has to declare.
+    result.report.warnings.push(...(await kimiAliasWarnings(result.configuredAgents, result.report.conflicts)))
     if (options.json) process.stdout.write(JSON.stringify(result, null, 2) + '\n')
     else {
       process.stdout.write(`Scope: ${options.scope ?? 'local'}\n`)

@@ -278,8 +278,12 @@ Run preconditions explicitly, and stop to report a missing capability when no eq
 When a workflow step names a task kind, resolve its tier with
 `sf agents route --task <kind> --provider <current-agent>` and delegate the step to the
 `sf-<tier>` agent it names: that agent carries its own model and effort, so never name a
-model or an effort yourself. When the route fails or the agent cannot delegate, run the step
-in the session.
+model or an effort yourself. The one exception is a route that prints `alias <name>` (Kimi Code
+binds no model in an agent file): pass that alias, copied from the route and never composed, as
+the `model` of the delegation call. When the route fails or the agent cannot delegate, run the
+step in the session: a refused or failed route is never worked around by starting another coding
+agent's CLI (`claude`, `codex`, or any other) or a background session of another host, and a host
+with no worktree support delegates sub-tasks only, through its own native sub-agent tool.
 Never bypass CLI guards, required approvals, tests or workflow status exit conditions.
 An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook
 refuses an agent call that sets one.
@@ -319,6 +323,10 @@ team's default; a clone may override it locally, and the line reports the effect
   not part of the running ticket becomes a ticket of its own, handed to its own agent.
 - `declined`, or the current agent cannot delegate or run in the background: deliver the tickets
   in the session, one after the other, and say so explicitly.
+- `allowed`, but the current agent's profile has no worktree support (`sf agents catalog --json`
+  says `worktrees: none`, as for Kimi Code): it cannot open a worktree for a delegate, so it
+  delivers the tickets in the session, one after the other, and delegates sub-tasks only, in the
+  current worktree.
 
 A delegated agent runs the tests the change affects while it works, and the full suites once, at the end of AI Testing, not after every iteration. After a rebase it reruns the affected tests, and the full suites only when the rebase brought changes to shared files. The ready pull request's CI stays the final check. The brief does not restate this rule: the workflow status documents hold it.
 

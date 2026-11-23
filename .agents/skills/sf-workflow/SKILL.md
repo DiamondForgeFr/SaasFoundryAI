@@ -15,8 +15,12 @@ Run preconditions explicitly, and stop to report a missing capability when no eq
 When a workflow step names a task kind, resolve its tier with
 `sf agents route --task <kind> --provider <current-agent>` and delegate the step to the
 `sf-<tier>` agent it names: that agent carries its own model and effort, so never name a
-model or an effort yourself. When the route fails or the agent cannot delegate, run the step
-in the session.
+model or an effort yourself. The one exception is a route that prints `alias <name>` (Kimi Code
+binds no model in an agent file): pass that alias, copied from the route and never composed, as
+the `model` of the delegation call. When the route fails or the agent cannot delegate, run the
+step in the session: a refused or failed route is never worked around by starting another coding
+agent's CLI (`claude`, `codex`, or any other) or a background session of another host, and a host
+with no worktree support delegates sub-tasks only, through its own native sub-agent tool.
 Never bypass CLI guards, required approvals, tests or workflow status exit conditions.
 An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook
 refuses an agent call that sets one.
@@ -183,12 +187,14 @@ Every step that delegates work to another agent names a **task kind** from the r
 | `review`             | Examine (security, logic, performance) and diff review                              |
 | `terminal-ci`        | Shell, build and CI work, long test runs                                            |
 
-1. **Resolve the tier** with `sf agents route --task <kind> --provider <current-agent>` (`claude-code` or `codex`) and hand the work to the `sf-<tier>` agent it names. That agent carries its own model
-   and effort.
+1. **Resolve the tier** with `sf agents route --task <kind> --provider <current-agent>` (`claude-code`, `codex` or `kimi`) and hand the work to the `sf-<tier>` agent it names. That agent carries its
+   own model and effort. The one exception is a route that prints `alias <name>` (Kimi Code binds no model in an agent file): pass that alias, copied from the route and never composed, as the `model`
+   of the delegation call.
 2. **Decompose before delegating.** A subtask handed to a tier below the orchestrating session states its **file set** (the files it may touch), its **expected result** and its **check** (the command
    or observation that proves it). A subtask that cannot state all three is split until it can; if it still cannot, it stays in the orchestrating session and is never handed to a lower tier.
 3. **No routing.** When the route fails (a coding agent without routing candidates) or the agent cannot delegate, run the step in the session, sequentially, and report that a self-review is not an
-   independent review.
+   independent review. A refused or failed route is never worked around by starting another coding agent's CLI (`claude`, `codex`, or any other) or a background session of another host. A host with no
+   worktree support (`worktrees: none` in `sf agents catalog --json`, Kimi Code today) delegates sub-tasks only, in the current worktree, through its own native sub-agent tool.
 
 ### Delegated ticket delivery
 
@@ -213,9 +219,9 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
 
 1. **Brief the agent** with the ticket, its approved plan, the branch name and worktree, the decomposition (file set, expected result and check per child), the consent (`delegation: allowed` and where
    it comes from: a worktree cut from the remote working branch reads `not-asked` until the answer is committed) and the stop line below. Resolve the tier with `sf agents route` as above, and never
-   name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (In progress status document). When
-   the host names the worktree branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent pushes to it
-   (`git push origin HEAD:<ticket branch>`): `create-pr` accepts that branch when `origin` holds it at the local `HEAD`, found on its own or passed as `--head <ticket branch>`.
+   name a model (the alias a route prints excepted). The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree
+   (In progress status document). When the host names the worktree branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent
+   pushes to it (`git push origin HEAD:<ticket branch>`): `create-pr` accepts that branch when `origin` holds it at the local `HEAD`, found on its own or passed as `--head <ticket branch>`.
 2. **The agent's line.** It follows the In progress and AI Testing status documents, which hold the test strategy (the affected tests while it works, the full suites once at the end of AI testing; the
    brief does not restate it): it delivers the children, posts the test plan, runs the automated and heavy checks, posts the `## Test report` comment and opens the draft PR, then stops with the ticket
    still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human Testing route, the session on the other) and never records the delegation consent.
@@ -226,7 +232,9 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
    handed to its own agent.
 4. **Hand-backs.** A defect reported in review or testing, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree, which
    returns the ticket to AI Testing when the change calls for retesting.
-5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session delivers the tickets itself, one after the other, and says so explicitly.
+5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session delivers the tickets itself, one after the other, and says so explicitly. So does a
+   session whose host has no worktree support (`worktrees: none`, Kimi Code today): it cannot open a worktree for a delegate, so it delegates sub-tasks only, in the current worktree, and never starts
+   another host's CLI to get a worktree.
 6. **Measured delegations.** Every routed delegation is recorded in the clone's ledger, and the routing adjusts itself from it (`sf agents routing report` shows what it did). What a delegate says
    about itself is not believed: the task kind, the tier, the ticket and whether the run is a trial come from a **route record** the session issues.
    - Issue it when you route the work: `sf agents route --task <kind> --provider <current-agent> --ticket <n> --record`. It prints `route=<id>` (`--json` gives `routeId`): put that id in the brief.

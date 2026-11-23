@@ -20,11 +20,17 @@ export interface AgentProfile {
 }
 
 /** The file formats a tier agent can be written in. A renderer exists for each one (`tier-agents.ts`), and the type holds the two lists together. */
-export const TIER_AGENT_FORMATS = ['claude-md', 'codex-toml'] as const
+export const TIER_AGENT_FORMATS = ['claude-md', 'codex-toml', 'kimi-md'] as const
 export type TierAgentFormat = (typeof TIER_AGENT_FORMATS)[number]
 /** Whether a tier agent carries its model in its own file, or the model is chosen per call by an alias. */
 export const MODEL_BINDINGS = ['file', 'call-alias'] as const
 export type ModelBinding = (typeof MODEL_BINDINGS)[number]
+/**
+ * What each file format can express about the model: a format that writes the model in the file binds it there, and a
+ * format with no model field (Kimi Code's agent files) leaves the model to the alias a call passes. A profile whose
+ * binding disagrees with its format would route to an alias nobody reads, or write a model nobody honours.
+ */
+export const FORMAT_MODEL_BINDING: Record<TierAgentFormat, ModelBinding> = { 'claude-md': 'file', 'codex-toml': 'file', 'kimi-md': 'call-alias' }
 /** Where the host reads its hooks from: the project (a tracked file) or the user's own configuration. */
 export const HOOK_SCOPES = ['project', 'user'] as const
 export type HookScope = (typeof HOOK_SCOPES)[number]
@@ -125,6 +131,8 @@ function validateCapabilities(id: string, value: unknown): void {
     if (typeof tierAgents.dir !== 'string' || !/^\.[a-z0-9-]+\/agents$/.test(tierAgents.dir)) return fail('tierAgents.dir must be a project directory such as .host/agents')
     if (!oneOf(tierAgents.format, TIER_AGENT_FORMATS)) return fail(`tierAgents.format must be one of ${TIER_AGENT_FORMATS.join(', ')}`)
     if (!oneOf(tierAgents.modelBinding, MODEL_BINDINGS)) return fail(`tierAgents.modelBinding must be one of ${MODEL_BINDINGS.join(', ')}`)
+    if (tierAgents.modelBinding !== FORMAT_MODEL_BINDING[tierAgents.format as TierAgentFormat])
+      return fail(`tierAgents.modelBinding of the ${tierAgents.format} format must be ${FORMAT_MODEL_BINDING[tierAgents.format as TierAgentFormat]}`)
     // A tier agent takes its model and effort from the routing grid: a host with files and no routing would have nothing to write.
     if (routing === null) return fail('tierAgents needs routing: a tier agent is rendered from a routed candidate')
   }

@@ -23,10 +23,10 @@ const routingState = (state: Partial<StatusRoutingState>): StatusRoutingState =>
 
 describe('the registry derives what two lists and a ternary used to say', () => {
   it('routes the agents whose profile declares routing, in registry order, and no other', () => {
-    // FR-MAH-021: Kimi Code is routed by its profile alone, with no tier-agent folder and no hook of its own yet
+    // FR-MAH-021: Kimi Code is routed by its profile alone; FR-MAH-022 gives it tier agents, and it still has no hook of its own
     expect([...ROUTING_PROVIDERS]).toEqual(['claude-code', 'codex', 'kimi'])
     expect(agentsWith('routing')).toEqual([...ROUTING_PROVIDERS])
-    expect(agentsWith('tierAgents')).toEqual(['claude-code', 'codex'])
+    expect(agentsWith('tierAgents')).toEqual(['claude-code', 'codex', 'kimi'])
     expect(agentsWith('hooks')).toEqual(['claude-code', 'codex'])
   })
 
@@ -42,12 +42,20 @@ describe('the registry derives what two lists and a ternary used to say', () => 
     expect(TIER_AGENT_PATH.test('.claude/agents/sf-build.toml')).toBe(false)
     expect(TIER_AGENT_PATH.test('.codex/agents/sf-build.md')).toBe(false)
     expect(TIER_AGENT_PATH.test('.kimi/agents/sf-build.md')).toBe(false)
+    // FR-MAH-022: Kimi Code reads Markdown from .kimi-code/agents, and nothing else of that folder is a tier agent
+    expect(TIER_AGENT_PATH.test('.kimi-code/agents/sf-build.md')).toBe(true)
+    expect(TIER_AGENT_PATH.test('.kimi-code/agents/sf-custom-tier.md')).toBe(true)
+    expect(TIER_AGENT_PATH.test('.kimi-code/agents/sf-build.toml')).toBe(false)
+    expect(TIER_AGENT_PATH.test('.kimi-code/agents/other.md')).toBe(false)
+    expect(TIER_AGENT_PATH.test('.kimi-code/agents/sf-Build.md')).toBe(false)
+    expect(TIER_AGENT_PATH.test('.kimi-code/skills/sf-build.md')).toBe(false)
+    expect(TIER_AGENT_PATH.test('.claude/agents/sf-build.md')).toBe(true)
   })
 
   it('knows what a host may be asked for without throwing for an agent nobody registered', () => {
     expect(hasCapability('codex', 'hooks')).toBe(true)
     expect(hasCapability('kimi', 'routing')).toBe(true)
-    expect(hasCapability('kimi', 'tierAgents')).toBe(false)
+    expect(hasCapability('kimi', 'tierAgents')).toBe(true)
     expect(hasCapability('kimi', 'hooks')).toBe(false)
     expect(hasCapability('gemini-cli', 'routing')).toBe(false)
     expect(hasCapability('cursor', 'hooks')).toBe(false)
@@ -62,7 +70,7 @@ describe('the registry derives what two lists and a ternary used to say', () => 
   })
 
   it('writes no tier agent for a host whose profile declares no tier-agent folder', () => {
-    expect(renderTierAgents(['kimi', 'gemini-cli', 'generic'])).toEqual([])
+    expect(renderTierAgents(['gemini-cli', 'qwen-code', 'generic'])).toEqual([])
   })
 
   it('hands a copy of the block, never the registry itself', () => {
@@ -141,16 +149,20 @@ describe('a missing capability always says why (AC-3)', () => {
   })
 })
 
-describe('Kimi Code is routed by its profile and the grid alone (FR-MAH-021)', () => {
+describe('Kimi Code is routed by its profile and the grid, and writes tier agents by its profile (FR-MAH-021, FR-MAH-022)', () => {
   const kimi = getAgentProfile('kimi')
 
-  it('declares routing, and states why it has no tier agent, no hook and no worktree tool', () => {
+  it('declares routing and tier agents, and states why it has no hook and no worktree tool', () => {
     expect(kimi.capabilities.routing).toEqual({ vendor: 'moonshot', efforts: ['low', 'high', 'max'] })
-    expect(kimi.capabilities).toMatchObject({ tierAgents: null, hooks: null, worktrees: 'none' })
-    expect(Object.keys(kimi.capabilities.limitations).sort()).toEqual(['hooks', 'tierAgents', 'worktrees'])
-    expect(kimi.capabilities.limitations.tierAgents).toContain('FR-MAH-022')
+    expect(kimi.capabilities).toMatchObject({ tierAgents: { dir: '.kimi-code/agents', format: 'kimi-md', modelBinding: 'call-alias' }, hooks: null, worktrees: 'none' })
+    expect(Object.keys(kimi.capabilities.limitations).sort()).toEqual(['hooks', 'worktrees'])
     expect(kimi.capabilities.limitations.hooks).toContain("user's own configuration")
     expect(kimi.capabilities.limitations.worktrees).toContain('sub-tasks in the current worktree')
+  })
+
+  it('says in its profile limitations that sf writes no ~/.kimi-code and that the alias pool is the developer', () => {
+    expect(kimi.limitations.join('\n')).toContain('write ~/.kimi-code')
+    expect(kimi.limitations.join('\n')).toContain('[secondary_model.models]')
   })
 
   it('reads AGENTS.md from the project, as its documentation says', () => {
@@ -159,10 +171,10 @@ describe('Kimi Code is routed by its profile and the grid alone (FR-MAH-021)', (
     expect(kimi.runtime).toBe('not-checked')
   })
 
-  it('writes no file for it and keeps no worktree or hook of its own: only the routing grid changed', () => {
-    expect(renderTierAgents(['kimi'])).toEqual([])
+  it('writes one Markdown tier agent per tier, and keeps no worktree or hook of its own', () => {
+    expect(renderTierAgents(['kimi']).map((file) => file.path)).toEqual(['light', 'edit', 'build', 'fix', 'plan', 'terminal'].map((tier) => `.kimi-code/agents/sf-${tier}.md`))
     expect(agentsWith('hooks')).not.toContain('kimi')
-    expect(agentsWith('tierAgents')).not.toContain('kimi')
+    expect(agentsWith('tierAgents')).toContain('kimi')
   })
 })
 
@@ -185,7 +197,7 @@ describe('the registry refuses a capability block that breaks the rules', () => 
   })
 
   it('requires a reason for what a profile lacks', () => {
-    refused((data) => (data.profiles.kimi.capabilities.limitations = {}), /kimi: missing tierAgents, hooks, worktrees must say why/)
+    refused((data) => (data.profiles.kimi.capabilities.limitations = {}), /kimi: missing hooks, worktrees must say why/)
     refused((data) => (data.profiles['gemini-cli'].capabilities.limitations = {}), /gemini-cli: missing routing, tierAgents, hooks, worktrees must say why/)
     refused((data) => delete data.profiles.codex.capabilities.limitations.worktrees, /codex: missing worktrees must say why/)
   })
@@ -197,6 +209,9 @@ describe('the registry refuses a capability block that breaks the rules', () => 
   it('refuses a vocabulary the renderers and the hosts do not know', () => {
     refused((data) => (data.profiles.codex.capabilities.tierAgents.format = 'yaml'), /tierAgents.format must be one of claude-md, codex-toml/)
     refused((data) => (data.profiles.codex.capabilities.tierAgents.modelBinding = 'env'), /tierAgents.modelBinding must be one of file, call-alias/)
+    // a format with a model field binds it there, and one with none leaves it to the alias a call passes
+    refused((data) => (data.profiles.codex.capabilities.tierAgents.modelBinding = 'call-alias'), /codex: tierAgents.modelBinding of the codex-toml format must be file/)
+    refused((data) => (data.profiles.kimi.capabilities.tierAgents.modelBinding = 'file'), /kimi: tierAgents.modelBinding of the kimi-md format must be call-alias/)
     refused((data) => (data.profiles.codex.capabilities.hooks.scope = 'global'), /hooks.scope must be one of project, user/)
     refused((data) => (data.profiles.codex.capabilities.worktrees = 'cloud'), /worktrees must be one of native, manual, none/)
   })
@@ -210,7 +225,7 @@ describe('the registry refuses a capability block that breaks the rules', () => 
 
   it('refuses tier agents for a host the grid does not route', () => {
     refused((data) => {
-      data.profiles['gemini-cli'].capabilities.tierAgents = { dir: '.gemini/agents', format: 'claude-md', modelBinding: 'call-alias' }
+      data.profiles['gemini-cli'].capabilities.tierAgents = { dir: '.gemini/agents', format: 'kimi-md', modelBinding: 'call-alias' }
       delete data.profiles['gemini-cli'].capabilities.limitations.tierAgents
     }, /gemini-cli: tierAgents needs routing/)
   })

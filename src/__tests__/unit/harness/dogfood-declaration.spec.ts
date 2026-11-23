@@ -9,15 +9,18 @@ import { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS } from '../../../install
 
 const ROOT = resolve(__dirname, '../../../..')
 const CODEX_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.codex/agents/sf-${tier}.toml`)
+const CLAUDE_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.claude/agents/sf-${tier}.md`)
+const KIMI_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.kimi-code/agents/sf-${tier}.md`)
 
 // The tests hash every baselined file of this repository, run git ls-files and project every skill: a loaded machine
 // went past the former 20 s of the unit project (#1205). The bound is a hang guard, not what the tests check.
 jest.setTimeout(90_000)
 
 describe('SaaSFoundryAI shared harness dogfood declaration', () => {
-  it('declares Claude Code and Codex with reproducible tracked adapter baselines', async () => {
+  it('declares Claude Code, Codex and Kimi Code with reproducible tracked adapter baselines', async () => {
     const manifest = JSON.parse(await readFile(resolve(ROOT, '.saasfoundry.json'), 'utf8'))
-    expect(manifest.modules.harness.agents).toEqual(['claude-code', 'codex'])
+    // We dogfood every provider we ship (FR-MAH-022): Kimi Code is declared in shared scope, so its tier agents are committed.
+    expect(manifest.modules.harness.agents).toEqual(['claude-code', 'codex', 'kimi'])
 
     // AGENTS.md holds the project instructions since the harness v3 → v4 migration (#938)
     const agents = await readFile(resolve(ROOT, 'AGENTS.md'), 'utf8')
@@ -41,6 +44,20 @@ describe('SaaSFoundryAI shared harness dogfood declaration', () => {
     const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean)
     expect(tracked).toEqual(expect.arrayContaining(['AGENTS.md', 'GEMINI.md', '.agents/skills/sf-workflow/workflow-cli.sh']))
     expect(tracked.filter((path) => path.startsWith('.codex/')).sort()).toEqual([...CODEX_TIER_AGENTS, '.codex/hooks.json'].sort())
+    // Kimi Code: only the six generated tier agents live under .kimi-code/, each with a baseline, and nothing of ~/.kimi-code is here
+    expect(
+      Object.keys(baselines)
+        .filter((path) => path.startsWith('.kimi-code/'))
+        .sort()
+    ).toEqual(KIMI_TIER_AGENTS)
+    expect(tracked.filter((path) => path.startsWith('.kimi-code/')).sort()).toEqual(KIMI_TIER_AGENTS)
+    // The Claude Code and Codex tier agents are still the six each host has always had: declaring Kimi Code adds a folder, and changes neither
+    expect(
+      Object.keys(baselines)
+        .filter((path) => path.startsWith('.claude/agents/'))
+        .sort()
+    ).toEqual(CLAUDE_TIER_AGENTS)
+    expect(tracked.filter((path) => path.startsWith('.claude/agents/')).sort()).toEqual(CLAUDE_TIER_AGENTS)
 
     for (const [path, expected] of Object.entries(baselines)) {
       const content = await readFile(resolve(ROOT, path))
