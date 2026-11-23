@@ -1,5 +1,13 @@
+# Every branch the push updates is one the workflow names (#1232), whatever the local branch is:
+# a host-named agent branch or a detached HEAD pushes with HEAD:<ticket branch>, and that name is checked.
+sf_branch_guard="$(dirname "$0")/workflow-branch-guard.mjs"
+if [ -f "$sf_branch_guard" ]; then
+  node "$sf_branch_guard" push
+fi
+
 # Get the current branch name
-current_branch=$(git symbolic-ref --short HEAD)
+# A detached HEAD (a push from a rebase or `git push origin HEAD:<branch>`) is no rc-* branch: nothing to check.
+current_branch=$(git symbolic-ref --short -q HEAD) || exit 0
 echo "Preparing to push branch: $current_branch"
 
 # Get remote and URL information
@@ -8,12 +16,18 @@ url="$2"
 
 # RC pushes are validation-only. Version changes must already be committed,
 # and release tags are created from the verified master commit after merge.
-if [[ "$current_branch" =~ ^rc- ]]; then
+# Husky runs hooks with sh (dash on most Linux images): match with a POSIX case and grep -E,
+# no bash-only test.
+is_rc_branch=false
+case "$current_branch" in
+  rc-*) is_rc_branch=true ;;
+esac
+if [ "$is_rc_branch" = true ]; then
   echo "Release candidate branch detected: $current_branch"
   expected_version="${current_branch#rc-}"
   current_version=$(node -p "require('./package.json').version")
 
-  if [[ ! "$expected_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+  if ! printf '%s\n' "$expected_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
     echo "❌ Invalid release branch name. Expected rc-X.Y.Z, got $current_branch."
     exit 1
   fi

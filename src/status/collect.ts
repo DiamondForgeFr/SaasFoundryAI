@@ -4,12 +4,15 @@ import path from 'path'
 
 import { type CliChannel, isCliSourceRepository } from '../cli-channel'
 import type { ManagedFileState } from '../harness/agent-instructions'
+import { declaredAgents as harnessAgents } from '../harness/agent-registry'
 import { inspectTierAgents } from '../harness/agent-support'
 import { captureErrorWindowStart, readCaptureErrors, type CaptureErrorSummary } from '../harness/capture-errors'
 import { type DelegationState, loadDelegationState } from '../harness/delegation'
-import { captureState, type CaptureProbe, type CaptureState } from '../harness/delegation-hooks'
+import { captureStanding, type CaptureProbe, type CaptureState } from '../harness/delegation-hooks'
 import { resolveLedgerDir } from '../harness/delegation-ledger'
-import { guardState, type GuardProbe, type GuardState } from '../harness/guard-hook'
+import { guardStanding, type GuardProbe, type GuardState } from '../harness/guard-hook'
+import { DEFAULT_SHELL_SHAPE, recordedShellShape } from '../harness/shell-guard-mode'
+import type { ShellShapeMode } from '../harness/tool-call-guard'
 import { ROUTING_GRID_VERSION, type RoutingOverrides } from '../harness/routing-grid'
 import { emptyLocalRouting, listLocalAdjustments, listLocalHolds, readLocalRouting } from '../harness/routing-local'
 import { type LocalCiGateResult, resolveLocalCiGate } from '../local-ci-gate'
@@ -131,12 +134,18 @@ export interface StatusRoutingState {
   adjustments: { kind: string; provider: string; tier: string; from: string; action: string; at: string }[]
   /** Kinds the adjustment looked at and left where they are, with the reason (also in the log of the local layer). */
   holds: { kind: string; provider: string; reason: string; since: string }[]
-  capture: { agent: string; state: CaptureState }[]
+  /** Each declared agent's capture hook, and the CLI it reaches when one resolves (#1228). */
+  capture: { agent: string; state: CaptureState; cli?: string; cliVersion?: string }[]
   /**
    * Whether the PreToolUse guard hook (#1106), which refuses an agent's own bypass of a guard, is declared for each
    * declared coding agent and could run. Optional for a caller that builds a report by hand.
    */
-  guard?: { agent: string; state: GuardState }[]
+  guard?: { agent: string; state: GuardState; cli?: string; cliVersion?: string }[]
+  /**
+   * What the guard hook does with a shell line that is not one plain command (#1251): `modules.harness.guard.shellShape`,
+   * `refuse` when the manifest records nothing. Optional for a caller that builds a report by hand.
+   */
+  shellShape?: ShellShapeMode
   /**
    * The failures the capture hooks logged in the last 7 days (#1105): a hook that fails leaves no other trace, since
    * the host discards its output. Optional for a caller that builds a report without reading the log.
@@ -396,7 +405,7 @@ async function collectRouting(
     const since = captureErrorWindowStart(now())
     const captureErrors = dir ? await readCaptureErrors(dir, { since }) : { count: 0, since: since.toISOString() }
     // The effective declaration (shared and local) when the instruction files let it be read, otherwise what the manifest says.
-    const tiers = await inspectTierAgents(projectRoot, manifest, declaredAgents ?? harness.agents ?? ['claude-code'])
+    const tiers = await inspectTierAgents(projectRoot, manifest, declaredAgents ?? harnessAgents(harness.agents))
     return {
       gridVersion: ROUTING_GRID_VERSION,
       overrides: routingOverrides(harness.routing),
@@ -412,8 +421,10 @@ async function collectRouting(
         at: adjustment.at
       })),
       holds: listLocalHolds(local).map(({ kind, provider, hold }) => ({ kind, provider, reason: hold.reason, since: hold.since })),
-      capture: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await captureState(projectRoot, agent, probe) }))),
-      guard: await Promise.all((harness.agents ?? ['claude-code']).map(async (agent) => ({ agent, state: await guardState(projectRoot, agent, guardProbe) }))),
+      // The CLI each hook reaches is compared with the version that last updated the project (#1228).
+      capture: await Promise.all(harnessAgents(harness.agents).map(async (agent) => ({ agent, ...(await captureStanding(projectRoot, agent, probe, manifest.version)) }))),
+      guard: await Promise.all(harnessAgents(harness.agents).map(async (agent) => ({ agent, ...(await guardStanding(projectRoot, agent, guardProbe, manifest.version)) }))),
+      shellShape: recordedShellShape(manifest) ?? DEFAULT_SHELL_SHAPE,
       captureErrors
     }
   } catch (error) {

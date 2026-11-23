@@ -76,7 +76,8 @@ describe('Accounts Module (e2e)', () => {
       lastname: 'Manager',
       roles: ['account-user', 'account-admin'],
       // ROLE_CUSTOM_MANAGEMENT is opt-in (not granted to account-admin by default) — the custom-role
-      // builder tests below need it. The helper grants it RBAC v2-correctly (module + ROLES sub-module first).
+      // builder tests below need it. The helper grants it to this user only, through a custom role of its
+      // own account (module + ROLES sub-module first): the system roles keep their seeded grants (#987).
       permissions: ['ROLE_CUSTOM_MANAGEMENT']
     })
 
@@ -993,6 +994,77 @@ describe('Accounts Module (e2e)', () => {
         expect(await grantsOf(siblingRole.id)).toMatchObject({ name: 'scope-probe-sibling', isActive: true })
       })
 
+      describe('a pending invitation that carries an ENTITY role counts like an assignment (#1222)', () => {
+        const invitationIds: string[] = []
+
+        /** A pending (SENT) invitation into one entity, carrying one role: on acceptance it assigns the role there. */
+        const inviteWithRole = async (email: string, roleId: number, invitedEntityId: string) => {
+          const invitation = await prismaService.invitation.create({
+            data: {
+              inviterUserId: testUser.id,
+              inviteeUserEmail: email,
+              status: 'SENT',
+              entitiesLinked: { create: { entityId: invitedEntityId } },
+              rolesLinked: { create: { roleId } }
+            }
+          })
+          invitationIds.push(invitation.id)
+          return invitation
+        }
+
+        afterAll(async () => {
+          await prismaService.invitation.deleteMany({ where: { id: { in: invitationIds } } })
+        })
+
+        it('a seeded entity-admin cannot edit, toggle or delete an ENTITY role only promised to an invitee of a sibling entity (403, nothing changes)', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-invited-sibling', scope: 'ENTITY', permissionIds: [] })
+          await inviteWithRole('scope-invited-sibling@saasfoundryai.test', promisedRole.id, siblingEntityId)
+          const before = await grantsOf(promisedRole.id)
+          const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+
+          await entityAdminAgent
+            .patch(`/api/accounts/roles/${promisedRole.id}`)
+            .send({ name: 'hijacked', permissionIds: [allocation] })
+            .expect(403)
+          await entityAdminAgent.patch(`/api/accounts/roles/${promisedRole.id}/status`).send({ isActive: false }).expect(403)
+          await entityAdminAgent.delete(`/api/accounts/roles/${promisedRole.id}`).expect(403)
+
+          expect(await grantsOf(promisedRole.id)).toEqual(before)
+        })
+
+        it('a seeded entity-admin still manages an ENTITY role promised to an invitee of its own entity, with what it holds', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-invited-own', scope: 'ENTITY', permissionIds: [] })
+          await inviteWithRole('scope-invited-own@saasfoundryai.test', promisedRole.id, entityId)
+          const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+
+          await entityAdminAgent
+            .patch(`/api/accounts/roles/${promisedRole.id}`)
+            .send({ name: 'scope-probe-invited-own-2', permissionIds: [allocation] })
+            .expect(200)
+          expect(await grantsOf(promisedRole.id)).toMatchObject({ name: 'scope-probe-invited-own-2', permissionIds: [allocation] })
+        })
+
+        it('an invitation that can no longer be accepted promises nothing: the role is used nowhere again', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-invited-canceled', scope: 'ENTITY', permissionIds: [] })
+          const invitation = await inviteWithRole('scope-invited-canceled@saasfoundryai.test', promisedRole.id, siblingEntityId)
+          await prismaService.invitation.update({ where: { id: invitation.id }, data: { status: 'CANCELED' } })
+
+          await entityAdminAgent.patch(`/api/accounts/roles/${promisedRole.id}`).send({ name: 'scope-probe-invited-canceled-2' }).expect(200)
+        })
+
+        it('the account admin still manages an ENTITY role promised anywhere in its account', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-invited-admin', scope: 'ENTITY', permissionIds: [] })
+          await inviteWithRole('scope-invited-admin@saasfoundryai.test', promisedRole.id, siblingEntityId)
+          const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+
+          await agent
+            .patch(`/api/accounts/roles/${promisedRole.id}`)
+            .send({ name: 'scope-probe-invited-admin-2', permissionIds: [allocation] })
+            .expect(200)
+          expect(await grantsOf(promisedRole.id)).toMatchObject({ name: 'scope-probe-invited-admin-2', permissionIds: [allocation] })
+        })
+      })
+
       it('nobody adds a permission it does not hold: the holder of a custom role cannot extend it, nor mint one (403)', async () => {
         const roleManagement = await permissionIdOf('ROLE_CUSTOM_MANAGEMENT')
         const entityCreation = await permissionIdOf('ENTITY_CREATION')
@@ -1023,7 +1095,8 @@ describe('Accounts Module (e2e)', () => {
           .expect(200)
         expect(await grantsOf(ownRole.id)).toMatchObject({ name: 'scope-probe-mine-2', permissionIds: [allocation] })
         await entityAdminAgent.patch(`/api/accounts/roles/${ownRole.id}/status`).send({ isActive: false }).expect(200)
-        // A role still assigned cannot be deleted (the assignment's foreign key): detach the holder first.
+        // A role still assigned is not deleted (409 ROLE_IN_USE, #1221): unassign the holder first.
+        await entityAdminAgent.delete(`/api/accounts/roles/${ownRole.id}`).expect(409)
         await prismaService.userRoleAssignment.deleteMany({ where: { roleId: ownRole.id } })
         await entityAdminAgent.delete(`/api/accounts/roles/${ownRole.id}`).expect(200)
         expect(await prismaService.role.count({ where: { id: ownRole.id } })).toBe(0)
@@ -1039,9 +1112,257 @@ describe('Accounts Module (e2e)', () => {
           .send({ name: 'scope-probe-admin-2', permissionIds: [allocation] })
           .expect(200)
         await agent.patch(`/api/accounts/roles/${siblingRole.id}/status`).send({ isActive: false }).expect(200)
+        await agent.delete(`/api/accounts/roles/${siblingRole.id}`).expect(409)
         await prismaService.userRoleAssignment.deleteMany({ where: { roleId: siblingRole.id } })
         await agent.delete(`/api/accounts/roles/${siblingRole.id}`).expect(200)
         expect(await prismaService.role.count({ where: { id: siblingRole.id } })).toBe(0)
+      })
+
+      /**
+       * Deleting a role still in use (#1221): the delete is refused with a 409 that names who holds the role, and
+       * nothing changes. A pending invitation carrying the role counts (accepting it would assign the role), as it does
+       * for the authority check (#1222). Before #1221 the assignment's foreign key refused the delete with a bare 400.
+       */
+      describe('a role still in use is not deleted (#1221)', () => {
+        const invitationIds: string[] = []
+
+        afterAll(async () => {
+          await prismaService.invitation.deleteMany({ where: { id: { in: invitationIds } } })
+        })
+
+        const roleState = async (roleId: number) => ({
+          exists: (await prismaService.role.count({ where: { id: roleId } })) === 1,
+          assignments: await prismaService.userRoleAssignment.count({ where: { roleId } }),
+          invitationLinks: await prismaService.invitationRoleLink.count({ where: { roleId } })
+        })
+
+        it('answers 409 ROLE_IN_USE naming the users who hold the role, and keeps the role and its assignments', async () => {
+          const heldRole = await createRoleAsAccountAdmin({ name: 'scope-probe-held', scope: 'ENTITY', permissionIds: [] })
+          await createProbeUser('scope-held-own@saasfoundryai.test', { roleId: heldRole.id, entityId }, { entityId })
+          await createProbeUser('scope-held-sibling@saasfoundryai.test', { roleId: heldRole.id, entityId: siblingEntityId }, { entityId: siblingEntityId })
+
+          const res = await agent.delete(`/api/accounts/roles/${heldRole.id}`).expect(409)
+
+          expect(res.body.message).toMatch(/^ROLE_IN_USE: the role "scope-probe-held" is still assigned to /)
+          expect(res.body.message).toContain('scope-held-own@saasfoundryai.test (Test Entity)')
+          expect(res.body.message).toContain(`scope-held-sibling@saasfoundryai.test (entity ${siblingEntityId})`)
+          expect(res.body.message).toContain('first unassign it')
+          expect(await roleState(heldRole.id)).toEqual({ exists: true, assignments: 2, invitationLinks: 0 })
+        })
+
+        it('answers 409 naming the invitee when only a pending invitation carries the role, and keeps the invitation whole', async () => {
+          const promisedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-promised', scope: 'ENTITY', permissionIds: [] })
+          const invitation = await prismaService.invitation.create({
+            data: {
+              inviterUserId: testUser.id,
+              inviteeUserEmail: 'scope-promised@saasfoundryai.test',
+              status: 'SENT',
+              entitiesLinked: { create: { entityId } },
+              rolesLinked: { create: { roleId: promisedRole.id } }
+            }
+          })
+          invitationIds.push(invitation.id)
+
+          const res = await agent.delete(`/api/accounts/roles/${promisedRole.id}`).expect(409)
+
+          expect(res.body.message).toBe(
+            'ROLE_IN_USE: the role "scope-probe-promised" is still carried by the pending invitation to scope-promised@saasfoundryai.test (Test Entity). To delete it, first cancel the invitations.'
+          )
+          expect(await roleState(promisedRole.id)).toEqual({ exists: true, assignments: 0, invitationLinks: 1 })
+
+          // Once the invitation can no longer be accepted, it promises nothing: the role goes, and its link with it.
+          await prismaService.invitation.update({ where: { id: invitation.id }, data: { status: 'CANCELED' } })
+          await agent.delete(`/api/accounts/roles/${promisedRole.id}`).expect(200)
+          expect(await roleState(promisedRole.id)).toEqual({ exists: false, assignments: 0, invitationLinks: 0 })
+        })
+
+        it('still deletes a role nobody holds, with its grants', async () => {
+          const allocation = await permissionIdOf('USER_ROLE_ALLOCATION')
+          const unusedRole = await createRoleAsAccountAdmin({ name: 'scope-probe-unused', scope: 'ACCOUNT', permissionIds: [allocation] })
+
+          await agent.delete(`/api/accounts/roles/${unusedRole.id}`).expect(200)
+
+          expect(await roleState(unusedRole.id)).toEqual({ exists: false, assignments: 0, invitationLinks: 0 })
+          expect(await prismaService.rolePermissionLink.count({ where: { roleId: unusedRole.id } })).toBe(0)
+        })
+      })
+    })
+  })
+
+  /**
+   * Entity-type roles (#1230): a project adds an entity type whose sections exist only on its entities (a project's
+   * vision, its tickets), granted by a system role of that type (a `project-owner`). Nobody holds them on the account,
+   * so the account administrator shapes an ENTITY role against what the entity type allows, never beyond it, whether
+   * the role is assigned nowhere yet or already used (#1245).
+   */
+  describe('entity-type roles are shaped against what the entity type allows', () => {
+    const createdRoleIds: number[] = []
+    let projectModuleId: number
+    let projectOwnerRoleId: number
+    let visionSectionId: number
+    let secretSectionId: number
+    let ticketEditPermissionId: number
+
+    const grantsOf = async (roleId: number) => {
+      const role = await prismaService.role.findUniqueOrThrow({ where: { id: roleId }, include: { permissionsLinked: true, subModulesLinked: true } })
+      return { permissionIds: role.permissionsLinked.map((link) => link.permissionId), subModuleIds: role.subModulesLinked.map((link) => link.subModuleId).sort((a, b) => a - b) }
+    }
+
+    beforeAll(async () => {
+      const moduleType = await prismaService.moduleType.findFirstOrThrow({ where: { name: 'ACCOUNT_MANAGEMENT' } })
+      const projectModule = await prismaService.module.create({
+        data: { name: 'E2E_PROJECT', version: '1.0.0', description: 'Entity-only project module (e2e #1230)', typeId: moduleType.id, isActive: true }
+      })
+      projectModuleId = projectModule.id
+      const vision = await prismaService.subModule.create({ data: { moduleId: projectModule.id, name: 'E2E_PROJECT_VISION', description: 'Project vision section' } })
+      const secret = await prismaService.subModule.create({ data: { moduleId: projectModule.id, name: 'E2E_PROJECT_SECRET', description: 'A section no system role grants' } })
+      visionSectionId = vision.id
+      secretSectionId = secret.id
+      const ticketEdit = await prismaService.modulePermission.create({
+        data: { moduleId: projectModule.id, subModuleId: vision.id, name: 'E2E_PROJECT_TICKET_EDIT', description: 'Edit the tickets of a project', applicableScopes: ['ENTITY'] }
+      })
+      ticketEditPermissionId = ticketEdit.id
+
+      // The entity type's system role: module → section → permission, in the order the integrity trigger requires.
+      const projectOwner = await prismaService.role.create({ data: { name: 'e2e-project-owner', scope: 'ENTITY', isSystem: true, isActive: true, accountId: null } })
+      projectOwnerRoleId = projectOwner.id
+      await prismaService.roleModuleLink.create({ data: { roleId: projectOwner.id, moduleId: projectModule.id } })
+      await prismaService.roleSubModuleLink.create({ data: { roleId: projectOwner.id, subModuleId: vision.id } })
+      await prismaService.rolePermissionLink.create({ data: { roleId: projectOwner.id, permissionId: ticketEdit.id } })
+    })
+
+    afterAll(async () => {
+      await prismaService.role.deleteMany({ where: { id: { in: [...createdRoleIds, projectOwnerRoleId].filter((id) => id !== undefined) } } })
+      if (projectModuleId) await prismaService.module.delete({ where: { id: projectModuleId } }).catch(() => {})
+    })
+
+    it('the account admin creates an ENTITY role granting the sections that exist only on the entity', async () => {
+      const res = await agent
+        .post(`/api/accounts/${accountId}/roles`)
+        .send({ name: 'e2e-project-reviewer', scope: 'ENTITY', subModuleIds: [visionSectionId], permissionIds: [ticketEditPermissionId] })
+        .expect(201)
+      createdRoleIds.push(res.body.id)
+
+      expect(await grantsOf(res.body.id)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
+    })
+
+    it('the account admin adds them to an ENTITY role assigned nowhere yet', async () => {
+      const res = await agent.post(`/api/accounts/${accountId}/roles`).send({ name: 'e2e-project-empty', scope: 'ENTITY', permissionIds: [] }).expect(201)
+      createdRoleIds.push(res.body.id)
+
+      await agent
+        .patch(`/api/accounts/roles/${res.body.id}`)
+        .send({ subModuleIds: [visionSectionId], permissionIds: [ticketEditPermissionId] })
+        .expect(200)
+      expect(await grantsOf(res.body.id)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
+    })
+
+    it('nobody grants beyond what the entity type allows (403, nothing written)', async () => {
+      await agent
+        .post(`/api/accounts/${accountId}/roles`)
+        .send({ name: 'e2e-project-secret', scope: 'ENTITY', subModuleIds: [visionSectionId, secretSectionId], permissionIds: [] })
+        .expect(403)
+      expect(await prismaService.role.count({ where: { name: 'e2e-project-secret' } })).toBe(0)
+    })
+
+    it('an ACCOUNT role does not borrow what the entity type allows (403)', async () => {
+      await agent
+        .post(`/api/accounts/${accountId}/roles`)
+        .send({ name: 'e2e-project-account', scope: 'ACCOUNT', subModuleIds: [visionSectionId], permissionIds: [] })
+        .expect(403)
+      expect(await prismaService.role.count({ where: { name: 'e2e-project-account' } })).toBe(0)
+    })
+
+    it('an entity admin still grants only what it holds (403)', async () => {
+      await entityAdminAgent
+        .post(`/api/accounts/${accountId}/roles`)
+        .send({ name: 'e2e-project-entity-admin', scope: 'ENTITY', subModuleIds: [visionSectionId], permissionIds: [] })
+        .expect(403)
+      expect(await prismaService.role.count({ where: { name: 'e2e-project-entity-admin' } })).toBe(0)
+    })
+
+    /**
+     * #1245: the account administrator keeps the entity type allowance once the role is used, whether it is
+     * assigned in a project of the account or only promised by a pending invitation into one. An entity
+     * administrator still grants only what it holds, in every entity where the role is used.
+     */
+    describe('once the role is used in a project of the account (#1245)', () => {
+      let projectEntityId: string
+      const invitationIds: string[] = []
+
+      const createEmptyRole = async (name: string) => {
+        const res = await agent.post(`/api/accounts/${accountId}/roles`).send({ name, scope: 'ENTITY', permissionIds: [] }).expect(201)
+        createdRoleIds.push(res.body.id)
+        return res.body.id as number
+      }
+      /** Assigns the role to a member of the account in the project, as an allocation would. */
+      const assignInProject = (roleId: number) => prismaService.userRoleAssignment.create({ data: { userId: testUser2.id, roleId, entityId: projectEntityId } })
+      /** A pending (SENT) invitation into the project carrying the role: on acceptance it assigns the role there. */
+      const inviteIntoProject = async (roleId: number, email: string) => {
+        const invitation = await prismaService.invitation.create({
+          data: { inviterUserId: testUser.id, inviteeUserEmail: email, status: 'SENT', entitiesLinked: { create: { entityId: projectEntityId } }, rolesLinked: { create: { roleId } } }
+        })
+        invitationIds.push(invitation.id)
+      }
+      /** Read when a case runs: the section and permission ids are set by the `beforeAll` above. */
+      const addVision = () => ({ subModuleIds: [visionSectionId], permissionIds: [ticketEditPermissionId] })
+
+      beforeAll(async () => {
+        // A project of the account that the seeded entity admin does not administer.
+        projectEntityId = (await prismaService.entity.create({ data: { accountId, isActive: true } })).id
+      })
+
+      afterAll(async () => {
+        await prismaService.invitation.deleteMany({ where: { id: { in: invitationIds } } })
+        await prismaService.userRoleAssignment.deleteMany({ where: { roleId: { in: createdRoleIds } } })
+        await prismaService.entity.deleteMany({ where: { id: projectEntityId } })
+      })
+
+      it('the account admin adds the sections the entity type allows to a role already assigned in a project (200)', async () => {
+        const roleId = await createEmptyRole('e2e-project-assigned')
+        await assignInProject(roleId)
+
+        await agent.patch(`/api/accounts/roles/${roleId}`).send(addVision()).expect(200)
+        expect(await grantsOf(roleId)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
+      })
+
+      it('the account admin does the same on a role carried only by a pending invitation into a project (200)', async () => {
+        const roleId = await createEmptyRole('e2e-project-invited')
+        await inviteIntoProject(roleId, 'e2e-project-invitee@saasfoundryai.test')
+
+        await agent.patch(`/api/accounts/roles/${roleId}`).send(addVision()).expect(200)
+        expect(await grantsOf(roleId)).toEqual({ permissionIds: [ticketEditPermissionId], subModuleIds: [visionSectionId] })
+      })
+
+      it('nobody grants beyond what the entity type allows on a used role (403, nothing written)', async () => {
+        const roleId = await createEmptyRole('e2e-project-secret-2')
+        await assignInProject(roleId)
+
+        await agent
+          .patch(`/api/accounts/roles/${roleId}`)
+          .send({ subModuleIds: [visionSectionId, secretSectionId], permissionIds: [] })
+          .expect(403)
+        expect(await grantsOf(roleId)).toEqual({ permissionIds: [], subModuleIds: [] })
+      })
+
+      it('an entity admin of another entity still gets 403 on a role assigned or promised in the project (nothing written)', async () => {
+        const assignedRoleId = await createEmptyRole('e2e-project-assigned-ea')
+        await assignInProject(assignedRoleId)
+        const invitedRoleId = await createEmptyRole('e2e-project-invited-ea')
+        await inviteIntoProject(invitedRoleId, 'e2e-project-invitee-2@saasfoundryai.test')
+
+        await entityAdminAgent.patch(`/api/accounts/roles/${assignedRoleId}`).send(addVision()).expect(403)
+        await entityAdminAgent.patch(`/api/accounts/roles/${invitedRoleId}`).send(addVision()).expect(403)
+        expect(await grantsOf(assignedRoleId)).toEqual({ permissionIds: [], subModuleIds: [] })
+        expect(await grantsOf(invitedRoleId)).toEqual({ permissionIds: [], subModuleIds: [] })
+      })
+
+      it('an entity admin of the entity where the role is used still grants only what it holds (403)', async () => {
+        const roleId = await createEmptyRole('e2e-project-own-entity')
+        await prismaService.userRoleAssignment.create({ data: { userId: testUser2.id, roleId, entityId } })
+
+        await entityAdminAgent.patch(`/api/accounts/roles/${roleId}`).send(addVision()).expect(403)
+        expect(await grantsOf(roleId)).toEqual({ permissionIds: [], subModuleIds: [] })
       })
     })
   })

@@ -1,9 +1,12 @@
 import chalk from 'chalk'
 
 import { describeCliVersion } from '../cli-channel'
+import { agentsWith, capabilityLimitation, findAgentProfile, getAgentProfile } from '../harness/agent-registry'
 import { CAPTURE_ERROR_WINDOW_DAYS } from '../harness/capture-errors'
+import { hookCliText } from '../harness/hook-cli'
 import { isAllDefaultLanguages, resolveOutputLanguages } from '../language'
 import { localCiGateSummary } from '../local-ci-gate'
+import type { WorkflowConfig, WorkflowStatus } from '../types'
 import type { StatusCli, StatusDelegation, StatusLocalCi, StatusReport, StatusRouting, StatusRoutingState } from './collect'
 import type { Precondition, PreconditionStatus } from './preconditions'
 
@@ -23,6 +26,27 @@ export function delegationSummary(delegation: StatusDelegation): string {
   if (delegation.ticketDelivery === 'not-asked') return 'not-asked (ask the developer once, then record it with sf agents delegation allow or decline)'
   const team = delegation.source === 'local' ? `; shared team default: ${delegation.shared.ticketDelivery}` : ''
   return `${delegation.ticketDelivery} (${delegation.source}, ${delegation.decidedAt}${team})`
+}
+
+/** The status names of the workflow, in the order and the spelling of the manifest (#1249). */
+export function workflowStatusNames(workflow: WorkflowConfig | undefined): string[] {
+  const statuses: unknown = workflow?.statuses
+  if (!Array.isArray(statuses)) return []
+  return statuses
+    .map((status: unknown) => (typeof status === 'string' ? status : (status as Partial<WorkflowStatus> | null)?.name))
+    .filter((name): name is string => typeof name === 'string' && name.length > 0)
+}
+
+/**
+ * The workflow on one line (#1249): the tool, then the preset and its statuses in order, so a session reading the
+ * session-start report knows whether Human testing exists on this project:
+ * `github-projects (SaaSFoundry Solo: Backlog → In progress → AI testing → In review → Done)`.
+ */
+export function workflowSummary(workflow: WorkflowConfig | undefined): string {
+  if (!workflow?.tool || workflow.tool === 'none') return 'none'
+  const statuses = workflowStatusNames(workflow)
+  const detail = [workflow.template, statuses.length ? statuses.join(' → ') : undefined].filter(Boolean).join(': ')
+  return detail ? `${workflow.tool} (${detail})` : workflow.tool
 }
 
 /**
@@ -49,27 +73,70 @@ export function routingSummary(routing: StatusRouting): string {
         .map((entry) => `${entry.kind} → ${entry.tier} for ${entry.provider}, ${entry.action} on ${entry.at.slice(0, 10)}`)
         .join('; ')}; sf agents routing report, promote or reset)`
     : 'shipped grid and shared overrides, no local adjustment'
-  const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry.agent)}`).join('; ')
-  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${guardSummary(routing.guard)}${captureErrorsSummary(routing.captureErrors)}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
+  const capture = routing.capture.map((entry) => `${entry.agent} ${CAPTURE_TEXT[entry.state](entry)}`).join('; ')
+  return `${gridSummary(routing)}; ${moves}${holdsSummary(routing.holds ?? [])}; ${capture}${guardSummary(routing.guard, routing.shellShape)}${captureErrorsSummary(routing.captureErrors)}${routing.adjustment === 'off' ? '; automatic adjustment off' : ''}`
 }
 
 /**
  * Whether the PreToolUse hook that refuses an agent's own bypass of a guard is in place for each declared coding
  * agent (#1106): `; claude-code guard enforced; codex guard declared (...)`. Said for every agent, like the capture
- * hook: a fail-open hook is acceptable only if its absence is visible.
+ * hook: a fail-open hook is acceptable only if its absence is visible. It ends with what the hook does with a shell
+ * line that is not one plain command (#1251): `; shell shape: refuse` (the default), `warn` or `off`.
  */
-export function guardSummary(guard: StatusRoutingState['guard']): string {
+export function guardSummary(guard: StatusRoutingState['guard'], shellShape: StatusRoutingState['shellShape'] = 'refuse'): string {
   if (!guard?.length) return ''
-  return `; ${guard.map((entry) => `${entry.agent} ${GUARD_TEXT[entry.state](entry.agent)}`).join('; ')}`
+  return `; ${guard.map((entry) => `${entry.agent} ${GUARD_TEXT[entry.state](entry)}`).join('; ')}; shell shape: ${SHELL_SHAPE_TEXT[shellShape]}`
 }
 
-const GUARD_TEXT: Record<NonNullable<StatusRoutingState['guard']>[number]['state'], (agent: string) => string> = {
+const SHELL_SHAPE_TEXT: Record<NonNullable<StatusRoutingState['shellShape']>, string> = {
+  refuse: 'refuse',
+  warn: 'warn (a chained, substituted or scripted line is flagged, not refused; sf agents shell-guard refuse)',
+  off: 'off (the shape of a line is not checked; sf agents shell-guard refuse)'
+}
+
+interface HookEntry {
+  agent: string
+  cli?: string
+  cliVersion?: string
+}
+
+/**
+ * What a declared hook leaves to the host, from the agent's profile (`capabilities.hooks.needsTrust`): a host that
+ * runs a project hook only once the developer trusts it says so, naming its own project layer; any other host runs it.
+ */
+function declaredNote(agent: string): string {
+  const profile = findAgentProfile(agent)
+  const hooks = profile?.capabilities.hooks
+  return profile && hooks?.needsTrust ? `${profile.displayName} runs it once the ${hooks.file.split('/')[0]}/ layer and the hook are trusted` : 'the host runs it'
+}
+
+/** The hosts whose hooks the harness installs, as the profiles name them: `Claude Code and Codex`. */
+function hookHosts(): string {
+  const names = agentsWith('hooks').map((id) => getAgentProfile(id).displayName)
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('')
+}
+
+/**
+ * The reason a registered agent's profile gives for lacking hooks (FR-MAH-021), without its final period. Undefined for
+ * an agent whose profile declares hooks, whose hook is then declared but not enforced, and for an agent nobody registered,
+ * which has no profile to give a reason: both keep the "not enforced" wording.
+ */
+function noHooksReason(agent: string): string | undefined {
+  return capabilityLimitation(agent, 'hooks')?.replace(/\.$/, '')
+}
+
+const GUARD_TEXT: Record<NonNullable<StatusRoutingState['guard']>[number]['state'], (entry: HookEntry) => string> = {
   enforced: () => 'guard enforced',
-  declared: (agent) => `guard declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
-  'declared-not-runnable': () =>
-    'guard hook declared but no CLI can run it (install saasfoundryai-cli in the project, or put saasfoundryai on the PATH): an agent is not stopped from setting an escape hatch',
+  declared: ({ agent }) => `guard declared (${declaredNote(agent)})`,
+  'declared-not-runnable': (entry) =>
+    `guard hook declared but the CLI it reaches (${hookCliText(entry)}) cannot run sf agents guard (install saasfoundryai-cli in the project, or upgrade the saasfoundryai on the PATH): an agent is not stopped from setting an escape hatch`,
+  'declared-outdated-cli': (entry) => `guard hook declared but the CLI it reaches (${hookCliText(entry)}) is older than the project's harness: upgrade it`,
+  outdated: () => 'guard hook outdated (run sf agents refresh --scope shared)',
   missing: () => 'guard hook missing (run sf agents refresh --scope shared)',
-  'not-enforced': () => 'guard not enforced (the guard hook is for Claude Code and Codex; an agent here is told to ask the developer, nothing stops it)'
+  'not-enforced': ({ agent }) => {
+    const reason = noHooksReason(agent)
+    return reason ? `guard unavailable (${reason})` : `guard not enforced (the guard hook is for ${hookHosts()}; an agent here is told to ask the developer, nothing stops it)`
+  }
 }
 
 /**
@@ -82,13 +149,18 @@ export function captureErrorsSummary(errors: StatusRoutingState['captureErrors']
   return `; ${errors.count} capture error${errors.count === 1 ? '' : 's'} in ${CAPTURE_ERROR_WINDOW_DAYS} days${last}`
 }
 
-const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (agent: string) => string> = {
+const CAPTURE_TEXT: Record<StatusRoutingState['capture'][number]['state'], (entry: HookEntry) => string> = {
   enforced: () => 'capture enforced',
-  declared: (agent) => `capture declared (${agent === 'codex' ? 'Codex runs it once the .codex/ layer and the hook are trusted' : 'the host runs it'})`,
-  'declared-not-runnable': () => 'capture hook declared but no CLI can run it (install saasfoundryai-cli in the project, or put saasfoundryai on the PATH): delegations are not recorded',
+  declared: ({ agent }) => `capture declared (${declaredNote(agent)})`,
+  'declared-not-runnable': (entry) =>
+    `capture hook declared but the CLI it reaches (${hookCliText(entry)}) cannot run sf agents outcome capture (install saasfoundryai-cli in the project, or upgrade the saasfoundryai on the PATH): delegations are not recorded`,
+  'declared-outdated-cli': (entry) => `capture hook declared but the CLI it reaches (${hookCliText(entry)}) is older than the project's harness: upgrade it`,
   outdated: () => 'capture hook outdated (run sf agents refresh --scope shared)',
   missing: () => 'capture hook missing (run sf agents refresh --scope shared)',
-  'not-enforced': () => 'capture not enforced (record its delegations with sf agents outcome record)'
+  'not-enforced': ({ agent }) => {
+    const reason = noHooksReason(agent)
+    return reason ? `capture unavailable (${reason}; record its delegations with sf agents outcome record)` : 'capture not enforced (record its delegations with sf agents outcome record)'
+  }
 }
 
 /** Holds that say something (a kind stuck on a failing tier, a tier that costs more) are named; the ordinary waits are counted. */
@@ -143,6 +215,7 @@ export function renderHuman(payload: RenderPayload): string {
       lines.push(`${chalk.gray('Profile reason:')} ${report.capabilities.reason}`)
       if (report.capabilities.previewCommand) lines.push(`${chalk.gray('Preview full profile:')} ${report.capabilities.previewCommand}`)
     }
+    lines.push(`${chalk.gray('Workflow:')} ${workflowSummary(report.manifest.workflow)}`)
     if (report.delegation) lines.push(`${chalk.gray('Delegation:')} ${delegationSummary(report.delegation)}`)
     if (report.routing) lines.push(`${chalk.gray('Routing:')} ${routingSummary(report.routing)}`)
   } else {
@@ -183,6 +256,12 @@ export function renderHuman(payload: RenderPayload): string {
   return lines.join('\n')
 }
 
+/** `{ name, statuses }` of the workflow for `--json` (#1249); `name` is null when the manifest records no preset. */
+function workflowPresetJson(workflow: WorkflowConfig | undefined): { name: string | null; statuses: string[] } | null {
+  if (!workflow?.tool || workflow.tool === 'none') return null
+  return { name: workflow.template ?? null, statuses: workflowStatusNames(workflow) }
+}
+
 export function renderJson(payload: RenderPayload): string {
   const { report, preconditions } = payload
   const out = {
@@ -194,6 +273,8 @@ export function renderJson(payload: RenderPayload): string {
           projectName: report.manifest.projectName,
           structure: report.manifest.structure,
           workflow: report.manifest.workflow?.tool ?? null,
+          // Additive (#1249): the preset and its statuses in order, null without a workflow tool
+          workflowPreset: workflowPresetJson(report.manifest.workflow),
           tools: report.manifest.tools ?? null,
           // Always resolved, never echoed raw: a consumer must not have to
           // re-implement the "absent means English" rule.
@@ -257,7 +338,7 @@ export function renderAgentFriendly(payload: RenderPayload): string {
       lines.push(`- profile reason: ${report.capabilities.reason}`)
       if (report.capabilities.previewCommand) lines.push(`- full-profile preview: ${report.capabilities.previewCommand}`)
     }
-    lines.push(`- workflow: ${report.manifest.workflow?.tool ?? 'none'}`)
+    lines.push(`- workflow: ${workflowSummary(report.manifest.workflow)}`)
     if (report.delegation) lines.push(`- delegation: ${delegationSummary(report.delegation)}`)
     if (report.routing) lines.push(`- routing: ${routingSummary(report.routing)}`)
     const srs = report.manifest.tools?.srs

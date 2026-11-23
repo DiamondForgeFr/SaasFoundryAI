@@ -102,6 +102,71 @@ The CLI does not create a backup of the overwritten file. Commit the working tre
 
 :::
 
+## Pinned versions and the lockfile
+
+A template refresh can change the versions a `package.json` pins (the 1.2.0 stack refresh moved dozens of them). Your `package-lock.json` still holds the previous ones, and a plain `npm install` does
+not replace them: it keeps the previous versions hoisted at the root, where every peer resolves them (`@nestjs/jwt`, `@nestjs/swagger`, `react-dom`), and nests the new pins under the workspace that
+declares them. The project then has two copies of `@nestjs/common` and `@nestjs/core`, or a `react` and a `react-dom` of different versions: `nest build` fails on `INestApplication` (TS2345), the web
+unit tests on "Incompatible React versions", and the shared UI package on two `@types/react`.
+
+`npm dedupe` does not fix it: it moves the shared copy to the newest version in range, not to the pin. Removing only the lockfile does not either, because npm builds on the installed `node_modules`.
+Resolving the lockfile again, with `node_modules` and `package-lock.json` both removed, gives one copy of each.
+
+When an applied update changes a pinned version (or an `overrides` entry) in a `package.json` that a `package-lock.json` resolves (the root of a monorepo, each app of a multirepo), it names the pins
+and the lockfile, then:
+
+| Run                                         | What happens                                                                                                                                                                                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Interactive                                 | It asks whether to resolve the lockfile again now. On yes, it re-creates `package-lock.json` and `node_modules` under the Node version of the project's `.nvmrc`, then runs `npm ls` on the pinned frameworks and reports any installed twice. |
+| Interactive, answered no                    | It prints the command to run, below.                                                                                                                                                                                                           |
+| `--non-interactive`                         | It installs nothing and prints the command to run, below.                                                                                                                                                                                      |
+| The resolve fails (network, a registry)     | The previous lockfile and `node_modules` are put back, the command to retry is printed, and the update exits with code 1. The template update itself is already recorded.                                                                      |
+| A `package.json` conflict left as a sidecar | Nothing is resolved, since the file on disk did not change: the update says the sidecar changes pins, and to resolve the lockfile once it is merged.                                                                                           |
+| No `package-lock.json`                      | Nothing is said: the first `npm install` resolves the new pins.                                                                                                                                                                                |
+
+The command, from the directory that holds the lockfile, under the Node version of its `.nvmrc` (`nvm use`):
+
+```bash
+rm -rf node_modules package-lock.json && npm install
+npm ls @nestjs/common @nestjs/core react react-dom @types/react @types/react-dom @prisma/client prisma --all
+```
+
+The second line lists each of those frameworks with every version installed; after the resolve each appears in one version. TypeScript is not checked: the API pins 5.9 and the web app 6 on purpose.
+Commit the new `package-lock.json` with the update. A framework still installed twice after the resolve is pinned by a dependency of your own: `npm ls <name> --all` shows which one.
+
+### The Prisma client follows the Prisma pin
+
+The API commits its generated Prisma client under `src/generated/prisma`, and that client stamps the Prisma version that generated it. When the update moves the `prisma` (or `@prisma/client`) pin of
+the API, for example 7.10.0 → 7.10.1 in the 1.2.0 stack refresh, the client still carries the previous version, and the next `prisma generate` (the database scripts, the e2e setup) rewrites it and
+leaves the tree dirty. Which of the two cases applies depends on the lockfile resolve above:
+
+| The lockfile resolve                                     | The Prisma client                                                                                                                                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ran and succeeded (interactive, answered yes)            | `sf update` regenerates it right after, with `npx prisma generate` in the API directory under the Node version of its `.nvmrc`. Commit it with the update.                     |
+| Did not run (`--non-interactive`, answered no) or failed | The command is printed among the steps, after the lockfile resolve: `cd apps/api && npx prisma generate` in a monorepo, `npx prisma generate` from the API app in a multirepo. |
+| The generate fails                                       | Its error and the command to retry are printed, and the update exits with code 1.                                                                                              |
+| A `package.json` conflict left as a sidecar bumps Prisma | The sidecar notice adds the same command, to run once the merge is installed.                                                                                                  |
+
+Run the command after the dependencies are installed at the new pin: `prisma generate` uses the installed Prisma CLI.
+
+### The API client follows its codegen
+
+A monorepo commits the API client orval generates under `packages/api-client/src/generated`, and its pre-commit hook runs `codegen:check`: `npm run codegen`, then a comparison with the committed
+client. The output depends on the orval pin of `packages/api-client`, on the prettier pin that formats it, and on the two files orval reads besides the OpenAPI snapshot, `orval.config.ts` and the
+mutator `src/http-client.ts`. When the update changes one of them, for example orval 8.28.1 → 8.47.0 in the 1.2.0 stack refresh, the committed client no longer matches and the first commit after the
+update is refused. `sf update` aligns it the way it aligns the Prisma client:
+
+| The update                                                                              | The API client                                                                                                                                |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Moved the orval or prettier pin, and the lockfile resolve ran and succeeded             | `sf update` regenerates it right after, with `npm run codegen` at the root under the Node version of its `.nvmrc`. Commit it with the update. |
+| Moved the pin, and the resolve did not run (`--non-interactive`, answered no) or failed | `npm run codegen` is printed among the steps, after the lockfile resolve.                                                                     |
+| Rewrote `orval.config.ts` or `src/http-client.ts` and moved no pin                      | An interactive run regenerates it at once (the installed orval is already the right one); a `--non-interactive` run prints `npm run codegen`. |
+| The codegen fails                                                                       | Its error and the command to retry are printed, and the update exits with code 1.                                                             |
+| A `package.json` conflict left as a sidecar bumps orval or prettier                     | The sidecar notice adds `npm run codegen`, to run once the merge is installed.                                                                |
+
+The codegen reads the OpenAPI snapshot on disk (`apps/api/docs/openapi.json`), which the update does not touch: the API rewrites it when it starts. A change to the API contract shows up there at the
+next start, and `npm run codegen` then aligns the client as usual. A multirepo has no API client package: nothing applies.
+
 ## Migrations and recovery
 
 Updates can involve three distinct mechanisms:
@@ -168,16 +233,17 @@ It is the same merge as `sf agents refresh --scope shared`, so `sf agents refres
 merge too: a harness installed by an earlier release, v1.0.1 included, gets it on the update that raises it to v5, together with the tier agents and the `AGENTS.md` move that every update already did.
 Nothing else is deposited by the migration, and it never writes the consent to delegate: only your own answer records it (`sf agents delegation`).
 
-| Situation                                                                                                                                   | Result                                                                                                                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The file lacks the hooks or the rules.                                                                                                      | They are merged in. Your own keys, hooks and rules stay, in their order; the summary names the file.                                                                                            |
-| The file has everything.                                                                                                                    | Nothing is written: same bytes, same modification time, nothing printed.                                                                                                                        |
-| There is no file.                                                                                                                           | It is created with the harness's hooks and rules.                                                                                                                                               |
-| The file is a symbolic link, a hard link, or text that is not a JSON object.                                                                | It is left as it is and the merged proposal goes to `.claude/settings.json.saasfoundry.new`; the update goes on.                                                                                |
-| `hooks` is not an object, a hook event is not a list of hook groups, `permissions` is not an object, or its `allow` or `ask` is not a list. | Same: it is left as it is and the proposal goes to the sidecar, with the reason in the summary. Merging would have overwritten what you wrote.                                                  |
-| The hook is the bare `sf agents outcome capture` command a first build wrote.                                                               | It is replaced by the command that resolves the project's own CLI.                                                                                                                              |
-| The hook is the capture command v1.1.0 shipped (it discarded the CLI's output).                                                             | It is replaced, in `.claude/settings.json` and in `.codex/hooks.json`, by the command that lets the CLI's decision through; never left beside it. A copy you edited by hand is yours and stays. |
-| The `SessionStart` hook is the bare `sf status --claude-friendly --no-network` (or `--agent-friendly`) command that 1.0.x wrote.            | It is replaced by the command that resolves the project's own CLI; your other `SessionStart` hooks stay. A hook you wrote with other flags is yours and stays.                                  |
+| Situation                                                                                                                                   | Result                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The file lacks the hooks or the rules.                                                                                                      | They are merged in. Your own keys, hooks and rules stay, in their order; the summary names the file.                                                                                                                                       |
+| The file has everything.                                                                                                                    | Nothing is written: same bytes, same modification time, nothing printed.                                                                                                                                                                   |
+| There is no file.                                                                                                                           | It is created with the harness's hooks and rules.                                                                                                                                                                                          |
+| The file is a symbolic link, a hard link, or text that is not a JSON object.                                                                | It is left as it is and the merged proposal goes to `.claude/settings.json.saasfoundry.new`; the update goes on.                                                                                                                           |
+| `hooks` is not an object, a hook event is not a list of hook groups, `permissions` is not an object, or its `allow` or `ask` is not a list. | Same: it is left as it is and the proposal goes to the sidecar, with the reason in the summary. Merging would have overwritten what you wrote.                                                                                             |
+| The hook is the bare `sf agents outcome capture` command a first build wrote.                                                               | It is replaced by the command that resolves the project's own CLI.                                                                                                                                                                         |
+| The hook is the capture command v1.1.0 shipped (it discarded the CLI's output).                                                             | It is replaced, in `.claude/settings.json` and in `.codex/hooks.json`, by the command that lets the CLI's decision through; never left beside it. A copy you edited by hand is yours and stays.                                            |
+| The `SessionStart` hook is the bare `sf status --claude-friendly --no-network` (or `--agent-friendly`) command that 1.0.x wrote.            | It is replaced by the command that resolves the project's own CLI; your other `SessionStart` hooks stay. A hook you wrote with other flags is yours and stays.                                                                             |
+| The capture or guard hook is the command v1.2.0 shipped (it exited silently when the CLI it reached could not run it).                      | It is replaced, in both files, by the command that notes such a CLI in the capture error log (and, for the guard, lets a line that is not one plain command reach it); never left beside it. A copy you edited by hand is yours and stays. |
 
 **The v1.1.0 capture hook is replaced, and Codex has to trust the new one.** The v1.1.0 command ended in `>/dev/null 2>&1`, so a delegate that forgot its closing line could not be asked for it; the
 new one lets the CLI's stdout reach the host (see [asking for the missing line](/cli/sf-agents#asking-for-the-missing-line)). The settings merge only adds a command whose exact string is missing, so
@@ -188,8 +254,22 @@ Codex delegations are not recorded. The notice is given once: the next update fi
 
 **The guard hook is new, and Codex has to trust it too.** The same merge adds the `PreToolUse` guard to `.claude/settings.json` (matcher `Bash|PowerShell`) and to `.codex/hooks.json` (matcher `Bash`),
 after the `PreToolUse` hooks you wrote, which are kept. `sf update` and `sf agents refresh` print
-`.codex/hooks.json: the PreToolUse guard hook was added. Codex skips a project hook until it is trusted: review and trust it with /hooks, or the guard does not run.` once. Until you trust it, Codex
-does not run the guard; `sf status` says `guard declared` for Codex and never `enforced`. A project that changed a `PreToolUse` command of its own is not touched.
+`.codex/hooks.json: the PreToolUse guard hook was added or replaced. Codex skips a project hook until it is trusted: review and trust it with /hooks, or the guard does not run.` once. Until you trust
+it, Codex does not run the guard; `sf status` says `guard declared` for Codex and never `enforced`. A project that changed a `PreToolUse` command of its own is not touched.
+
+**The guard now refuses a shell line that is not one plain command, and the update writes nothing for it.** The guard hook also reads the shape of the line an agent is about to run, and refuses a
+chain (`&&`, `;`, `||`), a `$(…)` substitution, a loop, an inline script and a file written through a heredoc, naming the split to make (see
+[a shell line that is not one plain command](/cli/sf-agents#a-shell-line-that-is-not-one-plain-command)). The default is `refuse`, by absence: a project updated from an earlier release gets it without
+a setting in `.saasfoundry.json`, with no `manifestVersion` bump and no migration. After the hooks are in place the update prints one line,
+`The guard hook now refuses a shell line that is not one plain command … To flag it without refusing, run sf agents shell-guard warn; to stop checking the shape of a line, run sf agents shell-guard off.`,
+and, for a project that already chose, which mode it is in. The line is printed for a harness that declares Claude Code or Codex, and not on a dry run. The update never records the mode: only
+`sf agents shell-guard` does. The hook line also changes (the widened filter), which is why the row above replaces the v1.2.0 command and why Codex asks to trust the hook again.
+
+**The update names the CLI the hooks will reach.** The guard and capture hooks run `node_modules/.bin/saasfoundryai`, then `saasfoundryai` on the PATH, never the CLI that ran the update: an
+`npx saasfoundryai-cli@<version> update` is gone once it returns. A generated project does not depend on `saasfoundryai-cli`, so its hooks reach the global install, which can be older and lack
+`agents guard`. Once the hooks are in place the update says which CLI they reach, `The guard and capture hooks run /usr/local/bin/saasfoundryai 1.3.0.`, and, when that CLI cannot run them or is older
+than the version the project was just updated to, says so for each hook and gives the command to upgrade it (`npm install -D saasfoundryai-cli@<version>` in the project, or
+`npm install -g saasfoundryai-cli@<version>`). `sf status` reports the same until it is done (see [the guard hook](/cli/sf-status#the-guard-hook)). Nothing is said for a project without these hooks.
 
 No module version is bumped for this: the hook is delivered by the settings merge that runs on every update, not by an installer's file set, so there is no module migration to preview or run. A
 project that wrote exactly `sf status --claude-friendly --no-network` itself loses that line on the next update, since it cannot be told from the one the harness wrote; the resolved command takes its
@@ -355,8 +435,11 @@ Then:
 3. Apply with the default `save-new` strategy unless overwrite is intentional.
 4. Inspect `git diff` and every `.saasfoundry.new` sidecar.
 5. Merge or discard sidecars deliberately, then remove them.
-6. Run the generated project's build, lint, tests, and any required database procedure.
-7. Commit the updated files and `.saasfoundry.json` together.
+6. If the update changed pinned versions and you did not let it resolve the lockfile, resolve it again (see [Pinned versions and the lockfile](#pinned-versions-and-the-lockfile)), then run the
+   `prisma generate` it printed when it moved the Prisma pin (see [The Prisma client follows the Prisma pin](#the-prisma-client-follows-the-prisma-pin)) and the `npm run codegen` it printed when it
+   changed the API client codegen (see [The API client follows its codegen](#the-api-client-follows-its-codegen)).
+7. Run the generated project's build, lint, tests, and any required database procedure.
+8. Commit the updated files, `package-lock.json`, the regenerated Prisma and API clients and `.saasfoundry.json` together.
 
 If the command fails, read its recovery message and rerun the same lifecycle command after correcting the reported cause. Do not delete transition journals or rewrite ownership hashes manually.
 

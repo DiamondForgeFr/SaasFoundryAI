@@ -39,15 +39,76 @@ Un projet peut modifier la grille dans `modules.harness.routing` : `kinds` dépl
 manifeste valide les deux, et une surcharge invalide fait échouer la commande au lieu d'utiliser silencieusement la grille. La syntaxe complète est dans
 [`sf agents`](/fr/cli/sf-agents#routage-des-delegations-sf-agents-route).
 
+### Kimi Code
+
+Kimi Code a un candidat dans chaque palier, déclaré comme donnée dans son profil et dans la grille. Tous sont **provisoires** : aucun benchmark public ne les mesure avec un coût, et chaque route dit
+donc `provisional: No Kimi measurement exists yet` jusqu'à ce que le banc de rejeu des mainteneurs la remplace par une mesure. Les alias `highspeed` ne sont pas utilisés, car ils facturent deux fois.
+
+| Palier     | Types de tâche                | Candidat Kimi Code (modèle, effort) |
+| ---------- | ----------------------------- | ----------------------------------- |
+| `light`    | `exploration`, `prose`        | `k3`, `low`                         |
+| `edit`     | `scoped-edit`                 | `k3`, `high`                        |
+| `build`    | `multi-file-feature`, `tests` | `k3.1-pro`, `high`                  |
+| `fix`      | `bug-fix`, `review`           | `k3.1-pro`, `high`                  |
+| `plan`     | `planning`                    | `k3.1-pro`, `high`                  |
+| `terminal` | `terminal-ci`                 | `k3.1-pro`, `max`                   |
+
+Kimi Code exprime trois efforts, `low`, `high` et `max` : une surcharge à tout autre effort est refusée. Kimi Code se distingue des deux autres hôtes de trois façons :
+
+- **Des agents de palier sans modèle, et un alias par appel.** Le harness écrit `.kimi-code/agents/sf-<palier>.md` pour chaque palier, comme pour les autres hôtes, mais Kimi Code ne lie aucun modèle
+  dans un fichier d'agent. Un appel à son outil `Agent` passe `model: <alias>`, une clé du pool `[secondary_model.models]` de **votre propre** `~/.kimi-code/config.toml` (ou de
+  `$KIMI_CODE_HOME/config.toml`). La route nomme donc l'alias à côté du candidat, et la session le recopie :
+
+  ```bash
+  sf agents route --task bug-fix --provider kimi
+  # bug-fix → fix (shipped) kimi: k3.1-pro, effort high, alias sf-k3-1-pro-high — provisional: …
+  ```
+
+  L'alias porte le nom du candidat, jamais celui du palier : il suit donc une surcharge du candidat d'un palier, un déplacement automatique, un essai ou une reprise. Un point dans le nom du modèle
+  s'écrit `-` :
+
+  | Alias              | Candidat (modèle, effort) | Paliers                |
+  | ------------------ | ------------------------- | ---------------------- |
+  | `sf-k3-low`        | `k3`, `low`               | `light`                |
+  | `sf-k3-high`       | `k3`, `high`              | `edit`                 |
+  | `sf-k3-1-pro-high` | `k3.1-pro`, `high`        | `build`, `fix`, `plan` |
+  | `sf-k3-1-pro-max`  | `k3.1-pro`, `max`         | `terminal`             |
+
+  C'est l'unique exception à « ne nommez jamais de modèle » : la session passe l'alias exactement comme la route l'imprime, et n'en compose jamais un.
+
+- **Déclarer les alias est votre affaire.** sf n'écrit jamais `~/.kimi-code`. Il lit les noms des clés de votre pool et, quand l'alias d'une route y manque, imprime sur stderr le TOML à coller ;
+  `sf agents enable`, `replace` et `refresh` impriment la même chose pour tous les alias de palier, dans un avertissement. Collez d'abord les tables `[models.<alias>]` (chacune porte le
+  `default_effort` de son alias, et le `provider` et la taille de contexte recopiés de votre entrée du même modèle quand il y en a une), puis les lignes sous votre table `[secondary_model.models]`
+  existante. Ne répétez pas cet en-tête. Si `[secondary_model].default_effort` est défini, il l'emporte sur l'effort de chaque alias : retirez-le pour laisser chaque alias à son propre effort. Avec un
+  pool d'une seule entrée, Kimi Code ne propose pas le paramètre `model` : gardez-en au moins deux.
+- **Sous-tâches du worktree courant seulement.** Kimi Code n'a pas d'outil de worktree que le harness utilise : une délégation à Kimi se limite donc à des sous-tâches du worktree courant, tant qu'une
+  exécution de ticket entier dans un worktree n'est pas vérifiée. Chacun de ses agents de palier reçoit une sous-tâche et jamais un ticket entier, et la session livre le ticket elle-même. Quand une
+  route est refusée, ou qu'une délégation ne peut pas démarrer, la session exécute l'étape elle-même : elle ne lance jamais le CLI d'un autre agent de code (`claude`, `codex` ou tout autre), ni une
+  session en arrière-plan d'un autre hôte, pour déléguer malgré tout.
+
+Une limite de plus : **pas de hook.** Kimi Code lit ses hooks dans la configuration de l'utilisateur, jamais dans le projet : le harness n'installe donc ni garde ni hook de capture. `sf status` dit
+`guard unavailable` et `capture unavailable`, avec cette raison, et les délégations s'enregistrent à la main avec `sf agents outcome record --provider kimi`. Les gardes propres au CLI refusent
+toujours une échappatoire. Que Kimi Code résolve `subagent_type: "sf-<palier>"` et respecte l'alias d'un appel est déclaré d'après sa documentation et non vérifié (`runtime: not-checked`).
+
+L'agent s'appelle `kimi`, explicitement : aucun nom de modèle ni nom qui lui ressemble (`kimi-code`, `k3`, `moonshot`) n'est lu comme cet agent. Un CLI antérieur à cette release ne connaît pas `kimi`
+comme agent routé : il refuse `sf agents route --provider kimi`, et ignore (en la comptant) une ligne de registre dont le fournisseur est `kimi` ; mettez donc à jour chaque clone qui partage un
+registre avant d'y enregistrer des délégations Kimi.
+
 ## Les agents de palier
 
-Pour chaque agent de développement déclaré que la grille route, le harness écrit un sous-agent par palier. Pour Claude Code, ce sont les fichiers `.claude/agents/sf-<palier>.md`, avec le modèle et
-l'effort dans leur frontmatter ; pour Codex, ce sont `.codex/agents/sf-<palier>.toml`. Chaque description liste les types de tâches servis par le palier, afin que Claude Code choisisse le bon agent à
-partir de sa seule description.
+Pour chaque agent de développement déclaré que la grille route et dont le profil déclare des agents de palier, le harness écrit un sous-agent par palier. Pour Claude Code, ce sont les fichiers
+`.claude/agents/sf-<palier>.md`, avec le modèle et l'effort dans leur frontmatter ; pour Codex, ce sont `.codex/agents/sf-<palier>.toml` ; pour Kimi Code, ce sont `.kimi-code/agents/sf-<palier>.md`,
+qui ne nomment aucun modèle (l'appel passe [l'alias que la route nomme](#kimi-code)). Chaque description liste les types de tâches servis par le palier, afin que Claude Code choisisse le bon agent à
+partir de sa seule description ; un fichier Kimi les met dans `whenToUse`.
+
+Les agents routés, les efforts qu'un agent de palier peut porter, son dossier et son format de fichier ne sont pas décidés par le code du harness : chaque profil d'agent de développement les déclare
+dans son bloc `capabilities` ([`sf agents`](/fr/cli/sf-agents#le-bloc-de-capacites-d-un-profil)). Un outil dont le profil ne déclare aucun routage n'a ni route ni agent de palier, et une commande qui
+en a besoin dit pourquoi avec les mots de ce profil, par exemple que le harness ne livre aucun candidat de routage pour Gemini CLI. Un outil routé dont le profil ne déclare aucun agent de palier a une
+route et aucun fichier. La même règle vaut pour toute capacité qui manque à un profil : il dit pourquoi, ou le registre le refuse.
 
 Les fichiers sont générés et suivis par Git. `sf agents enable`, `replace`, `refresh` et `sf update` réécrivent un fichier non modifié et laissent un fichier édité à côté d'un sidecar
-`.saasfoundry.new`. [`sf status`](/fr/cli/sf-status#agents-de-palier) signale un fichier absent, modifié ou périmé. Les agents de palier ne désignent qu'un modèle et un effort ; ils ne portent aucun
-identifiant, et l'absence d'un compte fournisseur fait échouer la délégation au lieu de basculer silencieusement sur un autre modèle.
+`.saasfoundry.new`. [`sf status`](/fr/cli/sf-status#agents-de-palier) signale un fichier absent, modifié ou périmé. Les agents de palier ne désignent qu'un modèle et un effort (Kimi Code : un alias) ;
+ils ne portent aucun identifiant, et l'absence d'un compte fournisseur, ou d'un alias que votre pool ne déclare pas, fait échouer la délégation au lieu de basculer silencieusement sur un autre modèle.
 
 ## Accord
 
@@ -86,7 +147,9 @@ Lorsque la délégation est `allowed`, un ticket qui dépasse le changement triv
    | `medium` et `complex`, une fois décomposés                     | `multi-file-feature` |
 
 2. **Un agent en arrière-plan reçoit le ticket** dans son propre worktree Git, sur la branche `feature/<N>-<description>` créée depuis la branche de travail distante (ou la branche nommée par l'hôte,
-   poussée vers la branche du ticket). Le brief énonce l'accord, le type de tâche, l'enregistrement de route ainsi que le résultat attendu et la vérification attendue.
+   poussée vers la branche du ticket). Le brief énonce l'accord, le type de tâche, l'enregistrement de route ainsi que le résultat attendu et la vérification attendue. Pour un ticket marqué `ui`, il
+   ajoute une clause : tenir la partie visuelle jusqu'à ce que la session relaie l'accord du développeur, et suivre la maquette validée (voir
+   [Comment un agent travaille un ticket `ui`](/fr/guide/workflow-system#comment-un-agent-travaille-un-ticket-ui)).
 3. **L'agent construit le ticket de In progress jusqu'à la fin d'AI testing** : le code, le plan de test, les vérifications automatisées, le pipeline local, le rapport et la pull request en brouillon.
    Il ne transmet pas le ticket à un autre agent.
 4. **L'agent s'arrête au rapport vert.** Il laisse le ticket en AI testing et la pull request en brouillon. Il n'exécute jamais `ready-pr`, ne fusionne jamais, n'enregistre jamais le consentement à la
@@ -109,11 +172,14 @@ Le harness ne se fie pas au récit qu'un délégué fait de son travail. Il mesu
   aussi tout essai qu'il délivre, et une route que personne ne rappelle pendant sept jours expire.
 - **La ligne de verdict.** Chaque agent de palier termine son dernier message par `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`. `pass` signifie que la vérification demandée par le brief a
   été exécutée et satisfaite. Un délégué qui termine sans cette ligne la reçoit en réclamation une fois, pendant qu'il tourne encore : le hook de capture répond à son arrêt par un blocage qui porte la
-  ligne exacte à écrire, et la réponse est l'arrêt suivant de la même délégation. Un message qui n'a toujours pas la ligne donne un résultat inconnu.
+  ligne exacte à écrire, et la réponse est l'arrêt suivant de la même délégation. Un message qui n'a toujours pas la ligne donne un résultat inconnu. Un délégué attend les tâches d'arrière-plan qu'il
+  a lancées avant son dernier message ; un tour qui se termine pendant que l'une d'elles tourne encore (Claude Code liste les tâches en cours dans l'arrêt, ou le délégué écrit
+  `SF-DELEGATION: pending route=<id>`) est un arrêt intermédiaire : il garde son coût, n'enregistre aucun résultat et ne réclame rien, et seul le verdict de l'arrêt final atteint le routage (voir
+  [`sf agents`](../cli/sf-agents.md#arrets-intermediaires)).
 - **Le registre.** `<git-common-dir>/saasfoundry/delegations.jsonl` est un fichier en ajout seul qui contient les exécutions (jetons, coût, temps actif, résultat, vérifications, palier et candidat),
-  les enregistrements de route et les signaux. Sur Claude Code, les hooks `SubagentStop` et `PostToolUse` capturent chaque exécution automatiquement. Les autres hôtes enregistrent à la main avec
-  `sf agents outcome record`. Un coût n'est jamais deviné : un modèle sans prix publié conserve sa fiabilité mais n'a pas de coût tant que le projet n'en déclare pas un. Une capture qui échoue n'est
-  pas silencieuse : elle est journalisée à côté du registre, et `sf status` et `sf agents routing report` comptent les erreurs des 7 derniers jours.
+  les enregistrements de route et les signaux. Sur Claude Code, les hooks `SubagentStop` et `PostToolUse` capturent chaque exécution automatiquement. Les autres hôtes, Kimi Code compris, enregistrent
+  à la main avec `sf agents outcome record`. Un coût n'est jamais deviné : un modèle sans prix publié conserve sa fiabilité mais n'a pas de coût tant que le projet n'en déclare pas un. Une capture qui
+  échoue n'est pas silencieuse : elle est journalisée à côté du registre, et `sf status` et `sf agents routing report` comptent les erreurs des 7 derniers jours.
 
 Un verdict ultérieur s'ajoute comme signal, et la ligne d'origine n'est jamais modifiée. La session marque un travail délégué qu'elle a dû refaire avec `sf agents outcome mark <ticket> rework`, et un
 défaut revenu de Human testing ou de la revue avec `human-defect`. Ces deux écritures demandent une autorisation dans l'agent de développement, car elles modifient ce que le routage fera ensuite.

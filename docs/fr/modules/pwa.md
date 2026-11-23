@@ -68,6 +68,12 @@ Après `npm run build`, `dist/` doit contenir `manifest.webmanifest`, `sw.js`, `
 Servez le build en **HTTPS ou sur localhost** : les service workers sont refusés sur un HTTP classique. Chrome DevTools → _Application_ → _Manifest_ liste les éléments manquants et le navigateur doit
 proposer l'installation.
 
+## Tests de bout en bout
+
+La suite Playwright tourne sur le build de prévisualisation, où le service worker est enregistré. Une requête à laquelle il répond n'atteint jamais `page.route` : les mocks d'une spec sont ignorés et
+l'appel part sur le réseau. Les specs d'authentification de WebKit échouaient ainsi (#979). Le `playwright.config.ts` généré pose donc `serviceWorkers: 'block'` dans son bloc `use` partagé, avec ou
+sans ce module. Une spec qui teste le service worker lui-même pose `test.use({ serviceWorkers: 'allow' })`.
+
 ## Suppression
 
 Supprimez `pwa.config.ts`, les icônes `public/pwa-*.png`, l'import et l'appel `VitePWA` dans `vite.config.ts`, la dépendance `vite-plugin-pwa` et `modules.pwa` dans `.saasfoundry.json`.

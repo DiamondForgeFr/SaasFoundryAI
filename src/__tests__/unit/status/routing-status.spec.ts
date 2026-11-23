@@ -95,7 +95,8 @@ describe('the automatic routing in sf status (#1035)', () => {
         })
       )
       expect(summary).toContain('codex capture hook missing (run sf agents refresh --scope shared)')
-      expect(summary).toContain('gemini-cli capture not enforced (record its delegations with sf agents outcome record)')
+      // FR-MAH-020, FR-MAH-021: a host without hooks says why, in the words of its profile, and says it is unavailable
+      expect(summary).toContain('gemini-cli capture unavailable (No Gemini CLI guard or capture hook is installed by the harness; record its delegations with sf agents outcome record)')
     })
 
     it('does not call a hook enforced when nothing can run it, or when the host has not trusted it yet', () => {
@@ -107,7 +108,7 @@ describe('the automatic routing in sf status (#1035)', () => {
           ]
         })
       )
-      expect(summary).toContain('claude-code capture hook declared but no CLI can run it')
+      expect(summary).toContain('claude-code capture hook declared but the CLI it reaches (no CLI) cannot run sf agents outcome capture')
       expect(summary).toContain('delegations are not recorded')
       expect(summary).toContain('codex capture declared (Codex runs it once the .codex/ layer and the hook are trusted)')
       expect(summary).not.toContain('enforced')
@@ -126,15 +127,36 @@ describe('the automatic routing in sf status (#1035)', () => {
           ]
         })
       )
-      expect(summary).toContain('claude-code guard hook declared but no CLI can run it')
+      expect(summary).toContain('claude-code guard hook declared but the CLI it reaches (no CLI) cannot run sf agents guard')
       expect(summary).toContain('an agent is not stopped from setting an escape hatch')
       expect(summary).toContain('codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)')
       expect(summary).toContain('cursor guard not enforced')
       expect(summary).toContain('other guard hook missing (run sf agents refresh --scope shared)')
     })
 
+    // #1228 — the CLI a hook reaches is named: it is not always the one that writes the report
+    it('names the CLI a hook reaches when it cannot run the hook or is older than the project', () => {
+      const summary = routingSummary(
+        routingState({
+          capture: [{ agent: 'claude-code', state: 'declared-outdated-cli', cli: '/usr/local/bin/saasfoundryai', cliVersion: '1.2.0' }],
+          guard: [{ agent: 'claude-code', state: 'declared-not-runnable', cli: '/usr/local/bin/saasfoundryai', cliVersion: '1.0.1' }]
+        })
+      )
+      expect(summary).toContain("claude-code capture hook declared but the CLI it reaches (/usr/local/bin/saasfoundryai 1.2.0) is older than the project's harness")
+      expect(summary).toContain('claude-code guard hook declared but the CLI it reaches (/usr/local/bin/saasfoundryai 1.0.1) cannot run sf agents guard')
+    })
+
     it('says nothing of the guard when the report does not carry it', () => {
       expect(routingSummary(routingState())).not.toContain('guard')
+      expect(routingSummary(routingState({ shellShape: 'off' }))).not.toContain('shell shape')
+    })
+
+    // #1251 — the mode ends the guard part of the line: refuse when the report does not say
+    it('ends the guard text with what the hook does with a shell line that is not one plain command', () => {
+      const guard = [{ agent: 'claude-code', state: 'enforced' as const }]
+      expect(routingSummary(routingState({ guard }))).toContain('claude-code guard enforced; shell shape: refuse')
+      expect(routingSummary(routingState({ guard, shellShape: 'warn' }))).toContain('; shell shape: warn (')
+      expect(routingSummary(routingState({ guard, shellShape: 'off' }))).toContain('; shell shape: off (')
     })
 
     it('says an earlier release hook needs a refresh', () => {
@@ -193,12 +215,42 @@ describe('the automatic routing in sf status (#1035)', () => {
           { agent: 'claude-code', state: 'missing' },
           { agent: 'codex', state: 'missing' }
         ],
+        shellShape: 'refuse',
         captureErrors: { count: 0, since: expect.any(String) }
       })
       expect(await render(renderAgentFriendly)).toContain(
         `- routing: grid v${ROUTING_GRID_VERSION}, 0 overrides; shipped grid and shared overrides, no local adjustment; claude-code capture hook missing (run sf agents refresh --scope shared); codex capture hook missing (run sf agents refresh --scope shared); ` +
           'claude-code guard hook missing (run sf agents refresh --scope shared); codex guard hook missing (run sf agents refresh --scope shared)'
       )
+    })
+
+    // FR-MAH-021: Kimi Code is routed and has no hook the harness installs: it says guard and capture are unavailable, and why
+    it('says the guard and the capture of kimi are unavailable with the reason its profile gives, and leaves the lines of Claude Code and Codex as they were', async () => {
+      await manifest({ version: 4, agents: ['claude-code', 'codex', 'kimi'] })
+      const status = await report()
+      // FR-MAH-022: Kimi Code writes tier agents (not hooks), so its six files are compared with the grid like the others
+      expect(status.routing).toMatchObject({
+        tierAgents: notDeposited(['claude-code', 'codex', 'kimi']),
+        capture: [
+          { agent: 'claude-code', state: 'missing' },
+          { agent: 'codex', state: 'missing' },
+          { agent: 'kimi', state: 'not-enforced' }
+        ],
+        guard: [
+          { agent: 'claude-code', state: 'missing' },
+          { agent: 'codex', state: 'missing' },
+          { agent: 'kimi', state: 'not-enforced' }
+        ]
+      })
+      const text = await render(renderAgentFriendly)
+      const reason =
+        "Kimi Code reads its hooks from the user's own configuration only, never from the project, so the harness installs no guard or capture hook for it; the CLI's own guards still refuse an escape hatch"
+      expect(text).toContain('claude-code capture hook missing (run sf agents refresh --scope shared); codex capture hook missing (run sf agents refresh --scope shared); ')
+      expect(text).toContain(`kimi capture unavailable (${reason}; record its delegations with sf agents outcome record); `)
+      expect(text).toContain(`kimi guard unavailable (${reason})`)
+      expect(text).not.toContain('kimi capture not enforced')
+      expect(text).not.toContain('kimi guard not enforced')
+      expect(JSON.parse(await render(renderJson)).routing.guard).toContainEqual({ agent: 'kimi', state: 'not-enforced' })
     })
 
     it('shows the local moves, the holds and the enforced capture in the three outputs', async () => {
@@ -223,6 +275,7 @@ describe('the automatic routing in sf status (#1035)', () => {
         holds: [{ kind: 'terminal-ci', provider: 'claude-code', reason: 'top-of-ladder', since: AT }],
         capture: [{ agent: 'claude-code', state: 'enforced' }],
         guard: [{ agent: 'claude-code', state: 'missing' }],
+        shellShape: 'refuse',
         captureErrors: { count: 0, since: expect.any(String) }
       })
       expect(await render(renderAgentFriendly)).toContain(
@@ -239,7 +292,51 @@ describe('the automatic routing in sf status (#1035)', () => {
       await mkdir(join(root, '.claude'), { recursive: true })
       await writeFile(join(root, '.claude', 'settings.json'), JSON.stringify({ hooks: CLAUDE_CAPTURE_HOOKS }))
       expect(((await report(notRunnable)).routing as { capture: unknown }).capture).toEqual([{ agent: 'claude-code', state: 'declared-not-runnable' }])
-      expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code capture hook declared but no CLI can run it')
+      expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code capture hook declared but the CLI it reaches (no CLI) cannot run sf agents outcome capture')
+    })
+
+    // #1228 — DiamondForge: an older global CLI the hooks reach, while status, run by a newer one, said both were in place
+    describe('the CLI the hooks reach', () => {
+      const ancient = async () => ({ runnable: false, cli: '/usr/local/bin/saasfoundryai', version: '1.0.1' })
+      const older = async () => ({ runnable: true, cli: '/usr/local/bin/saasfoundryai', version: '1.1.0' })
+      const check = async (probe: CaptureProbe, name: string) => evaluatePreconditions(await report(probe)).find((entry) => entry.name === name)!
+
+      beforeEach(async () => {
+        await manifest({ version: 5, agents: ['claude-code'] }, { version: '1.2.0' })
+        await mkdir(join(root, '.claude'), { recursive: true })
+        await writeFile(join(root, '.claude', 'settings.json'), JSON.stringify({ hooks: { ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS } }))
+      })
+
+      it('fails the guard and warns on the capture when that CLI has no such command, naming it', async () => {
+        const guard = await check(ancient, 'guardHook')
+        expect(guard).toMatchObject({ status: 'fail', details: 'claude-code guard hook reaches /usr/local/bin/saasfoundryai 1.0.1, which cannot run `sf agents guard`' })
+        expect(guard.remediation).toContain('npm install -D saasfoundryai-cli@1.2.0')
+        const capture = await check(ancient, 'captureErrors')
+        expect(capture).toMatchObject({
+          status: 'warn',
+          details: 'claude-code capture hook reaches /usr/local/bin/saasfoundryai 1.0.1, which cannot run `sf agents outcome capture`: delegations are not recorded'
+        })
+        expect(capture.remediation).toContain('npm install -g saasfoundryai-cli@latest')
+      })
+
+      // A CLI that runs the guard but predates the project is a `warn`, on purpose: a patch release must not put every
+      // project that uses an older global CLI into `fail`.
+      it('warns on the guard and the capture when that CLI runs them but is older than the version that last updated the project', async () => {
+        expect((await report(older)).routing).toMatchObject({ guard: [{ agent: 'claude-code', state: 'declared-outdated-cli', cli: '/usr/local/bin/saasfoundryai', cliVersion: '1.1.0' }] })
+        const guard = await check(older, 'guardHook')
+        expect(guard).toMatchObject({
+          status: 'warn',
+          details: 'claude-code guard hook reaches /usr/local/bin/saasfoundryai 1.1.0, older than 1.2.0, the version that last updated this project'
+        })
+        expect(guard.remediation).toContain('npm install -D saasfoundryai-cli@1.2.0')
+        expect(await check(older, 'captureErrors')).toMatchObject({ status: 'warn' })
+      })
+
+      it('is ok when that CLI is as new as the project', async () => {
+        const current = async () => ({ runnable: true, cli: '/usr/local/bin/saasfoundryai', version: '1.2.0' })
+        expect(await check(current, 'guardHook')).toMatchObject({ status: 'ok' })
+        expect(await check(current, 'captureErrors')).toMatchObject({ status: 'ok' })
+      })
     })
 
     // #1106 — the PreToolUse guard hook: said on the routing line for each declared agent, and a warning when it cannot work
@@ -268,13 +365,14 @@ describe('the automatic routing in sf status (#1035)', () => {
         expect(await checkOf()).toMatchObject({ status: 'ok' })
       })
 
-      it('warns when the hook is declared and no CLI can run it: the call would go through unchecked', async () => {
+      // #1228: a `fail`, no longer a `warn`: the guard looks declared and every call passes unchecked
+      it('fails when the hook is declared and no CLI can run it: the call would go through unchecked', async () => {
         await manifest({ version: 5, agents: ['claude-code'] })
         await settings({ ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS })
         expect(await guardOf(notRunnable)).toEqual([{ agent: 'claude-code', state: 'declared-not-runnable' }])
-        expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code guard hook declared but no CLI can run it')
-        expect(await checkOf(notRunnable)).toMatchObject({ status: 'warn', details: 'claude-code guard hook declared but no CLI can run it' })
-        expect((await checkOf(notRunnable)).remediation).toContain('sf agents refresh --scope shared')
+        expect(await render(renderAgentFriendly, notRunnable)).toContain('claude-code guard hook declared but the CLI it reaches (no CLI) cannot run sf agents guard')
+        expect(await checkOf(notRunnable)).toMatchObject({ status: 'fail', details: 'claude-code guard hook reaches no CLI, which cannot run `sf agents guard`' })
+        expect((await checkOf(notRunnable)).remediation).toContain('npm install -D saasfoundryai-cli@')
       })
 
       it('warns when the hook is missing, for the agents that lack it only', async () => {
@@ -290,6 +388,35 @@ describe('the automatic routing in sf status (#1035)', () => {
       it('is skipped without a harness', async () => {
         await manifest()
         expect(await checkOf()).toMatchObject({ status: 'skip', details: 'No managed harness' })
+      })
+
+      // #1251 — what the hook does with a shell line that is not one plain command: refuse by absence, said when it is not
+      describe('the shell shape mode', () => {
+        const shapeOf = async () => ((await report()).routing as StatusRoutingState).shellShape
+
+        it('is refuse when the manifest records nothing, and the routing line says so after the guard', async () => {
+          await manifest({ version: 5, agents: ['claude-code'] })
+          await settings({ ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS })
+          expect(await shapeOf()).toBe('refuse')
+          expect(await render(renderAgentFriendly)).toContain('claude-code guard enforced; shell shape: refuse')
+          expect(await checkOf()).toMatchObject({ status: 'ok', details: 'claude-code enforced' })
+        })
+
+        it.each([
+          ['warn', 'shell shape: warn (a chained, substituted or scripted line is flagged, not refused; sf agents shell-guard refuse)'],
+          ['off', 'shell shape: off (the shape of a line is not checked; sf agents shell-guard refuse)']
+        ])('is %s when the manifest records it, said on the routing line and in the precondition', async (mode, text) => {
+          await manifest({ version: 5, agents: ['claude-code'], guard: { shellShape: mode } })
+          await settings({ ...CLAUDE_CAPTURE_HOOKS, ...CLAUDE_GUARD_HOOKS })
+          expect(await shapeOf()).toBe(mode)
+          expect(await render(renderAgentFriendly)).toContain(`claude-code guard enforced; ${text}`)
+          expect(await checkOf()).toMatchObject({ status: 'ok', details: `claude-code enforced; shell shape ${mode}` })
+        })
+
+        it('is refuse when the recorded value is one this release does not know', async () => {
+          await manifest({ version: 5, agents: ['claude-code'], guard: { shellShape: 'allow' } })
+          expect(await shapeOf()).toBe('refuse')
+        })
       })
     })
 
@@ -383,7 +510,7 @@ describe('the automatic routing in sf status (#1035)', () => {
         await failure('the ledger is locked', 1)
         const status = await collect()
         const json = JSON.parse(renderJson({ report: status, preconditions: evaluatePreconditions(status) }))
-        expect(Object.keys(json.routing)).toEqual(['gridVersion', 'overrides', 'tierAgents', 'adjustment', 'adjustments', 'holds', 'capture', 'guard', 'captureErrors'])
+        expect(Object.keys(json.routing)).toEqual(['gridVersion', 'overrides', 'tierAgents', 'adjustment', 'adjustments', 'holds', 'capture', 'guard', 'shellShape', 'captureErrors'])
         expect(json.routing.captureErrors).toMatchObject({ count: 1, since: '2026-10-31T10:00:00.000Z', last: { stage: 'ledger', message: 'the ledger is locked' } })
       })
 

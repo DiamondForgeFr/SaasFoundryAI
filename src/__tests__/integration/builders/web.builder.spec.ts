@@ -7,7 +7,7 @@ import childProcess from 'node:child_process'
 
 import { createWebApp } from '../../../builders/web.builder'
 import { webParams } from '../../helpers/fixtures'
-import { expectFileExists, expectFileContains, expectNoTodoMarkers, expectTodoMarkersPresent } from '../../helpers/assertions'
+import { expectFileExists, expectFileContains, expectNoTodoMarkers, expectTodoMarkersPresent, gitCommandsRun } from '../../helpers/assertions'
 
 describe('createWebApp (integration)', () => {
   let tempDir: string
@@ -57,6 +57,13 @@ describe('createWebApp (integration)', () => {
       await createWebApp(webParams())
 
       expect(spawnSpy).toHaveBeenCalledWith('git', ['init'], expect.objectContaining({ shell: false }))
+    })
+
+    // #969 — the harness and the manifest are written after this builder, so a commit made here left them untracked
+    it('should initialise the repository and leave the first commit to sf new', async () => {
+      await createWebApp(webParams({ frontendRepoUrl: 'https://github.com/test/web.git', workflow: { tool: 'none', workingBranch: 'develop' } }))
+
+      expect(gitCommandsRun(spawnSpy)).toEqual(['init', 'checkout -b', 'remote add'])
     })
   })
 

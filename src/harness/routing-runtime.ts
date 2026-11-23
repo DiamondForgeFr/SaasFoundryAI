@@ -1,8 +1,10 @@
+import { getAgentProfile } from './agent-registry'
 import { buildRouteRecord, readLedger, resolveLedgerDir, transact, type Complexity, type LedgerState, type Nature } from './delegation-ledger'
 import { readProjectRouting, type ProjectRouting } from './project-routing'
 import { adjustRouting, nextRung, selectTrial, type AdjustContext, type AdjustOutcome, type TrialOffer } from './routing-adjust'
 import { autoKindsFor, emptyLocalRouting, readLocalRouting, staleTierAgentPaths, updateLocalRouting, withLogEntry, type LocalAdjustment, type LocalRouting } from './routing-local'
 import { resolveRoute, ROUTING_PROVIDERS, type ResolvedRoute, type RoutingProvider, type TaskKind } from './routing-grid'
+import { modelAlias } from './tier-agents'
 
 /**
  * Everything one routing question needs, read once: the project's shared routing and policy, the clone's
@@ -59,6 +61,11 @@ export const contextOf = (state: RoutingState, now: Date = new Date()): AdjustCo
 })
 
 export interface RoutedKind extends ResolvedRoute {
+  /**
+   * The model alias the call passes, for a host whose tier-agent file binds no model (its profile says `modelBinding: call-alias`,
+   * Kimi Code). Absent for a host whose file carries the model, so its route reads as it always did.
+   */
+  alias?: string
   /** The route is a sample of another rung than the one the kind is routed to. */
   trial: boolean
   /** With a trial, the tier the kind is routed to. */
@@ -68,6 +75,9 @@ export interface RoutedKind extends ResolvedRoute {
   /** The route is the retry of an earlier delegation, one tier above it: the id it retries and the tier it left. */
   retry: { of: string; from: string } | null
 }
+
+/** The alias a route names, from what the host's profile says about how its model is bound: no `kimi` here, the profile decides. */
+const aliasOf = (route: ResolvedRoute): { alias?: string } => (getAgentProfile(route.provider).capabilities.tierAgents?.modelBinding === 'call-alias' ? { alias: modelAlias(route.candidate) } : {})
 
 /**
  * Resolve a kind for a provider the way the session must delegate it: the developer's override, then the
@@ -84,9 +94,9 @@ export function routeKind(state: RoutingState, kind: TaskKind, provider: Routing
   const entry = state.local.kinds[kind]?.[provider]
   const adjustment = route.source === 'auto' && entry ? { action: entry.action, from: entry.from, at: entry.at, rule: entry.evidence.rule } : null
   const offer: TrialOffer | undefined = options.trial === false || state.project.decision.differs ? undefined : selectTrial(kind, provider, contextOf(state, options.now))
-  if (!offer) return { ...route, trial: false, effectiveTier: null, adjustment, retry: null }
+  if (!offer) return { ...route, ...aliasOf(route), trial: false, effectiveTier: null, adjustment, retry: null }
   const sample = resolveRoute(kind, provider, { ...shared, kinds: { ...shared?.kinds, [kind]: { tier: offer.tier } } })
-  return { ...sample, source: route.source, trial: true, effectiveTier: offer.effectiveTier, adjustment, retry: null }
+  return { ...sample, ...aliasOf(sample), source: route.source, trial: true, effectiveTier: offer.effectiveTier, adjustment, retry: null }
 }
 
 /** What a retry needs to know about the delegation it follows. */
@@ -122,7 +132,7 @@ export function routeRetry(state: RoutingState, kind: TaskKind, provider: Routin
     )
   }
   const stronger = resolveRoute(kind, provider, { ...shared, kinds: { ...shared?.kinds, [kind]: { tier: up.tier } } })
-  return { ...stronger, source: base.source, trial: false, effectiveTier: null, adjustment: null, retry: { of: retried.id, from: retried.tier } }
+  return { ...stronger, ...aliasOf(stronger), source: base.source, trial: false, effectiveTier: null, adjustment: null, retry: { of: retried.id, from: retried.tier } }
 }
 
 export interface RouteRequest {

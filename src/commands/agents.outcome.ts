@@ -182,8 +182,8 @@ function payloadCwd(payload: unknown): string | undefined {
  * (`capture-errors.jsonl`, in the Git directory of the clone), which `sf status` reports (#1105).
  */
 export async function outcomeCapture(options: OutcomeCaptureOptions): Promise<void> {
-  const host = options.host
-  if (host !== 'claude-code' && host !== 'codex') {
+  const host = CAPTURE_HOSTS.find((candidate) => candidate === options.host)
+  if (host === undefined) {
     process.stderr.write(`Error: --host must be ${CAPTURE_HOSTS.join(' or ')}.\n`)
     process.exitCode = 1
     return

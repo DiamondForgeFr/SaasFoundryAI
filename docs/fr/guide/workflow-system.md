@@ -136,6 +136,64 @@ Sans `Human testing` (preset Solo, ou ticket `nature:internal`), l'agent ouvre a
 Une liste enregistrée est figée : un job ajouté ensuite à `.molten/project.json` n'est exigé qu'une fois la liste enregistrée de nouveau, ou effacée avec `sf workflow set-local-ci --clear` pour suivre
 le pipeline. `sf workflow show` et `sf status` affichent la liste effective et sa provenance.
 
+## Le garde-fou de maquette UI
+
+Un ticket qui modifie l'interface utilisateur est validé sur une maquette avant que son travail visuel n'arrive à votre revue : vous voyez d'abord le rendu, pas dans les captures d'une pull request
+terminée. Trois éléments portent ce garde-fou, avec GitHub Projects comme outil de workflow.
+
+- **Le marqueur `ui`.** La session pose le label `ui` sur un ticket à sa création (`create-ticket … --ui`, `create-subtask … --ui`) ou plus tard avec `set-ui <ticket>`, et `clear-ui <ticket>` le
+  retire. Ce label n'est pas un label de nature et ne vous est pas réservé : la session le pose, `sf new` le provisionne, et `set-ui` le crée quand le dépôt ne l'a pas.
+- **L'enregistrement de validation.** Une fois la maquette approuvée par vous, la session consigne le lien ou le chemin de la maquette, la date et la personne qui l'a approuvée. Quand vous avez fourni
+  vous-même les visuels (votre propre maquette, ou une capture exacte de la cible), elle consigne cela et ce que vous avez fourni, et aucune maquette n'est produite. L'enregistrement est un
+  commentaire du ticket, écrit par `record-ui-validation` et relu par `get-ui-validation`.
+- **Le garde-fou.** `update-status` refuse un ticket `ui` sans enregistrement complet sur le chemin de votre revue : `→ In review` avec le preset Solo, `→ Human testing` (et `→ In review` pour un
+  ticket qui saute Human testing) avec le preset Équipe. Le refus nomme la commande `record-ui-validation` à lancer, et il vient avant les garde-fous de la pull request. Un ticket sans le marqueur
+  passe exactement comme avant.
+
+```bash
+WORKFLOW=.claude/skills/sf-workflow/workflow-cli.sh
+
+# marquer un nouveau ticket, ou un ticket existant (clear-ui retire le marqueur)
+$WORKFLOW create-ticket story "Refondre l'écran de connexion" --complexity medium --ui
+$WORKFLOW set-ui 42
+
+# consigner l'approbation d'une maquette, ou les visuels que vous avez fournis (l'un des deux)
+$WORKFLOW record-ui-validation 42 --mockup docs/mockups/login.html --approved-by "Ada Lovelace" --date 2026-11-23
+$WORKFLOW record-ui-validation 42 --supplied "une capture exacte de la cible, login-target.png"
+
+# relire l'enregistrement que lit le garde-fou
+$WORKFLOW get-ui-validation 42
+```
+
+`--date` vaut la date du jour par défaut. `get-ui-validation` affiche l'enregistrement complet le plus récent sur une seule ligne de JSON, et rien quand il n'y en a pas. Un commentaire qui ne fait que
+citer le marqueur, ou auquel manque un champ (la maquette, l'approbateur et la date ; ou ce qui a été fourni et la date), n'est pas un enregistrement.
+
+Le garde-fou laisse passer quand les labels du ticket sont illisibles (un `gh` hors ligne, un jeton expiré), comme le garde-fou de nature, pour qu'un incident d'infrastructure ne bloque pas le
+workflow. Il refuse quand le ticket porte le marqueur et que ses commentaires sont illisibles : une lecture en échec n'est jamais prise pour un ticket sans enregistrement. Les autres outils de
+workflow (Jira, Linear, Notion) refusent les commandes du marqueur et de l'enregistrement avec le code de sortie `2`, et leur `update-status` ne lit aucun enregistrement.
+
+Le refus est levé par `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`, une [échappatoire](#echappatoires) qui vous revient, annoncée et consignée sur le ticket comme les autres. Le hook de garde refuse l'agent
+qui l'active.
+
+### Comment un agent travaille un ticket `ui`
+
+Le skill de workflow donne à tout agent de code (Claude Code, Codex, Kimi Code ou un autre) les mêmes instructions pour un ticket `ui`. Elles nomment des capacités, jamais l'outil d'un seul hôte :
+
+- **Les skills de design.** L'agent charge les skills de design et d'UX que son hôte propose avant de dessiner quoi que ce soit, et travaille en professionnel de l'UI/UX, avec les design tokens et les
+  composants du projet.
+- **Une courte checklist.** `ui-checklist.md` est livrée à côté du `SKILL.md` du skill : hiérarchie ; espacements et design tokens ; états (vide, chargement, erreur, désactivé) ; accessibilité
+  (contraste, clavier, focus, libellés) ; texte.
+- **Un fichier HTML comme maquette.** Le socle est un seul fichier HTML autonome : CSS en ligne, aucune étape de build, et il s'ouvre dans n'importe quel navigateur. Il est conservé avec les preuves
+  du ticket (commité sur la branche du ticket, dans `docs/mockups/` sauf si votre `AGENTS.md` nomme un autre dossier), et son chemin ou son lien va dans `record-ui-validation`. Une surface plus riche
+  que l'hôte propose, comme un artefact Claude ou un cadre Figma, peut s'y ajouter, jamais s'y substituer.
+- **Vous le voyez d'abord.** La maquette vous est montrée avant l'implémentation visuelle. La spécification, le modèle, les données et les tests peuvent démarrer entre-temps ; seule la partie visuelle
+  attend votre accord. Quand vous fournissez vous-même les visuels, la session le consigne avec `record-ui-validation --supplied` et aucune maquette n'est produite.
+- **Un agent délégué attend votre accord.** Le brief d'un ticket `ui` délégué dit de tenir la partie visuelle jusqu'à ce que la session relaie votre accord, et de suivre la maquette validée. C'est la
+  session qui vous montre la maquette et consigne votre approbation ; un agent ne consigne jamais une approbation que vous n'avez pas donnée.
+
+Où votre projet montre une maquette (par exemple le panneau navigateur de votre terminal) et quels design tokens il utilise, c'est à vous de l'indiquer, dans votre propre `AGENTS.md` et hors de sa
+région générée. La région générée renvoie les agents à cet endroit ; sans indication, l'agent vous donne le chemin du fichier de maquette à ouvrir dans un navigateur.
+
 ## Le premier ticket
 
 Créez les tickets avec le CLI : ils arrivent sur le tableau en Backlog, avec leur type et leur étiquette de complexité :
@@ -156,6 +214,25 @@ Un dépôt sans aucun commit n'a ni branche de travail d'où partir, ni pull req
 ```
 
 Le garde-fou de Done accepte ce ticket parce que l'unique commit racine du dépôt le nomme. Tous les tickets suivants exigent une pull request fusionnée, sans aucune variable de contournement.
+
+Un projet que `sf new` vient de générer avec un workflow est dans cet état : `sf new` ne fait pas de commit racine à votre place, pour que `bootstrap` puisse faire le sien. Voir
+[Ce que `sf new` versionne](/fr/cli/sf-new#ce-que-sf-new-versionne).
+
+## Le ticket d'abord
+
+Aucune ligne de code n'est écrite avant que son ticket existe : le numéro du ticket nomme la branche (`workflow.branchNaming`) et chaque commit (`<type>(#<N>): …`). Quand l'outil de tickets ou le
+dépôt distant est injoignable (un jeton `gh` expiré, pas de réseau), l'agent s'arrête, vous signale le blocage avec la commande en échec, et vous propose des solutions temporaires parmi lesquelles
+vous choisissez. Il ne choisit pas seul un contournement : un agent qui l'a fait a committé 19 correctifs en `fix(#TBD): …` sur des branches locales sans numéro, sans rien pousser, et personne n'a vu
+ce travail pendant deux jours (#1232). La région générée d'`AGENTS.md` et le document du statut In progress le disent.
+
+Un projet généré avec sa pile applicative l'impose aussi dans ses hooks git :
+
+- `commit-msg` : commitlint refuse une référence de ticket qui n'est pas un numéro (`#TBD`, `#XXX`). Il n'y a pas d'échappatoire : reformulez le sujet une fois le ticket créé.
+- `pre-commit` et `pre-push` : `.husky/workflow-branch-guard.mjs` refuse une branche que le workflow ne nomme pas. Il accepte les motifs de `workflow.branchNaming`, `rc-*`, et les branches principale,
+  de travail, cible des pull requests et de release. Un HEAD détaché (chaque étape d'un rebase) et une branche nommée par l'hôte (`worktree-agent-<id>`, le worktree isolé de Claude Code) committent
+  librement ; c'est le push qui est contrôlé, et un tel agent pousse vers la branche de son ticket avec `git push origin HEAD:<branche du ticket>`. Un projet sans bloc `workflow` n'est pas contrôlé.
+
+Un projet installé avec le seul harness n'a pas de hooks git de SaaSFoundryAI : ce sont les instructions qui portent la règle.
 
 ## Commandes de statut et de configuration
 
@@ -231,21 +308,23 @@ quelques échappatoires explicites. Elles sont à vous, pas à l’agent : posit
 avec les preuves. Un refus n’indique pas à un agent de développement comment contourner le garde-fou : il nomme la prochaine commande légitime et renvoie l’agent vers vous, et un hook refuse l’agent
 qui active tout de même une échappatoire ([plus bas](#qui-applique-une-echappatoire)).
 
-| Échappatoire                                                                                | Ce qu’elle désactive                                                                     |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                            | Garde les tickets `srs:*` hors des statuts du parcours de code                           |
-| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                     | Exige un label `complexity:` pour quitter Backlog                                        |
-| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                         | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)               |
-| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                       | Exige que chaque enfant natif soit Done avant le parent                                  |
-| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                 | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR        |
-| `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                         | Exige que le travail du ticket soit commité et poussé avant AI testing                   |
-| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                                   | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review |
-| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                                      | Exige une PR fusionnée vérifiée avant Done                                               |
-| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic`                | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                       |
-| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                                            | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle            |
-| `--skip-local-ci "<raison>"` sur `create-pr`, `ready-pr`, `update-status … "Human testing"` | Exige que les statuts de CI locale requis soient verts sur le commit de tête             |
-| `SF_CACHE_BUST=1`                                                                           | Pas un garde-fou : recharge le schéma du board mis en cache                              |
-| `SF_DISABLE_SRS_HOOK=1`                                                                     | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                          |
+| Échappatoire                                                                                | Ce qu’elle désactive                                                                             |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                            | Garde les tickets `srs:*` hors des statuts du parcours de code                                   |
+| `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                     | Exige un label `complexity:` pour quitter Backlog                                                |
+| `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                         | Aiguille selon `nature:*` (Human testing, In review, bundled-PR vers Done)                       |
+| `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`                                                      | Exige la validation de maquette d'un ticket `ui` avant In review ou Human testing                |
+| `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                       | Exige que chaque enfant natif soit Done avant le parent                                          |
+| `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                 | Exige un parent natif vérifié, qui ne soit pas un Epic, pour un enfant bundled-PR                |
+| `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                         | Exige que le travail du ticket soit commité et poussé avant AI testing                           |
+| `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                                   | Exige une PR ouverte correspondante (brouillon ou prête) pour Human testing et In review         |
+| `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                                      | Exige une PR fusionnée vérifiée avant Done                                                       |
+| `SF_WORKFLOW_BYPASS_BRANCH_GUARD=1` sur `git commit` ou `git push`                          | Le garde-fou de branche des hooks git : le travail se fait sur une branche que nomme le workflow |
+| `--bypass-srs <raison>` sur `create-ticket`, `create-subtask`, `create-epic`                | Règle 8 : les tickets d’un projet avec SRS viennent du spawner SRS                               |
+| `--bypass-reason <texte>` sur `srs-cli.sh spawn`                                            | Fixe la raison `--bypass-srs` des tickets créés ; ne désactive aucun contrôle                    |
+| `--skip-local-ci "<raison>"` sur `create-pr`, `ready-pr`, `update-status … "Human testing"` | Exige que les statuts de CI locale requis soient verts sur le commit de tête                     |
+| `SF_CACHE_BUST=1`                                                                           | Pas un garde-fou : recharge le schéma du board mis en cache                                      |
+| `SF_DISABLE_SRS_HOOK=1`                                                                     | Pas un garde-fou : coupe le rappel du détecteur d’intention SRS                                  |
 
 `--bypass-srs` et `--skip-local-ci` exigent une raison. La raison est la trace : choisissez un jeton facile à retrouver avec `grep`, comme `meta-srs-tooling`. `--bypass-srs` la publie sur le ticket
 créé et `--skip-local-ci` l’écrit sur la pull request (ou sur le ticket quand aucune pull request ne peut le porter). Les usages légitimes et illégitimes de chaque échappatoire, ainsi que la trace à
@@ -274,6 +353,16 @@ Vous appliquez une échappatoire depuis le checkout principal, de l’une de ces
 - **Tout hôte :** votre propre terminal, à la racine du checkout principal. `update-status` et `local-ci-gate` y retrouvent le worktree ou la pull request du ticket.
 
 Les labels de nature, c’est vous qui les ajoutez sur GitHub, ou avec `!` dans Claude Code.
+
+Le même hook tient aussi l’agent à **une commande simple par appel de shell**, ce que lui demande `AGENTS.md`. Un hôte ne peut pas analyser une ligne qui enchaîne des commandes (`&&`, `;`, `||`, un
+saut de ligne), substitue la sortie de l’une dans une autre (`$(…)`, accents graves), boucle, lance un script en ligne (`node -e`, `python3 -c`, `bash -c`, `eval`) ou écrit un fichier par heredoc : il
+vous demande donc une permission à chaque appel de ce genre, même quand chaque commande qu’il contient est permise. Le hook refuse la ligne et nomme le découpage à faire, si bien que l’agent réécrit
+son appel au lieu de vous solliciter. Ce n’est pas une échappatoire : rien ne reste à appliquer de votre côté. C’est actif par défaut (`modules.harness.guard.shellShape` vaut `refuse` quand rien n’est
+enregistré, et `sf update` n’écrit rien), et le mode qu’utilise un projet est votre décision : `sf agents shell-guard warn` fait avertir l’agent sans refuser (la demande de permission propre à l’hôte
+s’applique toujours), et `sf agents shell-guard off` cesse de lire la forme d’une ligne. Le refus d’une échappatoire, d’un label de nature et d’une fusion déléguée vaut dans tous les modes. Claude
+Code ne demande rien pour `git commit -m "$(cat <<'EOF' … EOF)"` ni pour `gh pr create --body "$(cat <<'EOF' … EOF)"` avec un délimiteur entre apostrophes (mesuré sur 2.1.325) : le hook laisse donc
+ces deux formes tranquilles sur Claude Code ; sur Codex, et pour toute autre commande, le texte passe par un fichier (`git commit -F <fichier>`, `--body-file <fichier>`). Le détail, le tableau des
+constructions et la mesure sont dans [`sf agents guard`](/fr/cli/sf-agents#une-ligne-de-shell-qui-n-est-pas-une-commande-simple).
 
 Le hook est un garde-corps contre le chemin ordinaire que les refus enseignaient, pas une frontière de sécurité : il lit la commande que l’agent a écrite, ne couvre que l’outil Bash, et laisse passer
 en cas d’échec (pas de CLI, un CLI ancien ou une charge qu’il ne sait pas lire laisse l’appel passer). `sf status` le dit sur sa ligne `routing:` (`guard enforced`, `guard declared`,

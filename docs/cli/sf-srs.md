@@ -116,7 +116,9 @@ edit its body by hand.
 
 ### Spawning tickets
 
-`--milestone` on `spawn` **declares the release these tickets ship in**: the milestone is created or reused, the version page is linked to it, and every ticket spawned joins it.
+`--milestone` on `spawn` **declares the release these tickets ship in**: the milestone is created or reused, the version page is linked to it, and the Stories of the run, created or reused, join it.
+An Epic the run creates joins it too. An Epic that already exists, given with `--ticket` or found from an earlier run, keeps its milestone: an Epic may span several releases, and only its Stories
+carry one. The dry run says so, and since 1.3.0 `spawn` no longer moves the Epic ([#1119](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1119)).
 
 `--complexity <level>` on `spawn` labels every created Story whose FR page states no complexity (`bug`, `low`, `medium` or `complex`); an FR page's own Complexity wins. The summary lists any Story
 left without one, which the workflow refuses to move out of Backlog.
@@ -128,10 +130,19 @@ Before creating anything, `spawn` searches the repository for tickets that alrea
 
 `spawn` reuses the ticket that already carries an FR's canonical page, with or without `--reconciliation-plan`. A closed ticket is reused as it is and never reopened, a ticket closed as not planned
 (how a duplicate is closed) is ignored, and an FR with no ticket is created. Two candidates for one FR, or a candidate that belongs to another parent, stop the run with exit `10` before anything is
-written. Without `--ticket`, the open version Epic that a previous run created is adopted instead of created again.
+written. Without `--ticket`, the open version Epic that a previous run created is adopted instead of created again: `spawn` recognises it by the version page link it wrote in the Epic body, then by
+its `<feature> - <version>` title, so a version page renamed between two runs keeps its Epic. When the Stories hang under an Epic `spawn` cannot recognise, such as one made by hand, the run stops and
+names that Epic: pass `--ticket <n>` if it is the version's Epic.
 
-`--dry-run` prints one line per FR: `reuse #N`, `reuse #N (closed)`, `create`, or `blocked — <reason>` (a blocked FR makes the dry run exit `10` too). A duplicate that already exists is detached from
-its Epic with `workflow-cli.sh unlink-subtask <epic> <duplicate>`; close it as not planned and every later `spawn` ignores it.
+#### Re-running spawn after adding an FR
+
+Adding an FR to a version that was already spawned needs no reconciliation plan: run the same `spawn` again. The Stories that already exist are reported and left alone, and only the new FR's Story is
+created, under the same Epic. A third run creates nothing.
+
+`--dry-run` shows it before anything is written. The first line counts the FRs, `5 FR page(s): 1 new, 3 already ticketed`, the `•` list names only the Stories the run creates, and each FR gets one
+line: `exists #N, skipped`, `exists #N (closed), skipped`, `new`, or `blocked — <reason>` (a blocked FR makes the dry run exit `10` too). `exists #N, skipped (linked under the delivery parent)` marks
+a Story with no parent, which joins the Epic instead of being created again. A duplicate that already exists is detached from its Epic with `workflow-cli.sh unlink-subtask <epic> <duplicate>`; close
+it as not planned and every later `spawn` ignores it.
 
 ## Common options
 

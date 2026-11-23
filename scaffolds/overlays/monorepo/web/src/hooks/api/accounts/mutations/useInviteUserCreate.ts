@@ -10,6 +10,7 @@ import { z } from 'zod'
  */
 import { invitationControllerCreateInvitation } from '@{{PROJECT_NAME}}/api-client/generated/api/invitations/invitations'
 import { buildCreateInvitationPayloadSchema } from '@shared-validation/invitation'
+import { invitationRefusalOf } from '@/utils/invitation-refusal'
 
 // Translation
 const tAccounts = (key: string) => i18next.t(key, { ns: 'accounts' })
@@ -64,6 +65,8 @@ export const useInviteUser = () => {
       queryClient.invalidateQueries({ queryKey: ['platformOverview'] })
     },
     onError: (error) => {
+      // An address that already has an active account (409, #988) is an expected refusal the dialogs show on the email field.
+      if (invitationRefusalOf(error).kind === 'already-active') return
       console.error(tAccounts('errors.tk_inviteUserError_'), error)
     }
   })

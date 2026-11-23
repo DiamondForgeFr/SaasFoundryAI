@@ -19,7 +19,7 @@ import {
   type HookDecision
 } from '../../../harness/delegation-capture'
 import { agentToken, buildRouteRecord, readLedger, transact } from '../../../harness/delegation-ledger'
-import { issueRoutes, loadRoutingState } from '../../../harness/routing-runtime'
+import { issueRoutes, loadRoutingState, runAdjustment } from '../../../harness/routing-runtime'
 
 const exec = promisify(execFile)
 // A commit hook exports GIT_* variables: a fixture repository must never inherit them.
@@ -37,6 +37,12 @@ describe('the delegate line (#1035)', () => {
       checks: ['type-check', 'automated-tests'],
       ignored: []
     })
+  })
+
+  // A turn that ends while the delegate's own background job runs is not the end of the delegation (#1241)
+  it('reads a pending line: the route it names, and no verdict', () => {
+    expect(parseDelegationLine('The suite runs.\nSF-DELEGATION: pending route=0123456789abcdef0123')).toEqual({ verdict: 'pending', route: '0123456789abcdef0123', checks: [], ignored: [] })
+    expect(parseDelegationLine('SF-DELEGATION: pendingx route=0123456789abcdef0123')).toBeUndefined()
   })
 
   // The affected tests a delegate ran while it worked are a real check, next to the full suites (#1157)
@@ -929,6 +935,179 @@ describe('capturing a host event (#1035)', () => {
       expect(missingLineReason(null)).toContain('route=<the id from your brief, if it gave one> checks=<codes>')
       expect(missingLineReason('0123456789abcdef0123')).toContain('SF-DELEGATION: <pass|fail> route=0123456789abcdef0123 checks=<codes>')
       expect(missingLineReason(null).split('\n')).toHaveLength(3)
+    })
+  })
+
+  // A delegate that ends a turn while its own background work runs is woken again when that work reports (#1241).
+  describe('an interim stop: background work of the delegate still running (#1241)', () => {
+    const decisionOf = (result: unknown) => (result as { decision?: HookDecision }).decision
+    const at = (minutes: number) => () => new Date(NOW().getTime() + minutes * 60_000)
+    /** The transcript of a delegate that started `molten ci run` in the background and armed a monitor on it. */
+    const backgroundTranscript = async (route: string, file = 'background.jsonl') => {
+      const path = join(transcripts, file)
+      await writeFile(path, (await fixture('claude-subagent-background.jsonl')).replaceAll('__ROUTE__', route))
+      return path
+    }
+    const fixRoute = () => issue({ taskKind: 'bug-fix', tier: 'fix', ticket: 1241, complexity: 'bug' })
+
+    it('records no outcome for a fail written while its own job still runs, asks nothing, and the routing reads nothing', async () => {
+      const route = await fixRoute()
+      const result = await captureHostEvent('claude-code', await payload('claude-subagent-stop-interim.json', await backgroundTranscript(route.id), {}, route.id), { now: NOW })
+      expect(result.status).toBe('appended')
+      expect(decisionOf(result)).toBeUndefined()
+      const [run] = (await ledger()).runs
+      expect(run).toMatchObject({ outcome: 'outcome-unknown', effectiveOutcome: 'outcome-unknown', interim: true, censored: true, decisive: false, checks: [] })
+      // The run stays attributed (its cost belongs to the delegation), and the verdict it wrote is kept as a fact only.
+      expect(run).toMatchObject({ route: route.id, taskKind: 'bug-fix', ticket: 1241 })
+      expect(run.evidenceRefs).toEqual(expect.arrayContaining(['interim-stop', 'background-work-running', 'interim-verdict-fail']))
+      expect(run.evidenceRefs).not.toContain('no-sf-delegation-line')
+      expect(run.cost).not.toBeNull()
+    })
+
+    it('counts only the final stop: the interim one is folded into the delegation, its cost added', async () => {
+      const route = await fixRoute()
+      const path = await backgroundTranscript(route.id)
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop-interim.json', path, {}, route.id), { now: NOW })
+      // The pipeline reported, the host woke the agent, and it closed with its verdict.
+      const done = [
+        {
+          type: 'attachment',
+          agentId: 'a1b2c3',
+          timestamp: '2026-10-20T08:09:00.000Z',
+          attachment: { type: 'queued_command', prompt: '<task-notification>\n<task-id>bjob00001</task-id>\n<status>completed</status>\n</task-notification>' }
+        },
+        {
+          type: 'assistant',
+          agentId: 'a1b2c3',
+          timestamp: '2026-10-20T08:09:30.000Z',
+          message: {
+            id: 'msg_D',
+            model: 'claude-opus-5-5',
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Green.' }],
+            usage: { input_tokens: 4, output_tokens: 30, cache_read_input_tokens: 1700, cache_creation_input_tokens: 10 }
+          }
+        }
+      ]
+      await appendFile(path, `${done.map((line) => JSON.stringify(line)).join('\n')}\n`)
+      const final = await payload(
+        'claude-subagent-stop-interim.json',
+        path,
+        {
+          background_tasks: [
+            { id: 'a1b2c3', type: 'subagent', status: 'running' },
+            { id: 'bjob00001', type: 'shell', status: 'completed' }
+          ],
+          last_assistant_message: `Green.\nSF-DELEGATION: pass route=${route.id} checks=automated-tests`
+        },
+        route.id
+      )
+      const second = await captureHostEvent('claude-code', final, { now: at(10) })
+      expect(second.status).toBe('appended')
+      const { runs } = await ledger()
+      expect(runs).toHaveLength(2)
+      const [interim, last] = runs
+      expect(interim).toMatchObject({ superseded: true, censored: true })
+      expect(last).toMatchObject({ interim: false, chainSegments: 2, effectiveOutcome: 'success', censored: false, decisive: true, taskKind: 'bug-fix' })
+      expect(Number(last.countedCost!.amount)).toBeCloseTo(Number(interim.cost!.amount) + Number(last.cost!.amount), 8)
+    })
+
+    it('takes no verdict from a later stop while that one is interim too: an earlier verdict of the agent does not count meanwhile', async () => {
+      const route = await fixRoute()
+      const path = await backgroundTranscript(route.id)
+      const answered = await payload(
+        'claude-subagent-stop-interim.json',
+        path,
+        { background_tasks: [], last_assistant_message: `SF-DELEGATION: pass route=${route.id} checks=automated-tests` },
+        route.id
+      )
+      await captureHostEvent('claude-code', answered, { now: NOW })
+      expect((await ledger()).runs[0]).toMatchObject({ effectiveOutcome: 'success', decisive: true })
+      // Handed back, the agent starts another job and its turn ends while it runs.
+      await appendFile(
+        path,
+        `${JSON.stringify({ type: 'assistant', agentId: 'a1b2c3', timestamp: '2026-10-20T08:20:00.000Z', message: { id: 'msg_E', model: 'claude-opus-5-5', role: 'assistant', content: [{ type: 'text', text: 'Rerunning.' }], usage: { input_tokens: 1, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } })}\n`
+      )
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop-interim.json', path, { last_assistant_message: 'Rerunning the suite.' }, route.id), { now: at(20) })
+      const { runs } = await ledger()
+      expect(runs[1]).toMatchObject({ interim: true, effectiveOutcome: 'outcome-unknown', censored: true, decisive: false })
+      expect(runs[0]).toMatchObject({ superseded: true, decisive: false })
+    })
+
+    it("does not take another delegate's job, or the stopping agent itself, for its own work", async () => {
+      const route = await fixRoute()
+      const tasks = [
+        { id: 'a1b2c3', type: 'subagent', status: 'running' },
+        { id: 'bother001', type: 'shell', status: 'running' },
+        // launched by this agent, but finished
+        { id: 'bjob00001', type: 'shell', status: 'completed' },
+        // a task id its transcript gave to something that is not background work
+        { id: 'btodo0001', type: 'shell', status: 'running' }
+      ]
+      await captureHostEvent('claude-code', await payload('claude-subagent-stop-interim.json', await backgroundTranscript(route.id), { background_tasks: tasks }, route.id), { now: NOW })
+      const [run] = (await ledger()).runs
+      expect(run).toMatchObject({ interim: false, outcome: 'validation-failed', decisive: true })
+      expect(run.evidenceRefs).not.toContain('interim-stop')
+    })
+
+    it('reads a pending line as interim on a host that lists no tasks (Codex, an older Claude Code), and asks nothing', async () => {
+      const route = await issue({ provider: 'codex', taskKind: 'bug-fix', tier: 'fix' })
+      const result = await captureHostEvent(
+        'codex',
+        await payload('codex-subagent-stop.json', undefined, { agent_type: 'sf-fix', last_assistant_message: `Waiting for the suite.\nSF-DELEGATION: pending route=${route.id}` }),
+        { now: NOW }
+      )
+      expect(decisionOf(result)).toBeUndefined()
+      const [run] = (await ledger()).runs
+      expect(run).toMatchObject({ host: 'codex', interim: true, outcome: 'outcome-unknown', route: route.id, decisive: false })
+      expect(run.evidenceRefs).toContain('interim-stop')
+      expect(run.evidenceRefs).not.toContain('background-work-running')
+    })
+
+    it('does not ask a delegate whose turn ended without a line while its own job runs: the final stop will carry it', async () => {
+      const route = await fixRoute()
+      const result = await captureHostEvent(
+        'claude-code',
+        await payload('claude-subagent-stop-interim.json', await backgroundTranscript(route.id), { last_assistant_message: 'Waiting for the pipeline.' }, route.id),
+        {
+          now: NOW
+        }
+      )
+      expect(decisionOf(result)).toBeUndefined()
+      expect((await ledger()).runs[0].evidenceRefs).toEqual(expect.arrayContaining(['interim-stop', 'background-work-running']))
+    })
+
+    // 2026-11-13: seven passing bug-fix delegations, then three that stopped while `molten ci run` was still running.
+    describe('the escalation of 2026-11-13, replayed', () => {
+      const replay = async (backgroundTasks: unknown[] | undefined) => {
+        for (let index = 0; index < 7; index++) {
+          const route = await fixRoute()
+          const extra = { agent_id: `done-${index}`, agent_type: 'sf-fix', last_assistant_message: `SF-DELEGATION: pass route=${route.id} checks=automated-tests` }
+          await captureHostEvent('claude-code', await payload('claude-subagent-stop.json', undefined, extra, route.id), { now: at(index) })
+        }
+        for (let index = 0; index < 3; index++) {
+          const route = await fixRoute()
+          const path = await backgroundTranscript(route.id, `interim-${index}.jsonl`)
+          const extra = { agent_id: `interim-${index}`, ...(backgroundTasks === undefined ? {} : { background_tasks: backgroundTasks }) }
+          await captureHostEvent('claude-code', await payload('claude-subagent-stop-interim.json', path, extra, route.id), { now: at(10 + index) })
+        }
+        const decisions = (await runAdjustment(root, { dryRun: true, now: at(20)() })).decisions
+        return decisions.find((decision) => decision.kind === 'bug-fix' && decision.provider === 'claude-code')
+      }
+
+      it('holds the kind on its tier: the three interim stops carry no failure', async () => {
+        const decision = await replay([{ id: 'bjob00001', type: 'shell', status: 'running' }])
+        expect(decision).toMatchObject({ action: 'hold', from: 'fix' })
+        const { runs } = await ledger()
+        expect(runs.filter((run) => run.decisive)).toHaveLength(7)
+        expect(runs.filter((run) => run.interim)).toHaveLength(3)
+      })
+
+      it('escalated when the same stops were read as final, which is what the capture did before (control)', async () => {
+        const decision = await replay([])
+        expect(decision).toMatchObject({ action: 'escalate', from: 'fix', to: 'plan' })
+        expect(decision!.reason).toContain('3 failures in the last 10 rated runs')
+      })
     })
   })
 

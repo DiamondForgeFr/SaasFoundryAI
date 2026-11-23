@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { execFileSync } from 'child_process'
 import { existsSync } from 'fs'
-import { readFile, stat } from 'fs/promises'
+import { readdir, readFile, stat } from 'fs/promises'
 import { resolve } from 'path'
 
 import { planAgentInstructions } from '../../../harness/agent-instructions'
@@ -9,15 +9,18 @@ import { HARNESS_ALLOWED_COMMANDS, HARNESS_ASK_COMMANDS } from '../../../install
 
 const ROOT = resolve(__dirname, '../../../..')
 const CODEX_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.codex/agents/sf-${tier}.toml`)
+const CLAUDE_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.claude/agents/sf-${tier}.md`)
+const KIMI_TIER_AGENTS = ['build', 'edit', 'fix', 'light', 'plan', 'terminal'].map((tier) => `.kimi-code/agents/sf-${tier}.md`)
 
 // The tests hash every baselined file of this repository, run git ls-files and project every skill: a loaded machine
 // went past the former 20 s of the unit project (#1205). The bound is a hang guard, not what the tests check.
 jest.setTimeout(90_000)
 
 describe('SaaSFoundryAI shared harness dogfood declaration', () => {
-  it('declares Claude Code and Codex with reproducible tracked adapter baselines', async () => {
+  it('declares Claude Code, Codex and Kimi Code with reproducible tracked adapter baselines', async () => {
     const manifest = JSON.parse(await readFile(resolve(ROOT, '.saasfoundry.json'), 'utf8'))
-    expect(manifest.modules.harness.agents).toEqual(['claude-code', 'codex'])
+    // We dogfood every provider we ship (FR-MAH-022): Kimi Code is declared in shared scope, so its tier agents are committed.
+    expect(manifest.modules.harness.agents).toEqual(['claude-code', 'codex', 'kimi'])
 
     // AGENTS.md holds the project instructions since the harness v3 → v4 migration (#938)
     const agents = await readFile(resolve(ROOT, 'AGENTS.md'), 'utf8')
@@ -41,6 +44,20 @@ describe('SaaSFoundryAI shared harness dogfood declaration', () => {
     const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean)
     expect(tracked).toEqual(expect.arrayContaining(['AGENTS.md', 'GEMINI.md', '.agents/skills/sf-workflow/workflow-cli.sh']))
     expect(tracked.filter((path) => path.startsWith('.codex/')).sort()).toEqual([...CODEX_TIER_AGENTS, '.codex/hooks.json'].sort())
+    // Kimi Code: only the six generated tier agents live under .kimi-code/, each with a baseline, and nothing of ~/.kimi-code is here
+    expect(
+      Object.keys(baselines)
+        .filter((path) => path.startsWith('.kimi-code/'))
+        .sort()
+    ).toEqual(KIMI_TIER_AGENTS)
+    expect(tracked.filter((path) => path.startsWith('.kimi-code/')).sort()).toEqual(KIMI_TIER_AGENTS)
+    // The Claude Code and Codex tier agents are still the six each host has always had: declaring Kimi Code adds a folder, and changes neither
+    expect(
+      Object.keys(baselines)
+        .filter((path) => path.startsWith('.claude/agents/'))
+        .sort()
+    ).toEqual(CLAUDE_TIER_AGENTS)
+    expect(tracked.filter((path) => path.startsWith('.claude/agents/')).sort()).toEqual(CLAUDE_TIER_AGENTS)
 
     for (const [path, expected] of Object.entries(baselines)) {
       const content = await readFile(resolve(ROOT, path))
@@ -55,6 +72,24 @@ describe('SaaSFoundryAI shared harness dogfood declaration', () => {
     expect(settings.permissions.allow).toEqual(expect.arrayContaining([...HARNESS_ALLOWED_COMMANDS]))
     // The forms of an allowed command that write a route record ask first (Examine R6)
     expect(settings.permissions.ask).toEqual(expect.arrayContaining([...HARNESS_ASK_COMMANDS]))
+  })
+
+  // The developer works alone: this repository runs the Solo preset (#1242), which `sf workflow use solo` installs
+  // without touching the release branch or the local CI statuses the project declares (#1233).
+  it('declares the Solo workflow and keeps the release branch and the local CI statuses it had', async () => {
+    const manifest = JSON.parse(await readFile(resolve(ROOT, '.saasfoundry.json'), 'utf8'))
+    expect(manifest.workflow.template).toBe('SaaSFoundry Solo')
+    expect(manifest.workflow.statuses.map((status: { name: string }) => status.name)).toEqual(['Backlog', 'In progress', 'AI testing', 'In review', 'Done'])
+    expect(manifest.workflow.releaseBranch).toBe('master')
+    expect(manifest.workflow.localCi.requiredStatuses).toHaveLength(11)
+    // The workflow skill and its portable projection hold the Solo status documents, and none of the Team ones
+    for (const dir of ['.claude/skills/sf-workflow/statuses', '.agents/skills/sf-workflow/statuses']) {
+      const documents = (await readdir(resolve(ROOT, dir))).sort()
+      expect({ dir, documents }).toEqual({
+        dir,
+        documents: ['1-backlog.md', '2-in-progress.md', '2a-ai-drafting.md', '2b-human-review.md', '2c-spawning.md', '3-ai-testing.md', '4-in-review.md', '5-done.md']
+      })
+    }
   })
 
   it('keeps the portable guarded CLIs byte-identical and executable', async () => {

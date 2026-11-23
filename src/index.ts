@@ -6,6 +6,7 @@ import { describeCliVersion } from './cli-channel'
 import { feedbackCommand } from './commands/feedback'
 import { modulesCommand } from './commands/modules'
 import { newCommand } from './commands/new'
+import { registerNewCommandOptions } from './commands/new.options'
 import { skillCommand, runFullUninstall } from './commands/skill'
 import { srsCommand } from './commands/srs'
 import { updateCommand } from './commands/update'
@@ -25,89 +26,9 @@ const program = new Command()
 // the line was the program's, so `sf srs spawn --version <v>` printed the CLI version and
 // exited 0 without spawning (#834).
 program.name('sf').description('SaaSFoundryAI CLI - Create and manage your SaaS projects').version(describeCliVersion(version)).enablePositionalOptions()
-program
-  .command('new')
-  .description('Create a new SaaSFoundryAI project')
-  .option('--non-interactive', 'Fail if any required value is missing instead of prompting')
-  // Intent profile
-  .option('--profile <profile>', 'What to install: full (stack + AI harness, default), harness (AI workflow/skills/SRS on an existing project), or stack (technical base only)')
-  .option('--agents <agents>', 'Comma-separated coding-agent profiles to configure (for example: claude-code,codex)')
-  // Project basics
-  .option('--project-name <name>', 'Project name (kebab-case)')
-  .option('--project-description <description>', 'Project description')
-  .option('--structure <structure>', 'Project structure: monorepo or multirepo')
-  .option('--main-branch <branch>', 'Main branch name: main or master')
-  // Repository
-  .option('--setup-repo <setup>', 'Repository setup: local or existing')
-  .option('--monorepo-url <url>', 'Monorepo remote URL (when --structure monorepo and --setup-repo existing)')
-  .option('--backend-repo-url <url>', 'Backend repository URL (when --structure multirepo and --setup-repo existing)')
-  .option('--frontend-repo-url <url>', 'Frontend repository URL (when --structure multirepo and --setup-repo existing)')
-  // Database
-  .option('--db-setup <setup>', 'Database setup: docker, credentials, or manual')
-  .option('--db-type <type>', 'Database type: postgresql or sql')
-  .option('--db-host <host>', 'Database host')
-  .option('--db-port <port>', 'Database port (default: first free from 5435)')
-  .option('--db-user <user>', 'Database user')
-  .option('--db-password <password>', 'Database password')
-  .option('--db-name <name>', 'Database name')
-
-  // Ports — an explicit value is honoured or refused, never silently moved (#584)
-  .option('--api-port <port>', 'Host port the API listens on (default: first free from 3500)')
-  .option('--web-port <port>', 'Host port the web dev server listens on (default: first free from 5173)')
-  // Email
-  .option('--email-service <service>', 'Email service: none or mailersend')
-  .option('--mailersend-api-key <key>', 'MailerSend API key')
-  .option('--mailersend-sender-email <email>', 'MailerSend sender email')
-  .option('--mailersend-sender-name <name>', 'MailerSend sender name')
-  // Storage
-  .option('--s3-setup <setup>', 'S3 storage setup: docker, credentials, or manual')
-  .option('--s3-endpoint <endpoint>', 'S3 endpoint URL')
-  .option('--s3-access-key <key>', 'S3 access key')
-  .option('--s3-secret-key <key>', 'S3 secret key')
-  .option('--s3-bucket <bucket>', 'S3 bucket name')
-  .option('--s3-region <region>', 'S3 region')
-  // Analytics
-  .option('--analytics', 'Include analytics module')
-  .option('--no-analytics', 'Skip analytics module')
-  .option('--pwa', 'Make the app installable as a desktop application (default)')
-  .option('--no-pwa', 'Skip the installable-app module')
-  // Output language
-  .option('--language <tag>', 'Language the AI writes in — SRS, tickets, code comments (BCP-47 tag, default: en)')
-  // Advanced skills
-  .option('--advanced-skills <skills>', 'Comma-separated list of advanced skills (context7,atlassian,notion,figma)')
-  .option('--context7-api-key <key>', 'Context7 API key (unused — free public API)')
-  .option('--atlassian-email <email>', 'Atlassian account email')
-  .option('--atlassian-api-token <token>', 'Atlassian API token')
-  .option('--atlassian-site <site>', 'Atlassian site name (e.g. "mycompany")')
-  .option('--atlassian-cloud-id <id>', 'Atlassian Cloud ID')
-  .option('--notion-api-token <token>', 'Notion API token (prefer NOTION_API_TOKEN for SRS setup)')
-  .option('--notion-api-version <version>', 'Notion API version (default: 2022-06-28)')
-  .option('--figma-api-token <token>', 'Figma API token')
-  // SRS bootstrap (opt-in)
-  .option('--srs-enable', 'Enable SRS bootstrap (creates Notion workspace)')
-  .option('--no-srs-enable', 'Skip SRS bootstrap')
-  .option('--srs-backend <backend>', 'SRS backend (V1: notion)')
-  .option('--srs-parent-page-input <urlOrId>', 'URL or ID of the Notion parent page that will host the SRS workspace')
-  .option('--srs-ingest-enable', 'Enable ingestion of existing notes into the SRS after bootstrap')
-  .option('--no-srs-ingest-enable', 'Skip existing-notes ingestion')
-  .option('--srs-ingest-parent-input <urlOrId>', 'URL or ID of the Notion parent page that contains the existing notes to ingest')
-  // Tools-first selection (FR-CONFIG-ENGINE-04)
-  .option('--tracker <tool>', 'Issue/project tracker: github-projects, jira, notion, or linear')
-  .option('--docs <tool>', 'Docs/SRS backend: notion, confluence, or local-markdown')
-  .option('--design <tools>', 'Comma-separated design tools (figma,miro)')
-  .option('--no-network', 'Skip live connection checks; verify credential presence only')
-  // Workflow
-  .option('--workflow <preset>', 'Workflow preset: solo, saasfoundry, or none')
-  .option('--no-workflow', 'Skip workflow configuration entirely')
-  .option('--working-branch <branch>', 'Working branch: feature branches start from it and pull requests target it (default: develop)')
-  .option('--pr-target-branch <branch>', 'Branch pull requests target (default: the working branch)')
-  .option('--project-url <url>', 'Attach an existing board to the workflow (GitHub Projects, Jira, Notion or Linear URL)')
-  .option('--create-board', 'Create the GitHub Projects board, owned by the account of the git remote, without prompting')
-  // Post-setup behavior
-  .option('--start-services', 'Start dev services automatically (DB + MinIO)')
-  .option('--no-start-services', 'Do not start dev services after setup')
-  .option('--start-apps <mode>', 'Apps to start after setup: all, backend, frontend, none')
-  .action((opts) => newCommand(opts))
+// The option list lives in `new.options.ts`, where a spec checks it against the skill's flag
+// table (#968).
+registerNewCommandOptions(program.command('new').description('Create a new SaaSFoundryAI project')).action((opts) => newCommand(opts))
 program
   .command('update')
   .description('Add modules to an existing SaaSFoundryAI project')

@@ -15,7 +15,7 @@ import { buildTechnicalTransitionManifest, finalizeTechnicalAdoptionCandidate } 
 import { planTechnicalStackAdoption, technicalStackDryRunReport } from '../scaffold/technical-stack.planner'
 import { applyTechnicalStackTransition } from '../scaffold/technical-stack.transaction'
 import type { Answers, ProjectPorts, SaaSFoundryManifest } from '../types'
-import { setDefaultDbCredentials } from '../utils'
+import { isProjectSlug, setDefaultDbCredentials } from '../utils'
 import { buildTechnicalTransitionPrefillFromOptions, type ConflictStrategy, type UpdateCommandOptions, type UpdateDryRunReport, type UpdateTargetProfile } from './update.options'
 
 export interface ProfileTransitionDecision {
@@ -223,6 +223,24 @@ export async function handleProfileTransition(options: HandleProfileTransitionOp
     }
     if (!opts.json) emitHumanDecision(decision, capabilities)
     return { handled: false, addHarness: true, profileTransition: report.profileTransition }
+  }
+
+  // A harness keeps any safe name (#966), but the stack names its directories, packages, Docker
+  // resources and bucket after projectName, and every later update regenerates them from it.
+  if (!isProjectSlug(manifest.projectName)) {
+    report.profileTransition!.status = 'blocked'
+    report.profileTransition!.reasonCode = 'project-name-not-a-slug'
+    report.profileTransition!.remediation = [
+      {
+        command: 'sf status',
+        description: `A technical stack needs a projectName of lowercase letters, digits and hyphens; "${manifest.projectName}" is kept as it is for the harness.`
+      }
+    ]
+    delete report.profileTransition!.resultCapabilities
+    if (opts.json) emitJson(report)
+    else console.error(chalk.red(`  Profile transition blocked: a technical stack needs a lowercase projectName (got "${manifest.projectName}"). No project file was changed.`))
+    process.exitCode = 1
+    return { handled: true }
   }
 
   if (opts.json || opts.nonInteractive) {

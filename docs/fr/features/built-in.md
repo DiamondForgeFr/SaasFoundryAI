@@ -207,6 +207,10 @@ commit, les contrôles rapides avant commit et la gate plus lourde avant push.
 └── pre-push
 ```
 
+`prepare-commit-msg` et `pre-push` n'agissent que sur les branches de release candidate (`rc-*`). Sur une HEAD détachée, comme à chaque étape d'un rebase, ils sortent sans rien vérifier : un rebase
+arrêté sur un conflit reprend avec `git rebase --continue`. Husky lance les hooks avec `sh`, ils sont donc écrits en shell POSIX : les vérifications `rc-*` s'exécutent aussi là où `sh` est dash, comme
+sur la plupart des images Linux.
+
 Docker démarre la base de développement, et une configuration Compose dédiée isole les tests de base de données de l'API. Les GitHub Actions générées tiennent compte de la topologie et peuvent limiter
 les jobs aux surfaces modifiées par une pull request.
 

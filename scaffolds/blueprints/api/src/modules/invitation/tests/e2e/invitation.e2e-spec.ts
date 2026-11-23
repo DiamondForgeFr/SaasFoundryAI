@@ -69,14 +69,14 @@ describe('Invitation Module (e2e)', () => {
 
     prismaService = moduleRef.get<PrismaService>(PrismaService)
 
-    // Set up test user with necessary roles and permissions
+    // Set up test user with necessary roles. The seeded account-admin role already grants the invitation
+    // permissions (USER_ACCOUNTS_INVITATION, USER_ENTITIES_INVITATION, USER_ROLE_ALLOCATION).
     testUser = await setupTestUser(prismaService, {
       email: 'invitationtest@billmate.test',
       password: 'TestPassword123',
       firstname: 'Invitation',
       lastname: 'Manager',
-      roles: ['account-admin'],
-      permissions: ['USER_ACCOUNTS_INVITATION', 'USER_ENTITIES_INVITATION', 'USER_ROLE_ALLOCATION']
+      roles: ['account-admin']
     })
 
     // Create a test organization
@@ -218,6 +218,24 @@ describe('Invitation Module (e2e)', () => {
       expect(response.status).toBe(400)
       expect(response.body).toHaveProperty('message')
       expect(response.body.message).toContain('account or entity')
+    })
+
+    it('refuses an address that belongs to an active user with a 409 and writes nothing (#988)', async () => {
+      // The inviter's own address is an active user: an invitation could never be accepted by it.
+      const activeEmail = testUser.email
+      const invitationsBefore = await prismaService.invitation.count({ where: { inviteeUserEmail: activeEmail } })
+      const tokensBefore = await prismaService.userToken.count({ where: { userId: testUser.id, type: 'INVITATION' } })
+
+      const response = await agent
+        .post('/api/invitations')
+        .send({ email: activeEmail, firstname: 'Already', lastname: 'Active', roleIds: [2], accountIds: [testUser.accountId], entityIds: [], locale: Locale.FR })
+
+      expect(response.status).toBe(409)
+      expect(response.body.message).toMatch(/^USER_ALREADY_ACTIVE: /)
+      expect(response.body.message).toContain(activeEmail)
+      expect(response.body).not.toHaveProperty('invitationToken')
+      expect(await prismaService.invitation.count({ where: { inviteeUserEmail: activeEmail } })).toBe(invitationsBefore)
+      expect(await prismaService.userToken.count({ where: { userId: testUser.id, type: 'INVITATION' } })).toBe(tokensBefore)
     })
   })
 

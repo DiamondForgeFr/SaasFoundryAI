@@ -81,7 +81,8 @@ describe('workflow-cli update-status expectations banner (#436)', () => {
       expect(stdout).toContain('▶ AI:')
       expect(stdout).toContain('Branch from workingBranch')
       expect(stdout).toContain('⏳ Dev:')
-      expect(stdout).toContain('next involvement at Human Testing')
+      // The live skill holds the Solo documents (#1242): the next human step is the PR review
+      expect(stdout).toContain('next involvement at In Review')
     } finally {
       await sandbox.cleanup()
     }
@@ -91,7 +92,7 @@ describe('workflow-cli update-status expectations banner (#436)', () => {
     // "In progress" → banner is AI-centric; the In-review banner is the one
     // that prevented forgotten merges, so pin its wording too. Read straight
     // from the status file to avoid duplicating prose in the test.
-    const file = readFileSync(path.join(STATUSES_DIR, '6-in-review.md'), 'utf8')
+    const file = readFileSync(path.join(STATUSES_DIR, '4-in-review.md'), 'utf8')
     expect(file).toMatch(/^banner_human: .*merge.*triggers Done/m)
   })
 
@@ -108,7 +109,8 @@ describe('workflow-cli update-status expectations banner (#436)', () => {
 
   it('every status file carries both banner_ai and banner_human fields', () => {
     const files = readdirSync(STATUSES_DIR).filter((f) => f.endsWith('.md'))
-    expect(files.length).toBeGreaterThanOrEqual(10)
+    // The Solo set: backlog, in progress (+ the three SRS drafting phases), AI testing, in review, done
+    expect(files.length).toBeGreaterThanOrEqual(8)
     for (const f of files) {
       const content = readFileSync(path.join(STATUSES_DIR, f), 'utf8')
       expect(content).toMatch(/^banner_ai: .+/m)
@@ -117,7 +119,8 @@ describe('workflow-cli update-status expectations banner (#436)', () => {
   })
 
   it('status files are byte-identical between the live skill and the scaffolded template', () => {
-    const templateDir = path.resolve(REPO_ROOT, 'scaffolds/skills-templates/workflow/statuses')
+    // The live skill is installed for the Solo preset, which the template keeps under statuses-solo/
+    const templateDir = path.resolve(REPO_ROOT, 'scaffolds/skills-templates/workflow/statuses-solo')
     for (const f of readdirSync(STATUSES_DIR).filter((f) => f.endsWith('.md'))) {
       expect(readFileSync(path.join(STATUSES_DIR, f), 'utf8')).toBe(readFileSync(path.join(templateDir, f), 'utf8'))
     }

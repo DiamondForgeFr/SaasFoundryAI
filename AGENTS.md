@@ -28,14 +28,17 @@ all three surfaces (`srs`, `tickets`, `codeComments`).
 
 ### Workflow — NEVER bypass
 
-- **Statuses**: `Backlog → Ready → In progress → AI testing → Human testing → In review → Done`
+- **Statuses** (the Solo preset, `.saasfoundry.json` → `workflow.statuses`): `Backlog → In progress → AI testing → In review → Done`. There is no Ready and no Human testing: the developer works
+  alone, and the pull request review is the human gate.
 - **Before any status transition**: read `.claude/skills/sf-workflow/statuses/<N>-<name>.md` for mandatory actions and exit conditions
-- **Never skip statuses.** In particular: never go Backlog → AI Testing, open a draft PR for Human Testing and never mark it ready before human validation (unless ticket carries `nature:internal`).
-  Delivery tickets require a verified merged PR before Done, except validated `nature:bundled-pr` children. Epics own no PR and reach Done only after every native child has board status Done.
-- **Nature axis (Human Testing optionality)** — `nature:internal` tickets (refactor / scaffolding / non-terminal stories of an Epic) may transition AI Testing → In Review directly. Default (no label
-  or `nature:user-facing`) requires Human Testing. The `update-status` guard enforces this — see `.claude/skills/sf-workflow/SKILL.md` "Nature axis" section.
+- **Never skip statuses.** In particular: never go Backlog → AI Testing, and never take a pull request out of draft before the test report is posted and the local CI is green on its head. Under Solo
+  the session runs `ready-pr` at the end of AI Testing (a delegated agent never does), moves the ticket to In Review, and the developer reviews and merges. Delivery tickets require a verified merged PR
+  before Done, except validated `nature:bundled-pr` children. Epics own no PR and reach Done only after every native child has board status Done.
+- **Nature axis** — under Solo it no longer gates a testing step: AI Testing → In Review needs no `nature:*` label, whatever the ticket is. `nature:bundled-pr` still routes a child whose single commit
+  lands on its delivery parent's branch straight from AI Testing to Done (the parent's PR carries the review). Only the developer labels the nature of a ticket. The `update-status` guard enforces
+  this — see `.claude/skills/sf-workflow/SKILL.md` "Nature axis" section.
 - **Never bypass the CLI**: use `.claude/skills/sf-workflow/workflow-cli.sh` and `.claude/skills/sf-tool-github-projects/github-projects-cli.sh` — not raw `gh api graphql` mutations
-- **Heavy validation before Human Testing:** run the project's declared local pipeline explicitly during AI Testing and record the results: `molten ci run <branch>` when `.molten/project.json` declares at least one job in `ci.jobs` and `molten ci status` answers (exit 0, 1 or 2), otherwise `npm test` and `npm run test:pre-push`. Commits only check what they touch, and iterative pushes do
+- **Heavy validation before the PR leaves draft:** run the project's declared local pipeline explicitly during AI Testing and record the results: `molten ci run <branch>` when `.molten/project.json` declares at least one job in `ci.jobs` and `molten ci status` answers (exit 0, 1 or 2), otherwise `npm test` and `npm run test:pre-push`. The local CI must be green on the exact pushed head before the PR leaves draft: `ready-pr` applies that gate and refuses a head without it. Commits only check what they touch, and iterative pushes do
   not run Docker.
 - **Commit + push BEFORE moving to AI Testing.** Code must be on remote before any testing phase.
 - **Escape hatches** (`SF_WORKFLOW_BYPASS_*`, `--bypass-srs`, `--skip-local-ci`) are used only when the developer says so, for the cases and with the record listed in
@@ -66,8 +69,8 @@ tried. Whatever the ticket changes among these, its commits also carry the repos
 - the tier agents or the routing → `.claude/agents/` and `.codex/agents/`;
 - a `modules.harness` field → this repository's `.saasfoundry.json` (recorded with its own CLI command, never by hand).
 
-Regenerate with `npm run build && node bin/sf.js agents refresh --scope shared && npx prettier --write .saasfoundry.json`, and commit the result with the change. A ticket that leaves this repository behind
-the harness it ships is not done.
+Regenerate with three separate calls (the guard hook refuses a chained line): `npm run build`, then `node bin/sf.js agents refresh --scope shared`, then `npx prettier --write .saasfoundry.json`, and
+commit the result with the change. A ticket that leaves this repository behind the harness it ships is not done.
 
 ### Reading before acting
 
@@ -126,7 +129,7 @@ scripts/              # Version management (tag-manager.sh)
 - `npm run lint` — ESLint
 - `npm run test:pre-commit` — The commit gate (alias of `test:staged`): format, lint and type-check the staged files and run their related Jest tests; dependency or configuration changes escalate to
   the full Jest run (see `docs/guide/impact-aware-validation.md`, #878)
-- `npm run test:pre-push` — the exact three-check normal lifecycle lane (run explicitly during AI Testing before Human Testing)
+- `npm run test:pre-push` — the exact three-check normal lifecycle lane (run explicitly during AI Testing, before the PR leaves draft)
 - `npm run test:full` — Full local validation: format, lint, build, package check, every Jest suite and the exhaustive Docker lane
 - `npm run test:docker` / `npm run test:docker:full` — the four-check exhaustive lifecycle lane
 - `npm run test:docker:normal` — the three checks used by ordinary non-draft pull requests
@@ -174,7 +177,7 @@ scripts/              # Version management (tag-manager.sh)
 
 - This is a **scaffold/generator** CLI — the code in `scaffolds/` is template code, not application code
 - **NEVER** modify scaffold templates without considering the impact on generated projects
-- Current version: 1.2.0 (npm package `saasfoundryai-cli`)
+- Current version: 1.3.0 (npm package `saasfoundryai-cli`)
 - Node.js >= 22.13.0 to run the CLI (its own `.nvmrc` says 22.15.0)
 - **The generated API and web app run different TypeScript majors, on purpose.** The API is pinned to **5.9.x** with `ignoreDeprecations: "5.0"`; the web app is on 6.x. NestJS 11's OpenAPI CLI plugin
   cannot read the TypeScript 6 AST — it emits `{ enum: string }`, a bare identifier with no runtime value, and **no generated API can start**. The compiler, the build and the unit suite all stay
@@ -191,9 +194,14 @@ scripts/              # Version management (tag-manager.sh)
 Edit files with the agent's native file tools (read, edit, write), never with interpreter
 heredocs or scripts that rewrite files (`python3 - <<EOF`, `node -e`): a host cannot analyse
 those calls before running them. Keep each shell call to one plain command, run from the
-project root. Hosts that support it pre-approve the harness's read-only commands
-(`workflow-cli.sh status|next|help`, `sf status`, `sf agents list`); commands that change a
-ticket, a board or a pull request still ask.
+project root: no `&&`, `;` or `||` chain, no `$(...)` substitution, no loop, no inline script
+(`node -e`, `python3 -c`, `bash -c`), no file written through a heredoc, no trailing `&`. Give
+the directory to the command (`git -C <dir>`) instead of `cd <dir> &&`, and pass long text through
+a file (`git commit -F <file>`, `--body-file <file>`). A pipe and a redirection are fine. The guard
+hook of Claude Code and Codex refuses such a line and names the split to make; for any other agent
+nothing stops it, so follow the rule yourself. Hosts that support it pre-approve the harness's
+read-only commands (`workflow-cli.sh status|next|help`, `sf status`, `sf agents list`); commands
+that change a ticket, a board or a pull request still ask.
 
 ## Managed project capabilities
 
@@ -221,6 +229,30 @@ on it:
 - Write every artefact in the `output language` the report gives: SRS pages, tickets and their comments,
   code comments, commit messages. The language of the conversation is not the signal: a session held in
   French still produces English artefacts when the project says `en`.
+
+## Ticket first, and an unreachable tool
+
+The ticket exists before the first line of code: create it in the configured ticket tool, or
+ask the developer for it, then name its branch and every commit after its number
+(`.saasfoundry.json` → `workflow.branchNaming` and `workflow.commitFormat`). A placeholder such
+as `#TBD` or `#XXX`, or a branch without the ticket number, is no ticket; the project's commit
+hooks refuse both where it has them.
+
+When the ticket tool or the remote is unreachable (an expired token, no network, a refused
+fetch or push), stop instead of working around it. Report the blocker to the developer first,
+with the command that failed and its message, then propose temporary alternatives (wait and
+retry, the developer renews the access, or local work on a branch the developer names, pushed as
+soon as the remote answers) and let the developer choose. Never pick a workaround alone, and never
+leave commits that are on no remote, under no ticket and in no pull request without saying so.
+
+## UI work: mockup display and design tokens
+
+A ticket labelled `ui` follows "Working a `ui` ticket" in the workflow skill: a one-file HTML mockup
+that the developer sees before the visual work starts. How this project shows a mockup to the
+developer (for example the browser panel of its terminal, or a preview server) and which design
+tokens it uses are stated by the project itself, in this file, outside this generated region. Read
+them before you draw anything. When the project states neither, give the developer the path of the
+mockup file to open in a browser, and use the tokens its code already defines.
 
 ## Coding-agent identity and onboarding
 
@@ -255,8 +287,12 @@ Run preconditions explicitly, and stop to report a missing capability when no eq
 When a workflow step names a task kind, resolve its tier with
 `sf agents route --task <kind> --provider <current-agent>` and delegate the step to the
 `sf-<tier>` agent it names: that agent carries its own model and effort, so never name a
-model or an effort yourself. When the route fails or the agent cannot delegate, run the step
-in the session.
+model or an effort yourself. The one exception is a route that prints `alias <name>` (Kimi Code
+binds no model in an agent file): pass that alias, copied from the route and never composed, as
+the `model` of the delegation call. When the route fails or the agent cannot delegate, run the
+step in the session: a refused or failed route is never worked around by starting another coding
+agent's CLI (`claude`, `codex`, or any other) or a background session of another host, and a host
+with no worktree support delegates sub-tasks only, through its own native sub-agent tool.
 Never bypass CLI guards, required approvals, tests or workflow status exit conditions.
 An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook
 refuses an agent call that sets one.
@@ -296,6 +332,10 @@ team's default; a clone may override it locally, and the line reports the effect
   not part of the running ticket becomes a ticket of its own, handed to its own agent.
 - `declined`, or the current agent cannot delegate or run in the background: deliver the tickets
   in the session, one after the other, and say so explicitly.
+- `allowed`, but the current agent's profile has no worktree support (`sf agents catalog --json`
+  says `worktrees: none`, as for Kimi Code): it cannot open a worktree for a delegate, so it
+  delivers the tickets in the session, one after the other, and delegates sub-tasks only, in the
+  current worktree.
 
 A delegated agent runs the tests the change affects while it works, and the full suites once, at the end of AI Testing, not after every iteration. After a rebase it reruns the affected tests, and the full suites only when the rebase brought changes to shared files. The ready pull request's CI stays the final check. The brief does not restate this rule: the workflow status documents hold it.
 

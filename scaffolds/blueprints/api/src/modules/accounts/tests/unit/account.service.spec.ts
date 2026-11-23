@@ -3,7 +3,7 @@
  * This demonstrates how to use the base classes and utilities for cleaner, more maintainable tests
  */
 
-import { BadRequestException, ForbiddenException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
 
 /**
  * Dependencies
@@ -1198,6 +1198,15 @@ class AccountServiceScopeTest extends AccountServiceTest {
       const ALLOCATION = { id: 1, name: 'USER_ROLE_ALLOCATION', applicableScopes: ['PLATFORM', 'ACCOUNT', 'ENTITY'] }
       const ENTITY_CREATION = { id: 2, name: 'ENTITY_CREATION', applicableScopes: ['PLATFORM', 'ACCOUNT', 'ENTITY'] }
       const ACCOUNT_UPDATE = { id: 3, name: 'ACCOUNT_UPDATE', applicableScopes: ['PLATFORM', 'ACCOUNT'] }
+      // Sections and a permission that exist only on an entity (a project): an entity system role grants them, no account role does (#1230).
+      const PROJECT_VISION = { id: 20, name: 'PROJECT_VISION', module: { name: 'PROJECT' } }
+      const PROJECT_SECRET = { id: 21, name: 'PROJECT_SECRET', module: { name: 'PROJECT' } }
+      const PROJECT_TICKET_EDIT = { id: 4, name: 'PROJECT_TICKET_EDIT', applicableScopes: ['ENTITY'] }
+      /** The ENTITY system roles: what the entity type allows (a `project-owner` grants the project sections, not PROJECT_SECRET). */
+      const entityTypeSystemRoles = [
+        { permissionsLinked: [{ permission: { name: 'USER_ROLE_ALLOCATION' } }], subModulesLinked: [{ subModuleId: USERS.id }] },
+        { permissionsLinked: [{ permission: { name: 'PROJECT_TICKET_EDIT' } }], subModulesLinked: [{ subModuleId: PROJECT_VISION.id }] }
+      ]
 
       /** One role assignment of the actor: its scope, where it is held, and what its role grants. */
       interface Holding {
@@ -1237,13 +1246,22 @@ class AccountServiceScopeTest extends AccountServiceTest {
         role?: { id: number; scope: string; accountId: string | null; isSystem?: boolean; name?: string; permissionIds?: number[]; subModuleIds?: number[] }
         /** Entities the role is assigned in. */
         assignedIn?: string[]
+        /** Entities a pending invitation carrying the role targets (#1222). */
+        invitedIn?: string[]
+        /**
+         * Who the delete finds still holding the role (#1221): its assignments and the pending invitations carrying it.
+         * Kept apart from `assignedIn` / `invitedIn`, which drive the authority check only: unset, the role is held by nobody.
+         */
+        heldBy?: { email: string; entityName?: string | null }[]
+        pendingInvitations?: { email: string; entityNames?: string[] }[]
       }
 
       /* eslint-disable @typescript-eslint/no-explicit-any */
-      const given = ({ actor, role = { id: 5, scope: 'ENTITY', accountId: A }, assignedIn = [] }: Given) => {
+      const given = ({ actor, role = { id: 5, scope: 'ENTITY', accountId: A }, assignedIn = [], invitedIn = [], heldBy = [], pendingInvitations = [] }: Given) => {
         const prisma = this.prismaService as any
-        const permissionCatalog = [ALLOCATION, ENTITY_CREATION, ACCOUNT_UPDATE]
-        const sectionCatalog = [USERS, ENTITIES, PLATFORM_ACCOUNTS]
+        const permissionCatalog = [ALLOCATION, ENTITY_CREATION, ACCOUNT_UPDATE, PROJECT_TICKET_EDIT]
+        const sectionCatalog = [USERS, ENTITIES, PLATFORM_ACCOUNTS, PROJECT_VISION, PROJECT_SECRET]
+        prisma.role.findMany = jest.fn().mockResolvedValue(entityTypeSystemRoles)
         prisma.role.findUnique = jest.fn().mockResolvedValue({
           name: 'custom',
           description: null,
@@ -1255,8 +1273,17 @@ class AccountServiceScopeTest extends AccountServiceTest {
         })
         prisma.role.update = jest.fn().mockResolvedValue({ id: role.id, name: 'custom', isActive: false })
         prisma.role.delete = jest.fn().mockResolvedValue({})
+        const entityNamed = (name: string | null | undefined, index: number) => (name === undefined ? null : { id: `ent-${index}`, organization: name === null ? null : { name } })
         prisma.userRoleAssignment.findMany.mockReset()
-        prisma.userRoleAssignment.findMany.mockResolvedValue(assignedIn.map((entityId) => ({ entityId })))
+        prisma.userRoleAssignment.findMany.mockImplementation(async ({ select }: any) =>
+          select?.user ? heldBy.map((holder, index) => ({ user: { email: holder.email }, entity: entityNamed(holder.entityName, index) })) : assignedIn.map((entityId) => ({ entityId }))
+        )
+        prisma.invitationEntityLink.findMany.mockReset()
+        prisma.invitationEntityLink.findMany.mockResolvedValue(invitedIn.map((entityId) => ({ entityId })))
+        prisma.invitation.findMany.mockReset()
+        prisma.invitation.findMany.mockResolvedValue(
+          pendingInvitations.map((invitation) => ({ inviteeUserEmail: invitation.email, entitiesLinked: (invitation.entityNames ?? []).map((name, index) => ({ entity: entityNamed(name, index) })) }))
+        )
         const findPermissions = jest.fn(async ({ where }: any) => permissionCatalog.filter((permission) => where.id.in.includes(permission.id)))
         const findSections = jest.fn(async ({ where }: any) => sectionCatalog.filter((section) => where.id.in.includes(section.id)))
         prisma.modulePermission = { findMany: findPermissions }
@@ -1371,6 +1398,43 @@ class AccountServiceScopeTest extends AccountServiceTest {
           await call(this.service)
         })
 
+        it.each(routes)('%s answers 403 to an entity admin on an ENTITY role only promised by a pending invitation into a sibling entity (#1222)', async (_name, call) => {
+          const { prisma } = given({ actor: entityAdminOfE1, invitedIn: [E2] })
+
+          await assertForbidden(() => call(this.service), 'This role is used in an entity you do not administer')
+
+          expect(prisma.role.update).not.toHaveBeenCalled()
+          expect(prisma.role.delete).not.toHaveBeenCalled()
+        })
+
+        it.each(routes)('%s answers 403 to an entity admin when the role is assigned in its entity and invited into a sibling (#1222)', async (_name, call) => {
+          given({ actor: entityAdminOfE1, assignedIn: [E1], invitedIn: [E2] })
+
+          await assertForbidden(() => call(this.service), 'This role is used in an entity you do not administer')
+        })
+
+        it.each(routes)('%s lets an entity admin manage an ENTITY role promised by a pending invitation into its own subtree (#1222)', async (_name, call) => {
+          given({ actor: entityAdminOfE1, invitedIn: [E1_CHILD] })
+
+          await call(this.service)
+        })
+
+        it.each(routes)('%s lets the account admin manage an ENTITY role promised by a pending invitation anywhere in its account (#1222)', async (_name, call) => {
+          given({ actor: accountAdminOfA, invitedIn: [E2] })
+
+          await call(this.service)
+        })
+
+        it('reads the pending invitations that carry the role, and counts each entity once (#1222)', async () => {
+          const { prisma } = given({ actor: accountAdminOfA, assignedIn: [E1], invitedIn: [E1, E2] })
+
+          await update({ permissionIds: [ALLOCATION.id] })
+
+          expect(prisma.invitationEntityLink.findMany).toHaveBeenCalledTimes(1)
+          expect(prisma.invitationEntityLink.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { invitation: { status: 'SENT', rolesLinked: { some: { roleId: 5 } } } } }))
+          expect(this.accountAccessService.getPermissionChecker).toHaveBeenCalledWith(actorId, [E1, E2], { withSubModules: true })
+        })
+
         it.each(routes)('%s answers 403 to an entity admin on an ACCOUNT role', async (_name, call) => {
           given({ actor: entityAdminOfE1, role: { id: 5, scope: 'ACCOUNT', accountId: A } })
 
@@ -1400,6 +1464,81 @@ class AccountServiceScopeTest extends AccountServiceTest {
 
           await TestAssertions.assertThrows(() => this.service.deleteCustomRole(actorId, 5), UnauthorizedException)
           expect(this.accountAccessService.getPermissionChecker).not.toHaveBeenCalled()
+        })
+      })
+
+      describe('a role still in use is never deleted (#1221)', () => {
+        const remove = () => this.service.deleteCustomRole(actorId, 5)
+
+        it('answers 409 ROLE_IN_USE naming the users who hold it, and deletes nothing', async () => {
+          const { prisma } = given({
+            actor: accountAdminOfA,
+            assignedIn: [E1],
+            heldBy: [
+              { email: 'alice@acme.test', entityName: 'Acme Lyon' },
+              { email: 'bob@acme.test', entityName: null }
+            ]
+          })
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toBe('ROLE_IN_USE: the role "custom" is still assigned to alice@acme.test (Acme Lyon), bob@acme.test (entity ent-1). To delete it, first unassign it.')
+          expect(prisma.role.delete).not.toHaveBeenCalled()
+          expect(prisma.userRoleAssignment.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { roleId: 5 } }))
+        })
+
+        it('names an ACCOUNT assignment by its user alone', async () => {
+          given({ actor: accountAdminOfA, role: { id: 5, scope: 'ACCOUNT', accountId: A }, heldBy: [{ email: 'carol@acme.test' }] })
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toContain('assigned to carol@acme.test.')
+        })
+
+        it('answers 409 when only a pending invitation carries the role, naming the invitee and where it is invited', async () => {
+          const { prisma } = given({ actor: accountAdminOfA, invitedIn: [E2], pendingInvitations: [{ email: 'dave@acme.test', entityNames: ['Acme Paris'] }] })
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toBe('ROLE_IN_USE: the role "custom" is still carried by the pending invitation to dave@acme.test (Acme Paris). To delete it, first cancel the invitations.')
+          expect(prisma.invitation.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'SENT', rolesLinked: { some: { roleId: 5 } } } }))
+          expect(prisma.role.delete).not.toHaveBeenCalled()
+        })
+
+        it('names holders and invitations together, and counts the holders past the first five', async () => {
+          const heldBy = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((name) => ({ email: `${name}@acme.test` }))
+          given({ actor: accountAdminOfA, role: { id: 5, scope: 'ACCOUNT', accountId: A }, heldBy, pendingInvitations: [{ email: 'x@acme.test' }, { email: 'y@acme.test' }] })
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toContain('assigned to a@acme.test, b@acme.test, c@acme.test, d@acme.test, e@acme.test and 2 more')
+          expect(error.message).toContain('carried by the pending invitations to x@acme.test, y@acme.test')
+          expect(error.message).toContain('first unassign it and cancel the invitations.')
+        })
+
+        it('checks the authority first: a caller without it gets the 403, never the list of holders', async () => {
+          const { prisma } = given({ actor: entityAdminOfE1, assignedIn: [E2], heldBy: [{ email: 'alice@acme.test', entityName: 'Acme Lyon' }] })
+
+          await assertForbidden(remove, 'This role is used in an entity you do not administer')
+
+          expect(prisma.invitation.findMany).not.toHaveBeenCalled()
+        })
+
+        it('deletes a role nobody holds', async () => {
+          const { prisma } = given({ actor: accountAdminOfA })
+
+          await expect(remove()).resolves.toEqual({ id: 5 })
+
+          expect(prisma.role.delete).toHaveBeenCalledWith({ where: { id: 5 } })
+        })
+
+        it('answers 409 when the role is assigned between the check and the delete (the foreign key refuses it)', async () => {
+          const { prisma } = given({ actor: accountAdminOfA })
+          prisma.role.delete = jest.fn().mockRejectedValue(Object.assign(new Error('Foreign key constraint violated'), { code: 'P2003' }))
+
+          const error = await TestAssertions.assertThrows(remove, ConflictException)
+
+          expect(error.message).toContain('ROLE_IN_USE')
         })
       })
 
@@ -1459,6 +1598,95 @@ class AccountServiceScopeTest extends AccountServiceTest {
           given({ actor: accountAdminOfA })
 
           await assertForbidden(() => this.service.createCustomRole(actorId, null, { name: 'template', scope: 'ENTITY', permissionIds: [] }))
+        })
+      })
+
+      describe('an ENTITY role is shaped for its entity type by the account admin (#1230)', () => {
+        const projectRole = { name: 'project-reviewer', scope: 'ENTITY' as const, subModuleIds: [PROJECT_VISION.id], permissionIds: [PROJECT_TICKET_EDIT.id] }
+
+        it('the account admin creates it with the sections the entity type allows, which it does not hold on the account', async () => {
+          const { prisma, tx } = given({ actor: accountAdminOfA })
+
+          await this.service.createCustomRole(actorId, A, projectRole)
+
+          expect(tx.role.create).toHaveBeenCalled()
+          expect(prisma.role.findMany).toHaveBeenCalledTimes(1)
+          expect(prisma.role.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { scope: 'ENTITY', isSystem: true, isActive: true, accountId: null } }))
+        })
+
+        it('the account admin adds them to an ENTITY role assigned nowhere yet', async () => {
+          const { tx } = given({ actor: accountAdminOfA, assignedIn: [] })
+
+          await update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [PROJECT_TICKET_EDIT.id] })
+
+          expect(tx.rolePermissionLink.createMany).toHaveBeenCalledWith({ data: [{ roleId: 5, permissionId: PROJECT_TICKET_EDIT.id }] })
+        })
+
+        it('nobody grants beyond what the entity type allows (403, nothing written)', async () => {
+          const { tx } = given({ actor: accountAdminOfA })
+
+          await assertForbidden(() => this.service.createCustomRole(actorId, A, { ...projectRole, subModuleIds: [PROJECT_VISION.id, PROJECT_SECRET.id] }), 'PROJECT_SECRET')
+          expect(tx.role.create).not.toHaveBeenCalled()
+        })
+
+        it('an entity admin still grants only what it holds: the entity type allows it nothing more', async () => {
+          const { prisma, tx } = given({ actor: entityAdminOfE1 })
+
+          await assertForbidden(() => this.service.createCustomRole(actorId, A, projectRole), 'PROJECT_VISION')
+          expect(tx.role.create).not.toHaveBeenCalled()
+          expect(prisma.role.findMany).not.toHaveBeenCalled()
+        })
+
+        it('an ACCOUNT role is still checked against the account only', async () => {
+          given({ actor: accountAdminOfA })
+
+          await assertForbidden(() => this.service.createCustomRole(actorId, A, { ...projectRole, scope: 'ACCOUNT', permissionIds: [] }), 'PROJECT_VISION')
+        })
+
+        describe('the account admin keeps the entity type allowance once the role is used (#1245)', () => {
+          it.each<[string, Pick<Given, 'assignedIn' | 'invitedIn'>]>([
+            ['assigned in an entity of the account', { assignedIn: [E1] }],
+            ['assigned in several entities', { assignedIn: [E1, E2] }],
+            ['promised by a pending invitation (#1222)', { invitedIn: [E2] }]
+          ])('adds what the entity type allows to a role %s', async (_where, usage) => {
+            const { prisma, tx } = given({ actor: accountAdminOfA, ...usage })
+
+            await update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [PROJECT_TICKET_EDIT.id] })
+
+            expect(tx.rolePermissionLink.createMany).toHaveBeenCalledWith({ data: [{ roleId: 5, permissionId: PROJECT_TICKET_EDIT.id }] })
+            expect(prisma.role.findMany).toHaveBeenCalledTimes(1)
+          })
+
+          it('never beyond what the entity type allows (403, nothing written)', async () => {
+            const { prisma } = given({ actor: accountAdminOfA, assignedIn: [E1], invitedIn: [E2] })
+
+            await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id, PROJECT_SECRET.id], permissionIds: [] }), 'PROJECT_SECRET')
+            expect(prisma.$transaction).not.toHaveBeenCalled()
+          })
+
+          it('an entity admin of the entity where it is used still grants only what it holds (403)', async () => {
+            const { prisma } = given({ actor: entityAdminOfE1, assignedIn: [E1] })
+
+            await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }), 'PROJECT_VISION')
+            expect(prisma.role.findMany).not.toHaveBeenCalled()
+          })
+
+          it.each<[string, Pick<Given, 'assignedIn' | 'invitedIn'>]>([
+            ['assigned', { assignedIn: [E2] }],
+            ['promised by a pending invitation', { invitedIn: [E2] }]
+          ])('an entity admin of another entity cannot touch a role %s in a sibling (403)', async (_how, usage) => {
+            const { prisma } = given({ actor: entityAdminOfE1, ...usage })
+
+            await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }), 'used in an entity you do not administer')
+            expect(prisma.$transaction).not.toHaveBeenCalled()
+          })
+
+          it('an admin of another account gets no allowance on this account (403)', async () => {
+            const { prisma } = given({ actor: accountAdminOfB, assignedIn: [E1] })
+
+            await assertForbidden(() => update({ subModuleIds: [PROJECT_VISION.id], permissionIds: [] }))
+            expect(prisma.role.findMany).not.toHaveBeenCalled()
+          })
         })
       })
 

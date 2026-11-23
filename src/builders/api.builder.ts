@@ -229,7 +229,12 @@ export async function renderApiApp({
   return true
 }
 
-/** Apply the external effects required to make a rendered multirepo API ready to use. */
+/**
+ * Apply the external effects required to make a rendered multirepo API ready to use.
+ *
+ * Like the monorepo root, the repository is initialised and left without a commit, which
+ * `commitBootstrap` makes once the harness and the manifest are on disk (#969).
+ */
 export async function provisionApiApp({ targetDir = '.', isMonorepo, projectName, backendRepoUrl, mainBranch, workflow }: CreateApiAppParams): Promise<void> {
   if (isMonorepo) return
   const apiPath = join(targetDir, `apps/${projectName}-api`)
@@ -240,13 +245,9 @@ export async function provisionApiApp({ targetDir = '.', isMonorepo, projectName
 
   // Best-effort: the folder may already be a repository, or git may be absent. None of
   // that makes the scaffold unusable, so it reports and carries on.
-  const workingBranch = workflow?.workingBranch
   assertGitBranchName(mainBranch)
-  if (workingBranch) assertGitBranchName(workingBranch)
+  if (workflow?.workingBranch) assertGitBranchName(workflow.workingBranch)
   runBestEffortArgv('git init (api)', 'git', ['init'], { cwd: apiPath, onSkipped: warn })
   runBestEffortArgv('git checkout (api)', 'git', ['checkout', '-b', mainBranch], { cwd: apiPath, onSkipped: warn })
   if (backendRepoUrl) runBestEffortArgv('git remote add (api)', 'git', ['remote', 'add', 'origin', backendRepoUrl], { cwd: apiPath, onSkipped: warn })
-  runBestEffortArgv('git add (api)', 'git', ['add', '.'], { cwd: apiPath, onSkipped: warn })
-  runBestEffortArgv('git commit (api)', 'git', ['commit', '-m', 'Initial commit'], { cwd: apiPath, onSkipped: warn })
-  if (workingBranch && workingBranch !== mainBranch) runBestEffortArgv('git working branch (api)', 'git', ['checkout', '-b', workingBranch], { cwd: apiPath, onSkipped: warn })
 }

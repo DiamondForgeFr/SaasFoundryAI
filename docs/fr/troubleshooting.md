@@ -114,6 +114,40 @@ dernière release : il satisfait `@<version>`, et ce sont ses templates non publ
    `--dry-run --json`.
 2. Pour utiliser le paquet publié, repérez le lien avec `npm ls -g --depth=0`, retirez-le avec `npm rm -g <nom>`, puis relancez la commande.
 
+## Le serveur de dev web dit que `shared-config` « does not provide an export named … »
+
+**Symptôme** — Dans un monorepo, `npm run dev` sert l'application web, mais une route qui importe depuis `@<projet>/shared-config` plante, et la console du navigateur affiche :
+
+```text
+Uncaught SyntaxError: The requested module '/@fs/…/packages/shared-config/dist/index.js' does not provide an export named 'STORAGE_LOGO_ALLOWED_MIMES'
+```
+
+`npm run build` fonctionne.
+
+**Cause** — `shared-config` est compilé en CommonJS, car l'API l'exige. Le serveur de dev de Vite sert un paquet de workspace lié comme du source au lieu de le regrouper : le navigateur reçoit
+`exports.X = …` et `__exportStar(require('./storage'), exports)` et ne peut pas lier un import nommé dessus. Cela échoue pour tous les noms, `SHARED_CONFIG_PLACEHOLDER` compris. Le build de production
+n'est pas touché, car son bundler résout le CommonJS. Les projets générés avant la 1.3.0 n'ont pas de table `exports` dans `packages/shared-config/package.json`.
+
+**Correction**
+
+1. Lancez `sf update`. Le rafraîchissement des templates écrit le nouveau `packages/shared-config/package.json` si vous ne l'avez pas modifié, et un sidecar `.saasfoundry.new` sinon (voir plus haut).
+   Aucune migration n'intervient et rien d'autre ne change.
+2. Ou ajoutez la table à la main dans `packages/shared-config/package.json`, à côté de `main` et `types`, puis relancez le serveur de dev :
+   ```json
+   "exports": {
+     ".": {
+       "types": "./dist/index.d.ts",
+       "browser": "./src/index.ts",
+       "default": "./dist/index.js"
+     },
+     "./package.json": "./package.json"
+   },
+   ```
+
+Vite lit alors le source TypeScript du paquet, et l'API continue de lire `dist/`. Ne contournez pas avec `optimizeDeps.include` dans `apps/web/vite.config.ts` : le serveur de dev garderait une copie
+pré-regroupée des constantes et ignorerait vos modifications jusqu'à un redémarrage avec `--force`. Si vous avez déjà ajouté ce contournement, il continue de fonctionner après la mise à jour, mais
+vous pouvez le retirer.
+
 ## Port déjà utilisé — 3000, 5173 ou 5435
 
 **Symptôme**
@@ -151,15 +185,19 @@ ou la vérification de formatage en lecture seule échoue sur l'index Git.
 
 **Contrôles**
 
-| Hook         | Contrôle                                                                                                 |
-| ------------ | -------------------------------------------------------------------------------------------------------- |
-| `commit-msg` | `commitlint` : `<type>(#<ticket>): <description>`                                                        |
-| `pre-commit` | `npm run test:staged`, validation ciblée et en lecture seule de l'index Git                              |
-| `pre-push`   | cohérence RC/tag et vérifications WIP ; les cycles Docker sont lancés explicitement pendant `AI testing` |
+| Hook         | Contrôle                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `commit-msg` | `commitlint` : `<type>(#<ticket>): <description>`, le ticket étant un numéro                                                                                 |
+| `pre-commit` | le garde-fou de branche du workflow, puis `npm run test:staged`, validation ciblée et en lecture seule de l'index Git                                        |
+| `pre-push`   | le garde-fou de branche sur chaque branche poussée, cohérence RC/tag et vérifications WIP ; les cycles Docker sont lancés explicitement pendant `AI testing` |
 
 **Correction**
 
-- Utilisez un message comme `feat(#317): calibrate SRS intent detector`.
+- Utilisez un message comme `feat(#317): calibrate SRS intent detector`. Le ticket est un numéro : `fix(#TBD): …` échoue sur la règle `ticket-reference`. Créez d'abord le ticket.
+- **`Workflow branch guard (#1232): commit refused on "…"`** (ou `push refused`) : la branche n'est pas l'une de celles que nomme le workflow, à savoir `.saasfoundry.json` → `workflow.branchNaming`
+  (`feature/{N}-…`, `fix/{N}-…`, `rc-{version}`) et les branches principale, de travail et de release. Renommez-la d'après son ticket : `git branch -m fix/<N>-<description>`. Un HEAD détaché et une
+  branche `worktree-agent-<id>` committent librement et sont contrôlés au push : poussez-les vers la branche du ticket, `git push origin HEAD:fix/<N>-<description>`. Pour une branche ponctuelle et
+  voulue, le développeur pose `SF_WORKFLOW_BYPASS_BRANCH_GUARD=1` le temps d'une commande (voir les échappatoires du [système de workflow](guide/workflow-system.md#echappatoires)).
 - Si Prettier signale un écart, exécutez `npm run format`, inspectez et indexez les modifications, puis relancez le commit. Le hook ne réécrit pas les fichiers.
 - Corrigez les erreurs ESLint ou TypeScript, puis recommencez.
 - N'utilisez pas `--no-verify` pour contourner une erreur ordinaire.

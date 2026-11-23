@@ -1,8 +1,11 @@
 # Check if we're on a release candidate branch (rc-*)
-current_branch=$(git symbolic-ref --short HEAD)
-if [[ ! "$current_branch" =~ ^rc- ]]; then
-  exit 0
-fi
+# A detached HEAD (every rebase step) is no rc-* branch: exit 0 rather than fail the commit.
+current_branch=$(git symbolic-ref --short -q HEAD) || exit 0
+# Husky runs hooks with sh (dash on most Linux images): match the branch with a POSIX case, no bash-only test.
+case "$current_branch" in
+  rc-*) ;;
+  *) exit 0 ;;
+esac
 
 # Skip version bump prompt for WIP commits
 if grep -q "WIP" "$1"; then

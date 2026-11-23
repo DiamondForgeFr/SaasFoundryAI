@@ -67,7 +67,7 @@ three surfaces (`srs`, `tickets`, `codeComments`). `sf status --claude-friendly`
 | Reach full / add modules | `sf update --non-interactive [--target-profile full] [--add-modules …]` | Read `sf status --json --no-network` first (Phase 2D) |
 | Inspect project state | `scripts/read-project.sh` (`sf status --json --no-network` + manifest + catalogue) | Pure read, no mutation (Phase 2E) |
 | File a module request | `sf feedback request "<slug>" --description "…"` | Checks dedup automatically |
-| Report a bug | `sf feedback bug --source cli\|scaffold --title "…" --description "…" [--auto-repro]` | `--auto-repro` embeds `.saasfoundry.json` |
+| Report a bug | `sf feedback bug --source cli\|scaffold --title "…" --description "…" [--auto-repro]` | `--auto-repro` embeds a bounded, redacted excerpt of `.saasfoundry.json` |
 | List open feedback | `sf feedback list [--status open\|closed\|all] [--mine] [--json]` | 3-label fan-out: module-request, cli-bug, scaffold-bug |
 | Rank module requests | `sf feedback vote --list [--limit N] [--stack-filter <term>]` | Ranked by 👍 |
 | Cast a vote | `sf feedback vote <n> up\|down` | Recorded in `~/.saasfoundry/preferences.json` |
@@ -334,6 +334,11 @@ Full specification: `reference/new-flags.json`. Essentials:
 - **Always required:** `projectName` (kebab-case), `structure` (`monorepo` | `multirepo`)
 - **Recommended to set explicitly:** `mainBranch`, `dbSetup`, `emailService`, `analytics`
 - **Only set when user opts in:** `advancedSkills` (CSV of `context7`, `atlassian`, `notion`, `figma`) and their credential fields; `agents` (CSV of registered coding-tool IDs) when the user wants an explicit multi-agent declaration
+- **Output language:** `language` (`--language`, a BCP-47 tag, default `en`) is the language the AI writes the project's SRS pages, tickets and code comments in. Set it when the user wants those artefacts in another language than English; it does not translate the generated app.
+- **Ports:** `apiPort` / `webPort` (`--api-port` / `--web-port`). Omitted, `sf new` takes the first free port from 3500 and 5173. An explicit port is honoured or refused when it is taken, never moved, so set one only when the user needs that exact port.
+- **Tools:** `tracker` (`github-projects`, `jira`, `notion`, `linear`, `none`), `docs` (`notion`, `confluence`, `local-markdown`, `none`) and `design` (CSV of `figma`, `miro`) record the project's entry-point tools in the manifest. `local-markdown` keeps the docs in the repository, with no remote service.
+- **`noNetwork`** (`--no-network`) skips the live connection checks of the selected tools and verifies only that their credentials are present. Those checks run only in an interactive session, so it changes nothing on the `--non-interactive` command `plan-new.sh` renders. It is not an offline mode: the generated project's dependencies are still installed from the npm registry.
+- **The table is the CLI.** `reference/new-flags.json` is checked against the Commander definition of `sf new` by a spec, in both directions: a flag the CLI accepts is in the table, and the table holds no flag the CLI refuses.
 - **Secrets** (marked `"secret": true` in the manifest): never echo them back, never log them. For Notion SRS bootstrap, keep `notionApiToken` out of the intent entirely and have the user provide `NOTION_API_TOKEN` in the CLI environment.
 
 ### Recommendation rules
@@ -687,7 +692,7 @@ When something goes wrong — a `sf` command exits non-zero, a generated project
 
 ### Auto-repro payload
 
-`sf feedback bug --auto-repro` collects a repro envelope for free: CLI version, Node version, platform, `.saasfoundry.json` contents. The skill's job is to **supplement** that envelope with the captured failure evidence:
+`sf feedback bug --auto-repro` collects a repro envelope for free: CLI version, Node version, platform, and a bounded, redacted **excerpt** of `.saasfoundry.json`, never the file itself (a full project's manifest is past GitHub's 65,536-character limit for an issue body, almost all of it `fileHashes`). The excerpt carries the derived profile, structure, versions, language, every module with its choices, the workflow's tool, preset, branches and status names, and the SRS flags; `fileHashes` and `unmanagedPaths` are counted, and URLs, SRS page ids, account names and file paths are left out. The command measures the whole body against the limit before it calls GitHub and fails with the lengths, without sending anything, when the description leaves no room: shorten the description or drop `--auto-repro` rather than pasting the manifest yourself. The skill's job is to **supplement** that envelope with the captured failure evidence:
 
 - The exact command that was run (or the trigger action, for user-initiated reports)
 - The exit code when available

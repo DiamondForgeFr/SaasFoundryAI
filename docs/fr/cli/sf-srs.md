@@ -119,8 +119,10 @@ pour que vous mettiez son corps à jour à la main.
 
 ### Générer des tickets
 
-L'option `--milestone` de `spawn` **déclare la release dans laquelle ces tickets seront livrés** : le milestone est créé ou réutilisé, la page de version lui est associée et tous les tickets générés
-le rejoignent.
+L'option `--milestone` de `spawn` **déclare la release dans laquelle ces tickets seront livrés** : le milestone est créé ou réutilisé, la page de version lui est associée et les Stories de
+l'exécution, créées ou réutilisées, le rejoignent. Un Epic créé par l'exécution le rejoint aussi. Un Epic qui existe déjà, passé avec `--ticket` ou retrouvé d'une exécution précédente, garde son
+milestone : un Epic peut couvrir plusieurs releases, et seules ses Stories en portent une. Le dry run l'annonce, et depuis la 1.3.0 `spawn` ne déplace plus l'Epic
+([#1119](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1119)).
 
 L'option `--complexity <niveau>` de `spawn` étiquette chaque Story créée dont la page FR n'indique pas de complexité (`bug`, `low`, `medium` ou `complex`) ; la complexité de la page FR l'emporte. Le
 résumé liste les Stories restées sans complexité, que le workflow refuse de sortir du Backlog.
@@ -132,10 +134,19 @@ atteint cette limite, `spawn` attend 60 secondes puis réessaie, jusqu’à troi
 
 `spawn` réutilise le ticket qui porte déjà la page canonique d’une FR, avec ou sans `--reconciliation-plan`. Un ticket fermé est réutilisé tel quel et jamais rouvert, un ticket fermé comme « not
 planned » (la façon de fermer un doublon) est ignoré, et une FR sans ticket est créée. Deux candidats pour une même FR, ou un candidat qui appartient à un autre parent, arrêtent l’exécution avec le
-code `10` avant que quoi que ce soit ne soit écrit. Sans `--ticket`, l’Epic de version ouvert qu’une exécution précédente a créé est adopté au lieu d’être recréé.
+code `10` avant que quoi que ce soit ne soit écrit. Sans `--ticket`, l’Epic de version ouvert qu’une exécution précédente a créé est adopté au lieu d’être recréé : `spawn` le reconnaît au lien vers la
+page de version qu’il a écrit dans le corps de l’Epic, puis à son titre `<feature> - <version>`, si bien qu’une page de version renommée entre deux exécutions garde son Epic. Quand les Stories
+dépendent d’un Epic que `spawn` ne reconnaît pas, par exemple un Epic créé à la main, l’exécution s’arrête et nomme cet Epic : passez `--ticket <n>` si c’est bien celui de la version.
 
-`--dry-run` affiche une ligne par FR : `reuse #N`, `reuse #N (closed)`, `create`, ou `blocked — <raison>` (une FR bloquée fait aussi sortir le dry run avec le code `10`). Un doublon déjà créé se
-détache de son Epic avec `workflow-cli.sh unlink-subtask <epic> <doublon>` ; fermez-le comme « not planned » et chaque `spawn` suivant l’ignore.
+#### Relancer spawn après l’ajout d’une FR
+
+Ajouter une FR à une version déjà générée ne demande aucun plan de réconciliation : relancez le même `spawn`. Les Stories qui existent déjà sont signalées et laissées telles quelles, et seule la Story
+de la nouvelle FR est créée, sous le même Epic. Une troisième exécution ne crée rien.
+
+`--dry-run` le montre avant toute écriture. La première ligne compte les FR, `5 FR page(s): 1 new, 3 already ticketed`, la liste `•` ne nomme que les Stories que l’exécution crée, et chaque FR a sa
+ligne : `exists #N, skipped`, `exists #N (closed), skipped`, `new`, ou `blocked — <raison>` (une FR bloquée fait aussi sortir le dry run avec le code `10`).
+`exists #N, skipped (linked under the delivery parent)` signale une Story sans parent, qui rejoint l’Epic au lieu d’être recréée. Un doublon déjà créé se détache de son Epic avec
+`workflow-cli.sh unlink-subtask <epic> <doublon>` ; fermez-le comme « not planned » et chaque `spawn` suivant l’ignore.
 
 ## Options communes
 

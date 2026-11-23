@@ -323,10 +323,14 @@ describe('the delegation ledger (#1035)', () => {
       // lock; on a loaded machine some do not (#1205: 23 of 30 in the file). Either way no line is lost or torn.
       expect(results.every((result) => result.status === 'appended' || result.status === 'spooled')).toBe(true)
       const spooledCount = results.filter((result) => result.status === 'spooled').length
+      // A writer still waiting for the lock drains what an earlier one spooled, so the spool ends with at most the
+      // lines spooled after the last drain (#1240: 3 spooled, all 30 already in the file). Every writer is done here:
+      // each line is in exactly one of the two places.
       const lines = (await readFile(join(dir, 'delegations.jsonl'), 'utf8')).trim().split('\n')
-      expect(lines).toHaveLength(30 - spooledCount)
+      const left = await readdir(join(dir, 'delegations.spool')).catch(() => [] as string[])
+      expect(left.length).toBeLessThanOrEqual(spooledCount)
+      expect(lines.length + left.length).toBe(30)
       expect(lines.every((line) => JSON.parse(line).type === 'run')).toBe(true)
-      expect(await readdir(join(dir, 'delegations.spool')).catch(() => [])).toHaveLength(spooledCount)
       expect((await readLedger(dir)).runs).toHaveLength(30)
 
       // The next writer merges the spool: the file then holds every line, whole.
@@ -362,6 +366,48 @@ describe('the delegation ledger (#1035)', () => {
       const lines = (await readFile(join(dir, 'delegations.jsonl'), 'utf8')).trim().split('\n')
       expect(lines).toHaveLength(2)
       expect((await readLedger(dir)).runs).toHaveLength(2)
+    })
+
+    it('keeps the facts a spooled second sighting adds once the next writer drains the spool (#1240)', async () => {
+      const stop = buildRunRecord(run({ eventKey: 'claude-code:late', durationMs: null, tokens: null, outcome: undefined }))
+      await appendRun(dir, stop)
+      const lock = join(dir, 'delegations.lock')
+      await writeFile(lock, `${process.pid}:live-token`)
+      const enriched = buildRunRecord(run({ eventKey: 'claude-code:late', durationMs: 90_000, outcome: 'pass' }))
+      expect(await appendRun(dir, enriched, { waitMs: 60 })).toMatchObject({ status: 'spooled', id: stop.id })
+      expect((await readLedger(dir)).runs[0]).toMatchObject({ durationMs: 90_000, outcome: 'success' })
+      await rm(lock)
+      await appendRun(dir, buildRunRecord(run({ eventKey: 'next', at: at(1) })))
+      expect(await readdir(join(dir, 'delegations.spool'))).toHaveLength(0)
+      // The drain used to drop it on its id, because the file already held that run: the facts were gone.
+      expect((await readLedger(dir)).runs.find((entry) => entry.id === stop.id)).toMatchObject({ durationMs: 90_000, outcome: 'success' })
+    })
+
+    it('spools through a name readers ignore, and never deletes a spool file it could not read whole (#1240)', async () => {
+      await mkdir(join(dir, 'delegations.spool'), { recursive: true })
+      // A writer of an older CLI between the creation of its spool file and its write.
+      const inFlight = join(dir, 'delegations.spool', '0-run-in-flight.json')
+      await writeFile(inFlight, '')
+      const lock = join(dir, 'delegations.lock')
+      await writeFile(lock, `${process.pid}:live-token`)
+      await appendRun(dir, buildRunRecord(run({ eventKey: 'spooled' })), { waitMs: 60 })
+      const names = await readdir(join(dir, 'delegations.spool'))
+      expect(names).toHaveLength(2)
+      expect(names.every((name) => name.endsWith('.json'))).toBe(true)
+      await rm(lock)
+      await appendRun(dir, buildRunRecord(run({ eventKey: 'next', at: at(1) })))
+      expect(await readdir(join(dir, 'delegations.spool'))).toEqual(['0-run-in-flight.json'])
+      expect((await readLedger(dir)).runs).toHaveLength(2)
+    })
+
+    it('counts once a line a reader finds both in the spool and in the file (a drain between its two reads)', async () => {
+      const record = buildRunRecord(run())
+      await appendRun(dir, record)
+      const signal = buildSignalRecord({ target: { run: record.id }, signal: 'rework', at: at(5) })
+      await appendSignal(dir, signal)
+      await mkdir(join(dir, 'delegations.spool'), { recursive: true })
+      await writeFile(join(dir, 'delegations.spool', `0-signal-${signal.id}.json`), JSON.stringify(signal))
+      expect((await readLedger(dir)).runs[0].signals).toHaveLength(1)
     })
 
     it('breaks a lock that is far too old even when its pid looks alive (the pid may have been reused)', async () => {
@@ -523,6 +569,38 @@ describe('the delegation ledger (#1035)', () => {
       expect(() => buildStatusRecord({ ticket: 0, status: 'Done' })).toThrow(LedgerValidationError)
       expect(() => buildRouteRecord({ taskKind: 'tests', provider: 'gemini-cli' as never, tier: 'build', trial: false })).toThrow('provider')
       expect(foldLedger(entries).statuses).toHaveLength(1)
+    })
+  })
+
+  // FR-MAH-021: the provider list is the one the profiles declare, so a route and a run for Kimi Code are as valid as any other
+  describe('Kimi Code, a routed agent with no capture hook', () => {
+    const kimiRun = (overrides: Partial<RunInput> = {}) => run({ host: 'manual', provider: 'kimi', tier: 'build', model: 'k3.1-pro', effort: 'high', ...overrides })
+
+    it('keeps a route record for kimi and the run that echoed it, and replays them', async () => {
+      const route = buildRouteRecord({ taskKind: 'multi-file-feature', provider: 'kimi', tier: 'build', trial: false, ticket: 1286, complexity: 'medium', now: new Date(T0) })
+      expect(route).toMatchObject({ provider: 'kimi', tier: 'build', ticket: 1286 })
+      const claimed = buildRunRecord(kimiRun({ route: route.id }))
+      await writeFile(join(dir, 'delegations.jsonl'), `${[route, claimed].map((entry) => JSON.stringify(entry)).join('\n')}\n`)
+      const state = await readLedger(dir)
+      expect(state.skipped).toBe(0)
+      expect(state.routes).toEqual([{ ...route, consumedBy: claimed.id }])
+      expect(state.runs[0]).toMatchObject({ provider: 'kimi', host: 'manual', tier: 'build', candidate: { model: 'k3.1-pro', effort: 'high' }, route: route.id })
+      expect(await findRoute(dir, route.id)).toMatchObject({ id: route.id, provider: 'kimi' })
+    })
+
+    it('leaves a Kimi model without a cost, never a guess, until the project declares its rate', () => {
+      expect(buildRunRecord(kimiRun()).cost).toBeNull()
+      expect(buildRunRecord(kimiRun(), { prices: { 'k3.1-pro': { input: '1.00', output: '2.00' } } }).cost).toEqual({ amount: '0.14000000', currency: 'USD' })
+    })
+
+    it('has no capture hook, so no run names kimi as its host: the session records it by hand', () => {
+      expect(() => buildRunRecord(kimiRun({ host: 'kimi' as never }))).toThrow('host must be claude-code, codex, manual')
+      expect(buildRunRecord(kimiRun()).host).toBe('manual')
+    })
+
+    it('still refuses a provider that is not routed, and names the routed ones', () => {
+      expect(() => buildRunRecord(kimiRun({ provider: 'kimi-code' }))).toThrow('provider must be a routed coding agent (claude-code, codex, kimi)')
+      expect(() => buildRouteRecord({ taskKind: 'tests', provider: 'kimi-code' as never, tier: 'build', trial: false })).toThrow('provider must be a routed coding agent (claude-code, codex, kimi)')
     })
   })
 

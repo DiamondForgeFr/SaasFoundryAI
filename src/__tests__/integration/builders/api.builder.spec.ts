@@ -7,7 +7,7 @@ import childProcess from 'node:child_process'
 
 import { createApiApp } from '../../../builders/api.builder'
 import { apiParams } from '../../helpers/fixtures'
-import { expectFileExists, expectFileContains, expectNoTodoMarkers, expectTodoMarkersPresent } from '../../helpers/assertions'
+import { expectFileExists, expectFileContains, expectNoTodoMarkers, expectTodoMarkersPresent, gitCommandsRun } from '../../helpers/assertions'
 
 describe('createApiApp (integration)', () => {
   let tempDir: string
@@ -85,6 +85,13 @@ describe('createApiApp (integration)', () => {
       await createApiApp(apiParams())
 
       expect(spawnSpy).toHaveBeenCalledWith('git', ['init'], expect.objectContaining({ shell: false }))
+    })
+
+    // #969 — the harness and the manifest are written after this builder, so a commit made here left them untracked
+    it('should initialise the repository and leave the first commit to sf new', async () => {
+      await createApiApp(apiParams({ backendRepoUrl: 'https://github.com/test/api.git', workflow: { tool: 'none', workingBranch: 'develop' } }))
+
+      expect(gitCommandsRun(spawnSpy)).toEqual(['init', 'checkout -b', 'remote add'])
     })
 
     it('should replace saasfoundry-network with project-network in docker files', async () => {

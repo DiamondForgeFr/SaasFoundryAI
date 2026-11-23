@@ -33,6 +33,18 @@ sf workflow [subcommand] [args...]
 sf workflow show
 ```
 
+Elle se termine par les statuts du workflow, par leur nom, dans l'ordre et l'orthographe de `workflow.statuses` (avant la 1.3.0, chacun s'affichait `[object Object]`) :
+
+```text
+📊 Workflow Statuses
+
+  1. Backlog
+  2. In progress
+  3. AI testing
+  4. In review
+  5. Done
+```
+
 ```bash
 # Utiliser un modèle existant
 sf workflow use my-template
@@ -77,6 +89,34 @@ Team sépare la validation fonctionnelle (`Human testing`) de la revue de code (
 statuts, mais la v1 ne génère ni documents complets ni garde-fous arbitraires pour de nouveaux noms. Étendez le skill installé avant d'en faire un contrat de livraison.
 
 `sf workflow validate` contrôle les champs locaux du manifeste en v1 ; il ne compare pas le board distant configuré.
+
+### Changer de modèle (`use`)
+
+`sf workflow use solo` et `sf workflow use saasfoundry` font passer un projet d'un preset intégré à l'autre, sur place. Le changement part du bloc `workflow` actuel du projet et ne remplace que :
+
+- `template`, `statuses` et `issueTypes`, repris du preset ;
+- `validated`, remis à `false` ;
+- `projectUrl`, quand `--project-url` ou `--create-board` rattache un autre board, ou quand l'outil change.
+
+Tous les autres champs que le projet déclare sont conservés, en particulier `workingBranch`, `prTargetBranch`, `releaseBranch`, `localCi.requiredStatuses`, `requireCodeReview`, `branchNaming` et
+`commitFormat`. Un modèle enregistré (`sf workflow save`) remplace aussi l'outil et les conventions de branche, de revue et de commit qu'il contient ; il ne retire jamais un champ qu'il ne porte pas.
+
+Un statut que le projet nomme déjà avec une autre casse garde l'orthographe du projet : un board dont les options s'écrivent `In progress`, `AI testing` et `In review` les garde, et le manifeste
+aussi, bien que les presets les écrivent `In Progress`, `AI Testing` et `In Review`. Les noms de statuts se comparent partout sans tenir compte de la casse : la mise à jour du board compare ses
+options ainsi, et `update-status` passe la cible en minuscules avant chaque garde-fou et trouve l'option du board sans tenir compte de la casse : les deux orthographes déplacent un ticket de la même
+façon.
+
+Hors du manifeste, un changement sur un projet qui a déjà un workflow ne touche que le skill `sf-workflow` et le board :
+
+- le dossier `statuses/` du skill contient les documents du nouveau preset, et rien d'autre. Un document du preset précédent est supprimé s'il contient encore les octets écrits par la CLI (sa
+  référence dans `fileHashes`, ou une version livrée) ; un document que vous avez modifié est renommé `<nom>.saasfoundry.old`, que la CLI du workflow ne lit jamais, et la commande le nomme. Un
+  document qu'aucun preset ne livre, écrit pour un statut à vous, reste où il est ;
+- `SKILL.md` nomme les documents de rédaction du preset installé (`2a`–`2c` en Solo, `3a`–`3c` en Team) ;
+- la section « Workflow System » d'`AGENTS.md` est rafraîchie quand le fichier en a une, et jamais ajoutée ; l'écouteur de revue de PR n'est déposé que quand le projet passe à GitHub Projects ;
+- un projet qui suit son harness dans `fileHashes` reçoit les références des fichiers écrits et perd celles des documents partis.
+
+La copie partagée sous `.agents/skills/sf-workflow` suit avec `sf agents refresh --scope shared`, qui applique la même règle à chaque skill projeté : une copie que le rafraîchissement n'écrit plus est
+supprimée avec sa référence quand elle contient les octets enregistrés, et conservée, puis nommée dans un avertissement à chaque rafraîchissement, quand vous l'avez modifiée.
 
 ### Garde-fou de CI locale (`set-local-ci`)
 

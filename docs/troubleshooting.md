@@ -118,6 +118,39 @@ last release, so it satisfies `@<version>`, and its unreleased templates are use
 1. Run `sf --version`. A checkout names itself — `1.0.0 (development checkout: <path> @ <commit>)` — and so do the `sf update` header and the `cliChannel` field of the `--dry-run --json` report.
 2. To use the published package, find the link with `npm ls -g --depth=0`, remove it with `npm rm -g <name>`, and run the command again.
 
+## The web dev server says `shared-config` "does not provide an export named …"
+
+**Symptom** — In a monorepo, `npm run dev` serves the web app, but a route that imports from `@<project>/shared-config` crashes, and the browser console says:
+
+```
+Uncaught SyntaxError: The requested module '/@fs/…/packages/shared-config/dist/index.js' does not provide an export named 'STORAGE_LOGO_ALLOWED_MIMES'
+```
+
+`npm run build` works.
+
+**Cause** — `shared-config` is compiled to CommonJS, because the API requires it. Vite's dev server serves a linked workspace package as source instead of bundling it, so the browser receives
+`exports.X = …` and `__exportStar(require('./storage'), exports)` and cannot link a named import against it. It fails for every name, including `SHARED_CONFIG_PLACEHOLDER`. The production build is not
+affected, because its bundler resolves CommonJS. Projects generated before 1.3.0 have no `exports` map in `packages/shared-config/package.json`.
+
+**Fix**
+
+1. Run `sf update`. The template refresh writes the new `packages/shared-config/package.json` when you have not edited it, and a `.saasfoundry.new` sidecar when you have (see above). No migration is
+   involved and nothing else changes.
+2. Or add the map to `packages/shared-config/package.json` by hand, next to `main` and `types`, and restart the dev server:
+   ```json
+   "exports": {
+     ".": {
+       "types": "./dist/index.d.ts",
+       "browser": "./src/index.ts",
+       "default": "./dist/index.js"
+     },
+     "./package.json": "./package.json"
+   },
+   ```
+
+Vite then reads the TypeScript source of the package, and the API keeps reading `dist/`. Do not work around it with `optimizeDeps.include` in `apps/web/vite.config.ts`: the dev server would keep a
+pre-bundled copy of the constants and ignore your edits until it restarts with `--force`. If you already added that workaround, it keeps working after the update, but you can remove it.
+
 ## Port already in use (3000 / 5173 / 5435)
 
 **Symptom**
@@ -170,15 +203,20 @@ Code style issues found in the above file(s). Run Prettier with --write to fix.
 
 **Cause** — Three Husky hooks gate every commit:
 
-| Hook         | What it checks                                                                                  |
-| ------------ | ----------------------------------------------------------------------------------------------- |
-| `commit-msg` | `commitlint` — `<type>(#<ticket>): <description>` shape                                         |
-| `pre-commit` | `npm run test:staged` — impact-selected, read-only staged validation                            |
-| `pre-push`   | RC version/tag availability validation and WIP checks; Docker runs explicitly during AI Testing |
+| Hook         | What it checks                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commit-msg` | `commitlint` — `<type>(#<ticket>): <description>` shape, the ticket a number                                                                      |
+| `pre-commit` | the workflow branch guard, then `npm run test:staged` — impact-selected, read-only staged validation                                              |
+| `pre-push`   | the workflow branch guard on every pushed branch, RC version/tag availability validation and WIP checks; Docker runs explicitly during AI Testing |
 
 **Fix**
 
-- **commitlint failure** — Rewrite the commit message with the right shape: `feat(#317): SRS calibration` etc. The ticket scope is required.
+- **commitlint failure** — Rewrite the commit message with the right shape: `feat(#317): SRS calibration` etc. The ticket scope is required, and it is a number: `fix(#TBD): …` fails the
+  `ticket-reference` rule. Create the ticket first.
+- **`Workflow branch guard (#1232): commit refused on "…"`** (or `push refused`) — The branch is not one the workflow names: `.saasfoundry.json` → `workflow.branchNaming` (`feature/{N}-…`,
+  `fix/{N}-…`, `rc-{version}`), the main, working and release branches. Rename it after its ticket, `git branch -m fix/<N>-<description>`. A detached HEAD and a `worktree-agent-<id>` branch commit
+  freely and are checked at push: push them to the ticket branch, `git push origin HEAD:fix/<N>-<description>`. For a deliberate one-off branch, the developer sets `SF_WORKFLOW_BYPASS_BRANCH_GUARD=1`
+  for one command (see the escape hatches of the [workflow system](guide/workflow-system.md#escape-hatches)).
 - **Prettier check failed** — Run `npm run format`, inspect the changes, stage them, and create the commit again. The hook itself never rewrites files.
 - **ESLint / TS error** — Read the output, fix the reported line, re-stage, re-commit. `--no-verify` exists but every reviewer will ask why.
 

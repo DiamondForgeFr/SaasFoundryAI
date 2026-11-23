@@ -155,17 +155,13 @@ This skill uses Jira's REST API v3.
 
 The workflow skill (`sf-workflow`) delegates to this tool skill when the project uses Jira:
 
-```bash
-# workflow-cli.sh reads .saasfoundry.json
-TOOL=$(jq -r '.workflow.tool' .saasfoundry.json)
+`workflow-cli.sh` reads the tool from the manifest:
 
-# If tool is "jira", delegate to this CLI
-case "$TOOL" in
-  jira)
-    sf-tool-jira/jira-cli.sh "$@"
-    ;;
-esac
+```bash
+jq -r '.workflow.tool' .saasfoundry.json
 ```
+
+When it prints `jira`, `workflow-cli.sh` delegates the call to this tool's CLI, `sf-tool-jira/jira-cli.sh`, with the same arguments.
 
 ## Requirements
 

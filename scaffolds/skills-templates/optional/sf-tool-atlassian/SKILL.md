@@ -50,7 +50,7 @@ Confluence: dnascript.atlassian.net/wiki/.../pages/12345  -> confluence page 123
 
 ## Handling large JSON output
 
-Pipe through `python3 -m json.tool` for pretty-print, or `python3 -c` to extract fields.
+Pipe through `python3 -m json.tool` for pretty-print, or through `jq` to extract fields (never an inline `python3 -c` script: the guard hook refuses it).
 
 ## Gotchas
 - JQL values with spaces must be quoted: `status = "In Progress"`

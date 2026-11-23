@@ -59,14 +59,14 @@ describe('Organizations Module (e2e)', () => {
 
     prismaService = moduleRef.get<PrismaService>(PrismaService)
 
-    // Set up test user with necessary roles and permissions
+    // Set up test user with necessary roles. The seeded account-admin role already grants
+    // ORGANIZATION_CREATION and ORGANIZATION_UPDATE: no extra `permissions` needed.
     testUser = await setupTestUser(prismaService, {
       email: 'orgtest@billmate.test',
       password: 'TestPassword123',
       firstname: 'Organization',
       lastname: 'Manager',
-      roles: ['account-user', 'account-admin'],
-      permissions: ['ORGANIZATION_CREATION', 'ORGANIZATION_UPDATE']
+      roles: ['account-user', 'account-admin']
     })
 
     await app.init()

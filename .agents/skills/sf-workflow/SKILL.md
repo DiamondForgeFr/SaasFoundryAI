@@ -1,6 +1,6 @@
 ---
 name: sf-workflow
-description: "Development workflow of this project (SaaSFoundry AI): ticket statuses and their guards, complexity labels (bug, low, medium, complex), branches and pull requests, driven through workflow-cli.sh. Read it before any ticket status change. Triggers on \"workflow status\", \"check workflow\", \"what should I do\", \"next step\", \"workflow help\", \"current status\", \"complexity\", \"detect complexity\"."
+description: "Development workflow of this project (SaaSFoundry Solo): ticket statuses and their guards, complexity labels (bug, low, medium, complex), branches and pull requests, driven through workflow-cli.sh. Read it before any ticket status change. Triggers on \"workflow status\", \"check workflow\", \"what should I do\", \"next step\", \"workflow help\", \"current status\", \"complexity\", \"detect complexity\"."
 ---
 
 ## Execution capabilities
@@ -15,8 +15,12 @@ Run preconditions explicitly, and stop to report a missing capability when no eq
 When a workflow step names a task kind, resolve its tier with
 `sf agents route --task <kind> --provider <current-agent>` and delegate the step to the
 `sf-<tier>` agent it names: that agent carries its own model and effort, so never name a
-model or an effort yourself. When the route fails or the agent cannot delegate, run the step
-in the session.
+model or an effort yourself. The one exception is a route that prints `alias <name>` (Kimi Code
+binds no model in an agent file): pass that alias, copied from the route and never composed, as
+the `model` of the delegation call. When the route fails or the agent cannot delegate, run the
+step in the session: a refused or failed route is never worked around by starting another coding
+agent's CLI (`claude`, `codex`, or any other) or a background session of another host, and a host
+with no worktree support delegates sub-tasks only, through its own native sub-agent tool.
 Never bypass CLI guards, required approvals, tests or workflow status exit conditions.
 An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook
 refuses an agent call that sets one.
@@ -55,7 +59,7 @@ the merge, then remove the completed worktree and local branch only when they ar
 longer in use. Never remove or overwrite user-owned worktrees, branches, uncommitted changes,
 stashes or credentials implicitly.
 
-# Workflow SaaSFoundry AI
+# Workflow SaaSFoundry Solo
 
 Complexity-adaptive development workflow with GitHub Projects (GitHub Projects, Jira, Notion, Linear, etc.)
 
@@ -91,16 +95,21 @@ Orthogonal to complexity. Controls whether **Human Testing** and **In Review** a
 
 **Default** — if a ticket has no `nature:*` label, the workflow treats it as `user-facing` (safe default).
 
-**Why this exists** — Human Testing is theatrical on tickets with no user-visible surface (the docker tests + lint + tsc already cover the integration risk). And `In Review` on a bundled child is a
-board lie: there is no PR to review at child level — the delivery parent's PR carries the merge ceremony. Bundled children go AI Testing → Done directly.
+**Under the Solo preset** (this repository: `Backlog → In progress → AI testing → In review → Done`) the workflow declares no Human Testing status, so the axis has no testing step to skip:
+`AI Testing → In Review` needs no `nature:*` label, whatever the ticket is, and the human gate is the pull request review. The axis then matters for `nature:bundled-pr` only, which still goes
+`AI Testing → Done`. The rows above describe a workflow that declares Human Testing.
+
+**Why this exists** — Human Testing is theatrical on tickets with no user-visible surface (the existing tests + lint + typecheck already cover the integration risk). And `In Review` on a bundled child
+is a board lie: there is no PR to review at child level — the delivery parent's PR carries the merge ceremony. Bundled children go AI Testing → Done directly.
 
 **Delivery-parent Human Testing** — when a delivery parent contains `nature:bundled-pr` children, the meaningful manual validation happens on the delivery parent's PR after all children are validated.
 An Epic only groups delivery parents and never owns this PR.
 
 **Guards** (all enforced by `update-status`):
 
-- **Nature guard** on `→ In Review` from `AI Testing` — requires `nature:internal`. `nature:bundled-pr` is rejected here (must go to `Done` instead). Default (no label / `user-facing`) must go through
-  Human Testing first. Only the developer labels a ticket `nature:internal`. Escape hatch: the developer's (see [escape-hatches.md](escape-hatches.md)).
+- **Nature guard** on `→ In Review` from `AI Testing` — on a workflow that declares Human Testing, requires `nature:internal`; without that status (Solo) it asks for no label. `nature:bundled-pr` is
+  rejected here either way (must go to `Done` instead). With Human Testing, the default (no label / `user-facing`) must go through Human Testing first. Only the developer labels a ticket
+  `nature:internal`. Escape hatch: the developer's (see [escape-hatches.md](escape-hatches.md)).
 - **PR-state guard** — `→ Human Testing` requires an open draft PR; `→ In Review` requires an open non-draft PR. Unknown PR state blocks these transitions. Epic groupers without a PR keep their
   derived lifecycle. Escape hatch: the developer's.
 - **Pushed-commits guard** — `→ AI Testing` requires the ticket's work committed and pushed to `origin`, read from git in the checkout that holds it (the ticket branch, a bundled child's parent
@@ -108,7 +117,8 @@ An Epic only groups delivery parents and never owns this PR.
   to run; untracked files only warn. Escape hatch: the developer's.
 - **Local CI guard** — `→ Human Testing` requires the project's required local CI statuses green on the exact head commit of the draft PR: `workflow.localCi.requiredStatuses` when recorded
   (`sf workflow set-local-ci`), otherwise `local-<job>` for each job of `.molten/project.json` when it publishes to GitHub, otherwise the `AI testing / Local CI` status published with
-  `workflow-cli.sh ai-status <ticket> "Local CI" success`. The refusal names the source and the command to run. Escape hatch: the developer's, recorded on the PR.
+  `workflow-cli.sh ai-status <ticket> "Local CI" success`. The refusal names the source and the command to run. Escape hatch: the developer's, recorded on the PR. Without a Human Testing status (Solo)
+  there is no such move: `create-pr` (without `--draft`) and `ready-pr` apply the same gate to the pull request head, and `local-ci-gate <ticket>` runs it on its own.
 - **Nature guard** on `→ Done` from `AI Testing` — allowed **only** for `nature:bundled-pr` (everyone else must go through `In Review` first). Whether a ticket is bundled in its parent's PR is the
   developer's call. Escape hatch: the developer's.
 - **PR-merged guard** on `→ Done` — normal delivery tickets require a matching PR verified merged into the working branch. Aggregate Epics and verified `nature:bundled-pr` children are exempt because
@@ -119,10 +129,53 @@ legitimate and illegitimate uses, and the record to leave. An agent never sets o
 call that sets a hatch, labels the nature of its own ticket, or (for a delegated agent) merges or marks a pull request ready. The developer applies a hatch with `!` in Claude Code or from their own
 terminal, at the primary checkout.
 
+## 🖼️ UI mockup gate (the `ui` marker)
+
+Orthogonal to complexity and nature. A ticket that changes the user interface is validated on a mockup before its visual work reaches the developer's review: the developer sees the look first, not in
+the screenshots of a finished pull request. The gate is driven through `workflow-cli.sh`:
+
+| Part                | Command                                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The marker          | `create-ticket … --ui` and `create-subtask … --ui` label a new ticket `ui`; `set-ui <ticket>` marks an existing one and `clear-ui <ticket>` removes the marker            |
+| The validation      | `record-ui-validation <ticket> --mockup <link-or-path> --approved-by <name> [--date YYYY-MM-DD]`, once the developer has approved the mockup                              |
+| Or supplied visuals | `record-ui-validation <ticket> --supplied "<what the developer supplied>"`, when the developer gave their own mockup or an exact target screenshot, and no mockup is made |
+| The read-back       | `get-ui-validation <ticket>` prints the latest complete record as one line of JSON, and nothing when there is none: it is what the guard reads                            |
+
+- **The marker is the label `ui`.** It is not a nature label and is not reserved to the developer: the session sets it, as does the developer (`sf new` provisions the label, and `set-ui` creates it
+  when it is missing). Only `ui` counts; `ui-kit` or `no-ui` are other labels.
+- **The record is a ticket comment** that starts with `<!-- sf-ui-validation:v1 -->`, followed by `- Field: value` lines: `Kind: mockup` with `Mockup`, `Approved by` and `Approved on`, or
+  `Kind: supplied by the developer` with `Supplied` and `Recorded on`. A comment that only quotes the marker, or that lacks a field, is not a record. The latest complete record wins.
+- **UI mockup guard** (enforced by `update-status`) — a `ui` ticket with no complete record is refused on its way to the developer's review: `→ In review` under Solo (no Human testing status), and
+  `→ Human testing` (also `→ In review` for a ticket that skips it) on a workflow that declares Human testing. The refusal names the `record-ui-validation` command to run. A ticket without the marker
+  passes exactly as before. The guard fails open when the labels cannot be read, and closed when the ticket carries the marker and its comments cannot be read. Escape hatch: the developer's (see
+  [escape-hatches.md](escape-hatches.md)); it is announced and recorded on the ticket like the other environment hatches, and the guard hook refuses an agent that sets it.
+- Only the GitHub Projects adapter carries the marker and the record today: the other adapters refuse these commands with exit code `2`, and their `update-status` does not read a record.
+
+### Working a `ui` ticket
+
+The gate above says when the developer's look is checked; this says how the agent that holds a `ui` ticket works. It is one text for every coding agent (Claude Code, Codex, Kimi Code or any other): it
+names capabilities, never the tool of one host.
+
+1. **Work as a UI/UX professional.** Before you draw anything, load the design and UX skills your host offers (visual design, accessibility review, UX copy, design system, whatever form it gives them)
+   and apply the project's own design tokens and components. A host that offers none works from the checklist.
+2. **Follow the UI checklist**, [ui-checklist.md](ui-checklist.md), which ships next to this file: hierarchy; spacing and design tokens; states (empty, loading, error, disabled); accessibility
+   (contrast, keyboard, focus, labels); copy. Go through it for the mockup, and again before the pull request.
+3. **The mockup floor is one self-contained HTML file**: inline CSS, no build step, no request to the network, so that it opens in any browser from its path. Keep it with the ticket's evidence,
+   committed on the ticket's branch in the folder the project's `AGENTS.md` names (`docs/mockups/` when it names none), and put its path or link in `record-ui-validation --mockup`. A richer surface
+   the host offers (a Claude artifact, a Figma frame) may be added next to it, never in its place: every agent can produce the file, and the developer can open it.
+4. **Show the mockup before the visual implementation.** Spec, model, data and tests may start meanwhile; only the visual part (components, pages, styles) waits for the developer's OK. Where the
+   project shows a mockup (a browser panel of its terminal, a preview server) and which design tokens it uses are stated in the project's own `AGENTS.md`, outside the generated region. With no such
+   statement, give the developer the path of the file to open in a browser.
+5. **When the developer supplies the visuals** (their own mockup, or an exact target screenshot), record that with `record-ui-validation <ticket> --supplied "<what the developer supplied>"`, make no
+   mockup and follow what they supplied.
+6. **A delegated agent holds the visual part.** Only the session talks to the developer. The agent makes the mockup, commits it, reports its path to the session and keeps the visual part on hold. The
+   session shows the mockup; on the developer's OK it records the validation (`record-ui-validation`) and relays the OK to the same agent, in the same worktree (a hand-back, see "Delegated ticket
+   delivery"), which then builds the visual part from the validated mockup. An agent never records an approval the developer did not give.
+
 ## 🧩 Ticket Hierarchy (Epic / Delivery parent / Child ticket)
 
-SaaSFoundryAI distinguishes an optional grouping Epic from a delivery parent. Every child created by `create-subtask` is a **native GitHub sub-issue**. A child is either a normal child with its own
-branch and PR, or a bundled child whose single atomic commit lands on its delivery parent's branch.
+SaaSFoundry Solo distinguishes an optional grouping Epic from a delivery parent. Every child created by `create-subtask` is a **native GitHub Projects sub-issue**. A child is either a normal child
+with its own branch and PR, or a bundled child whose single atomic commit lands on its delivery parent's branch.
 
 ```
 (Epic)                 optional grouper — no branch or PR
@@ -130,13 +183,13 @@ branch and PR, or a bundled child whose single atomic commit lands on its delive
      └─ Child ticket   native sub-issue: own branch/PR, or bundled commit on parent branch
 ```
 
-| Level            | Role                                                                                        | Deliverable                                                                        | GitHub artifact                                                                          | Status                                                                                |
-| ---------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **Epic**         | Optional grouper for related delivery parents (SRS feature, bug batch, transverse refactor) | **None directly** — no branch, no commit, no PR                                    | Issue with delivery-parent issues linked via `addSubIssue`                               | **Derived from children** (see rule below)                                            |
-| **Story**        | Delivers user-observable value                                                              | Branch + commits + PR                                                              | Regular issue, `story.tpl.ts` body — Acceptance Criteria section                         | Explicit, full 7-status lifecycle                                                     |
-| **Task**         | Delivers a technical action                                                                 | Branch + commits + PR                                                              | Regular issue, `task.tpl.ts` body — Completion Criteria section                          | Explicit, full 7-status lifecycle                                                     |
-| **Issue (bug)**  | Task variant for defects                                                                    | Branch + commits + PR                                                              | Regular issue, `issue.tpl.ts` body — Behavior/Expected/Repro/Environment/Impact/Evidence | Explicit, full 7-status lifecycle                                                     |
-| **Child ticket** | Deliverable under a delivery parent                                                         | Normal child: branch + PR. Bundled child: one atomic commit on the parent's branch | Native GitHub sub-issue created by `create-subtask`                                      | Normal child follows the full lifecycle; `nature:bundled-pr` may go AI Testing → Done |
+| Level            | Role                                                                                        | Deliverable                                                                        | Tracking artifact                                                                         | Status                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Epic**         | Optional grouper for related delivery parents (SRS feature, bug batch, transverse refactor) | **None directly** — no branch, no commit, no PR                                    | Ticket with native issue type `sf-epic` and delivery-parent tickets linked as sub-issues  | **Derived from children** (see rule below)                                            |
+| **Story**        | Delivers user-observable value                                                              | Branch + commits + PR                                                              | Regular ticket, `story.tpl.ts` body — Acceptance Criteria section                         | Explicit, full workflow lifecycle                                                     |
+| **Task**         | Delivers a technical action                                                                 | Branch + commits + PR                                                              | Regular ticket, `task.tpl.ts` body — Completion Criteria section                          | Explicit, full workflow lifecycle                                                     |
+| **Issue (bug)**  | Task variant for defects                                                                    | Branch + commits + PR                                                              | Regular ticket, `issue.tpl.ts` body — Behavior/Expected/Repro/Environment/Impact/Evidence | Explicit, full workflow lifecycle                                                     |
+| **Child ticket** | Deliverable under a delivery parent                                                         | Normal child: branch + PR. Bundled child: one atomic commit on the parent's branch | Native GitHub Projects sub-issue created by `create-subtask`                              | Normal child follows the full lifecycle; `nature:bundled-pr` may go AI Testing → Done |
 
 **Child execution modes** — use a normal child when the work needs independent review, a branch, or a PR. Use `nature:bundled-pr` only for one atomic, tightly coupled commit on the delivery parent's
 branch; it has no child PR and may move from AI Testing directly to Done after validation. “Subtask” is shorthand for this native child ticket, not a commit-only concept.
@@ -177,12 +230,14 @@ Every step that delegates work to another agent names a **task kind** from the r
 | `review`             | Examine (security, logic, performance) and diff review                              |
 | `terminal-ci`        | Shell, build and CI work, long test runs                                            |
 
-1. **Resolve the tier** with `sf agents route --task <kind> --provider <current-agent>` (`claude-code` or `codex`) and hand the work to the `sf-<tier>` agent it names. That agent carries its own model
-   and effort.
+1. **Resolve the tier** with `sf agents route --task <kind> --provider <current-agent>` (`claude-code`, `codex` or `kimi`) and hand the work to the `sf-<tier>` agent it names. That agent carries its
+   own model and effort. The one exception is a route that prints `alias <name>` (Kimi Code binds no model in an agent file): pass that alias, copied from the route and never composed, as the `model`
+   of the delegation call.
 2. **Decompose before delegating.** A subtask handed to a tier below the orchestrating session states its **file set** (the files it may touch), its **expected result** and its **check** (the command
    or observation that proves it). A subtask that cannot state all three is split until it can; if it still cannot, it stays in the orchestrating session and is never handed to a lower tier.
 3. **No routing.** When the route fails (a coding agent without routing candidates) or the agent cannot delegate, run the step in the session, sequentially, and report that a self-review is not an
-   independent review.
+   independent review. A refused or failed route is never worked around by starting another coding agent's CLI (`claude`, `codex`, or any other) or a background session of another host. A host with no
+   worktree support (`worktrees: none` in `sf agents catalog --json`, Kimi Code today) delegates sub-tasks only, in the current worktree, through its own native sub-agent tool.
 
 ### Delegated ticket delivery
 
@@ -206,21 +261,25 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
 | `medium`, `complex`                                                           | `multi-file-feature`, once decomposed (planning stays in the session) |
 
 1. **Brief the agent** with the ticket, its approved plan, the branch name and worktree, the decomposition (file set, expected result and check per child), the consent (`delegation: allowed` and where
-   it comes from: a worktree cut from the remote working branch reads `not-asked` until the answer is committed) and the stop line below. Resolve the tier with `sf agents route` as above, and never
-   name a model. The agent that receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (`statuses/3-in-progress.md`). When
-   the host names the worktree branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent pushes to it
-   (`git push origin HEAD:<ticket branch>`): `create-pr` accepts that branch when `origin` holds it at the local `HEAD`, found on its own or passed as `--head <ticket branch>`.
-2. **The agent's line.** It follows `statuses/3-in-progress.md` and `statuses/4-ai-testing.md`, which hold the test strategy (the affected tests while it works, the full suites once at the end of AI
-   testing; the brief does not restate it): it delivers the children, posts the `## Test plan` comment, runs the automated and heavy checks, posts the `## Test report` comment and opens the draft PR,
-   then stops with the ticket still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human Testing route, the session on the other) and never
-   records the delegation consent. The session takes it from there: the Examine of a `complex` ticket, then the transition `statuses/4-ai-testing.md` names. The session runs `ready-pr <ticket>` and
-   `draft-pr <ticket>` from the primary checkout, on the working branch, and never enters the agent's worktree: off the ticket branch they find the ticket's one open pull request on GitHub and check
-   its head on origin (several candidates are listed: pick one with `--pr <number>`).
+   it comes from: a worktree cut from the remote working branch reads `not-asked` until the answer is committed) and the stop line below. For a ticket marked `ui` the brief carries one more clause:
+   **hold the visual part until the session relays the developer's OK, and follow the validated mockup** ("Working a `ui` ticket" in the UI mockup gate above). When the developer has already approved
+   the mockup, the brief names it instead and there is nothing to hold. Resolve the tier with `sf agents route` as above, and never name a model (the alias a route prints excepted). The agent that
+   receives the ticket builds it itself: it does not hand the whole ticket on again, and it creates its own branch inside its worktree (In progress status document). When the host names the worktree
+   branch itself (Claude Code's `isolation: "worktree"` gives `worktree-agent-<id>`), the brief names the ticket branch and the agent pushes to it (`git push origin HEAD:<ticket branch>`): `create-pr`
+   accepts that branch when `origin` holds it at the local `HEAD`, found on its own or passed as `--head <ticket branch>`.
+2. **The agent's line.** It follows the In progress and AI Testing status documents, which hold the test strategy (the affected tests while it works, the full suites once at the end of AI testing; the
+   brief does not restate it): it delivers the children, posts the test plan, runs the automated and heavy checks, posts the `## Test report` comment and opens the draft PR, then stops with the ticket
+   still in AI Testing. It never merges, never runs `ready-pr` (the developer takes the PR out of draft on the Human Testing route, the session on the other) and never records the delegation consent.
+   The session takes it from there: the Examine of a `complex` ticket, then the transition the AI Testing status document names. The session runs `ready-pr <ticket>` and `draft-pr <ticket>` from the
+   primary checkout, on the working branch, and never enters the agent's worktree: off the ticket branch they find the ticket's one open pull request on GitHub and check its head on origin (several
+   candidates are listed: pick one with `--pr <number>`).
 3. **One agent per ticket.** Several tickets may be in flight, each with its own agent and worktree. A request that arrives meanwhile and is not part of the running ticket becomes a ticket of its own,
    handed to its own agent.
-4. **Hand-backs.** A defect reported in Human Testing or in review, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree,
-   which returns the ticket to AI Testing when the change calls for retesting.
-5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session delivers the tickets itself, one after the other, and says so explicitly.
+4. **Hand-backs.** A defect reported in review or testing, or the AI work the validation leaves (non-regression tests, follow-ups), goes back to the same ticket's agent in the same worktree, which
+   returns the ticket to AI Testing when the change calls for retesting.
+5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session delivers the tickets itself, one after the other, and says so explicitly. So does a
+   session whose host has no worktree support (`worktrees: none`, Kimi Code today): it cannot open a worktree for a delegate, so it delegates sub-tasks only, in the current worktree, and never starts
+   another host's CLI to get a worktree.
 6. **Measured delegations.** Every routed delegation is recorded in the clone's ledger, and the routing adjusts itself from it (`sf agents routing report` shows what it did). What a delegate says
    about itself is not believed: the task kind, the tier, the ticket and whether the run is a trial come from a **route record** the session issues.
    - Issue it when you route the work: `sf agents route --task <kind> --provider <current-agent> --ticket <n> --record`. It prints `route=<id>` (`--json` gives `routeId`): put that id in the brief.
@@ -303,7 +362,8 @@ call `retag` to persist. The guard fails open if label fetch errors (offline / a
 
 ### Workflow Phase Commands (Complexity-Adaptive)
 
-**`/workflow prepare <ticket> <complexity>`** — adaptive analyze + plan phase (Backlog → Ready). **`/workflow test <ticket> [complexity]`** — validation + optional adversarial review (→ AI Testing).
+**`/workflow prepare <ticket> <complexity>`** — adaptive analyze + plan phase (in Backlog, before In progress). **`/workflow test <ticket> [complexity]`** — validation + optional adversarial review (→
+AI Testing).
 
 | Complexity  | `prepare` behavior                                | `test` behavior                                                    |
 | ----------- | ------------------------------------------------- | ------------------------------------------------------------------ |
@@ -346,7 +406,7 @@ See your tool-specific skill documentation for complete command reference:
 
 ## SRS Handoff (drafting / spawning tickets)
 
-When a ticket crosses into **Ready** and requires Software Requirements Specifications (US / UR / FR / DS / TC), stop and hand off to the agnostic SRS skill:
+When a ticket leaves **Backlog** and requires Software Requirements Specifications (US / UR / FR / DS / TC), stop and hand off to the agnostic SRS skill:
 
 - `.claude/skills/sf-srs/SKILL.md` — selects the configured SRS backend from `.saasfoundry.json → tools.srs.backend`
 - `.claude/skills/sf-srs/scripts/srs-cli.sh validate` — smoke-tests the backend adapter (init OK, exit 0)
@@ -359,7 +419,7 @@ Never bypass the skill to write SRS by hand — the backend dispatch is how new 
 SRS tickets don't flow through the code-path statuses — they have their own lifecycle inside the `In progress` board column:
 
 ```
-Ready → In progress (brainstorm)
+Backlog → In progress (brainstorm)
          → ai-draft        (agent drafts the spec; ai-draft --spec runs srs-cli.sh write)
          → human-review    (owner reviews the backend page)
          → spawning        (srs-cli.sh spawn — creates Backlog children)
@@ -380,12 +440,12 @@ Drive it with:
 
 Each phase is documented in detail:
 
-- `statuses/3a-ai-drafting.md` — AI drafter runs against the configured backend
-- `statuses/3b-human-review.md` — spec owner reviews and approves
-- `statuses/3c-spawning.md` — children land in Backlog, drafting ticket reaches Done
+- `statuses/2a-ai-drafting.md` — AI drafter runs against the configured backend
+- `statuses/2b-human-review.md` — spec owner reviews and approves
+- `statuses/2c-spawning.md` — children land in Backlog, drafting ticket reaches Done
 
-**Guard** — `update-status <ticket> "AI testing|Human testing|In review"` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch
-errors (offline / auth issues) so normal teams are not punished by infrastructure hiccups.
+**Guard** — `update-status <ticket> <any testing/review status>` is rejected when the ticket carries an `srs:*` label. Use `transition-drafting` instead. The guard fails open if label fetch errors
+(offline / auth issues) so normal teams are not punished by infrastructure hiccups.
 
 ### Rule 8 — spawning Stories from SRS
 
@@ -470,12 +530,10 @@ invalid workflow state produces an actionable failure instead of bypassing guard
 ## Workflow Statuses
 
 1. **Backlog** (GRAY) — Read `statuses/1-backlog.md` for full description
-2. **Ready** (YELLOW) — Read `statuses/2-ready.md` for full description
-3. **In progress** (BLUE) — Read `statuses/3-in-progress.md` for full description
-4. **AI testing** (PURPLE) — Read `statuses/4-ai-testing.md` for full description
-5. **Human testing** (ORANGE) — Read `statuses/5-human-testing.md` for full description
-6. **In review** (PINK) — Read `statuses/6-in-review.md` for full description
-7. **Done** (GREEN) — Read `statuses/7-done.md` for full description
+2. **In progress** (BLUE) — Read `statuses/2-in-progress.md` for full description
+3. **AI testing** (PURPLE) — Read `statuses/3-ai-testing.md` for full description
+4. **In review** (PINK) — Read `statuses/4-in-review.md` for full description
+5. **Done** (GREEN) — Read `statuses/5-done.md` for full description
 
 **⚠️ This skill is your SOURCE OF TRUTH for the workflow.**
 
@@ -485,20 +543,20 @@ invalid workflow state produces an actionable failure instead of bypassing guard
 2. **NEVER skip steps** described in a status
 3. **NEVER move to the next status** without meeting all exit conditions
 4. **ASK if uncertain** - don't assume or guess
-5. **CLOSE CHILD TICKETS AS THEY LAND** — every child is a native GitHub sub-issue. A normal child reaches `Done` only after its own PR is verified merged; a bundled child reaches `Done` after its
-   atomic commit is validated on the delivery parent's branch. Close each child immediately and verify `gh issue view <child> --json state` prints `CLOSED` before starting the next sibling. Never
-   batch closures.
+5. **CLOSE CHILD TICKETS AS THEY LAND** — every child is a native GitHub Projects sub-issue. A normal child reaches `Done` only after its own PR is verified merged; a bundled child reaches `Done`
+   after its atomic commit is validated on the delivery parent's branch. Close each child immediately and verify `gh issue view <child> --json state` prints `CLOSED` before starting the next sibling.
+   Never batch closures.
 6. **PARENT DONE IS GATED BY CHILDREN** — a delivery parent or Epic cannot enter `Done` until every native child ticket's project-board Status is exactly `Done`. Run
    `github-projects-cli.sh list-incomplete-children <N>`; any returned or unverifiable child blocks the transition. An Epic moves to In progress with its first active child and to Done with its last
    completed child.
-7. **ONE AGENT PER TICKET, NEVER A SWITCH MID-DELIVERY** — a ticket in `In Progress` / `AI Testing` / `Human Testing` / `In Review` stays with its one agent until `Done`, hand-backs from Human Testing
-   included. Several tickets may be in flight at once when each has its own agent and worktree (delegation `allowed`, see "Delegated ticket delivery"); the session itself never stops delivering one
-   ticket to start delivering another. With delegation `declined` or unavailable, drive the current ticket to `Done` before claiming or starting another. The only override is an explicit developer
-   request to pause.
+7. **ONE AGENT PER TICKET, NEVER A SWITCH MID-DELIVERY** — a ticket in any status between `In Progress` and `Done` (see the Workflow Statuses section above) stays with its one agent until `Done`,
+   hand-backs included. Several tickets may be in flight at once when each has its own agent and worktree (delegation `allowed`, see "Delegated ticket delivery"); the session itself never stops
+   delivering one ticket to start delivering another. With delegation `declined` or unavailable, drive the current ticket to `Done` before claiming or starting another. The only override is an
+   explicit developer request to pause.
 8. **TICKETS FROM SRS** — when `tools.srs.backend` is set in `.saasfoundry.json`, Story sub-tickets under an SRS Epic must be spawned from the canonical FR pages, not hand-written. Use the
    evidence-first `transition-drafting <parent> spawning --epic <feature> [--version <version>] [--milestone <release>] --reconciliation-plan <path>` flow. It renders each body from
    `renderStoryTicketBody` and reconciles exact canonical tickets before mutation. The `create-subtask` command rejects any call without `--bypass-srs <reason>` on SRS-enabled projects — see the "SRS
-   Handoff" section below. The escape hatch exists for meta tickets (SRS refactors, tooling) but must never be used to duplicate an FR that already has a page.
+   Handoff" section above. The escape hatch exists for meta tickets (SRS refactors, tooling) but must never be used to duplicate an FR that already has a page.
 9. **MIGRATION FRAMEWORK ON BREAKING CHANGES** — when transitioning a ticket whose diff touches `src/types.ts`, `schemas/saasfoundry-manifest.schema.json`, any installer's deposited templates under
    `scaffolds/`, or any file under `src/migrations/`, verify the change ships a numbered migration (`src/migrations/manifest/NNN-*.ts` for manifest shape changes, a `ModuleMigration` on the
    installer's `migrations` array for module file-set changes). Inline manifest mutations and "let users fix it manually" shortcuts are forbidden by `AGENTS.md`'s "Migration framework — NEVER bypass"

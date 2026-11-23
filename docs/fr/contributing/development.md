@@ -128,9 +128,9 @@ Le hook de pre-commit ne réécrit jamais les fichiers. Si `format:check` échou
 Les branches et tags RC, les cibles de release protégées, les exécutions planifiées et les lancements manuels utilisent la voie exhaustive. Les pushes ordinaires et les PR prêtes classent leur plage
 Git et ne démarrent que les voies sélectionnées. La validation de cycle de vie exigée par le ticket reste exécutée et documentée pendant `AI testing`.
 
-Dans le workflow d'équipe, la PR de `Human testing` reste en brouillon pour la validation fonctionnelle. Après approbation et ajout des tests de non-régression requis, le développeur clique sur
-**Ready for review**, ce qui déclenche la CI complète. Sans `Human testing` (`nature:internal`), l'agent lance lui-même `workflow-cli.sh ready-pr <ticket>` à la fin d'`AI testing`. `draft-pr <ticket>`
-permet de revenir en validation fonctionnelle.
+Ce dépôt utilise le workflow Solo, qui n'a pas de `Human testing` : à la fin d'`AI testing`, une fois le rapport de test publié et les statuts de CI locale requis au vert sur la tête de la PR, la
+session lance `workflow-cli.sh ready-pr <ticket>` (un agent délégué s'arrête avant), ce qui déclenche la CI complète. Le développeur relit ensuite la PR et la fusionne. `draft-pr <ticket>` remet la PR
+en brouillon et annule les exécutions de CI devenues obsolètes.
 
 ## Framework de migration — obligatoire
 
@@ -158,21 +158,23 @@ déposés ou de `src/migrations/`.
 
 ## Workflow du dépôt — ne jamais contourner les statuts
 
-Ce dépôt utilise le preset d'équipe :
+Ce dépôt utilise le preset Solo (`workflow.template` dans `.saasfoundry.json`) :
 
 ```text
-Backlog → Ready → In progress → AI testing → Human testing → In review → Done
+Backlog → In progress → AI testing → In review → Done
 ```
 
+- Il n'y a ni `Ready` ni `Human testing` : le développeur travaille seul, et la revue de la pull request (`In review`) est la validation humaine. `AI testing → In review` n'exige aucun label
+  `nature:*`.
 - Lisez le document du statut courant avant une transition.
 - Utilisez `.claude/skills/sf-workflow/workflow-cli.sh` ; ne déplacez pas une carte manuellement.
 - Les enfants sont des sous-issues GitHub natives, pas des cases Markdown.
 - Un enfant normal possède sa branche et sa PR.
 - Un enfant `nature:bundled-pr` fournit un commit atomique à la branche de livraison du parent et n'a pas de PR séparée.
-- `Human testing` signifie validation fonctionnelle sur PR brouillon ; `In review` signifie revue de code sur PR prête avec CI complète.
+- `In review` signifie revue de la pull request, prête et avec CI complète : c'est là que le développeur valide, y compris à la main si nécessaire.
 
-Les projets générés peuvent choisir le preset Solo à cinq statuts ou un workflow personnalisé. Les agents doivent lire `workflow.statuses` dans le manifeste au lieu de généraliser le preset de ce
-dépôt.
+Les projets générés peuvent choisir le preset d'équipe à sept statuts, le preset Solo à cinq statuts ou un workflow personnalisé. Les agents doivent lire `workflow.statuses` dans le manifeste au lieu
+de généraliser le preset de ce dépôt.
 
 Référence : [`sf-workflow/SKILL.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/skills/sf-workflow/SKILL.md).
 
@@ -233,11 +235,11 @@ Les objectifs d'acceptation sont dans [`.claude/docs/release-objectives.md`](htt
 ## Synchroniser « Ready for review » avec GitHub Projects
 
 Le bouton **Ready for review** déclenche `.github/workflows/pr-review-sync.yml`. Le workflow inspecte la PR et son ticket lié, puis utilise le CLI protégé pour passer le ticket en `In review`. Cliqué
-trop tôt — ticket encore en `AI testing` avec `Human testing` requis, ou pas encore en test —, le job ne déplace rien et réussit avec une notice qui indique l'étape suivante ; il n'échoue que si
-l'événement, le lien vers le ticket ou les labels du ticket sont incorrects. Une PR dont la branche source ne désigne aucun ticket selon `workflow.branchNaming` (par exemple `chore/sync-back-v1.1.0`,
-la synchronisation post-release vers develop) n'a rien à synchroniser : le job réussit avec une notice et ne déplace rien. Une branche de release (`rc-*`) reste synchronisée lorsqu'elle cible la
-branche de release, et une branche de ticket échoue toujours sans sa ligne `Resolves #N`. Une PR qui ne livre qu'une partie d'un ticket qui reste ouvert écrit `Part of #N` à la place, avec le ticket
-de sa branche : le job réussit avec une notice, au clic comme à la fusion, et le ticket ne bouge pas.
+trop tôt — ticket encore en `AI testing` sur un workflow qui exige `Human testing`, ou pas encore en test —, le job ne déplace rien et réussit avec une notice qui indique l'étape suivante ; il
+n'échoue que si l'événement, le lien vers le ticket ou les labels du ticket sont incorrects. Une PR dont la branche source ne désigne aucun ticket selon `workflow.branchNaming` (par exemple
+`chore/sync-back-v1.1.0`, la synchronisation post-release vers develop) n'a rien à synchroniser : le job réussit avec une notice et ne déplace rien. Une branche de release (`rc-*`) reste synchronisée
+lorsqu'elle cible la branche de release, et une branche de ticket échoue toujours sans sa ligne `Resolves #N`. Une PR qui ne livre qu'une partie d'un ticket qui reste ouvert écrit `Part of #N` à la
+place, avec le ticket de sa branche : le job réussit avec une notice, au clic comme à la fusion, et le ticket ne bouge pas.
 
 Configurez le secret Actions `SF_PROJECTS_TOKEN` avec l'accès au dépôt et l'écriture sur le Project de l'organisation. Le token Actions par défaut n'accède pas à Projects.
 

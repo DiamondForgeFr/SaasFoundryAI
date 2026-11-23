@@ -2,7 +2,7 @@ import { Command } from 'commander'
 
 import { runAgentsSubcommand } from './agents.shared'
 import { promoteLocalRouting } from '../harness/agent-support'
-import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, TASK_KINDS, type RoutingProvider } from '../harness/routing-grid'
+import { parseRoutingProvider, parseTaskKind, TASK_KINDS } from '../harness/routing-grid'
 import { buildRoutingReport, renderRoutingReport } from '../harness/routing-report'
 import { loadRoutingState, resetLocalRouting, runAdjustment, type AdjustmentReport } from '../harness/routing-runtime'
 
@@ -110,8 +110,8 @@ export async function routingReport(options: RoutingReportOptions): Promise<void
 export async function routingReset(kind: string | undefined, options: RoutingResetOptions): Promise<void> {
   await runAgentsSubcommand(options, async () => {
     if (!kind) throw new Error(`Name the task kind to reset: sf agents routing reset <${TASK_KINDS.join('|')}>.`)
-    if (options.provider !== undefined && !isRoutingProvider(options.provider)) throw new Error(`No routing for '${options.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
-    const result = await resetLocalRouting(process.cwd(), parseTaskKind(kind), { provider: options.provider as RoutingProvider | undefined })
+    const provider = options.provider === undefined ? undefined : parseRoutingProvider(options.provider)
+    const result = await resetLocalRouting(process.cwd(), parseTaskKind(kind), { provider })
     if (options.json) {
       process.stdout.write(JSON.stringify({ resetVersion: 1, ...result }, null, 2) + '\n')
       return

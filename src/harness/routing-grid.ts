@@ -1,27 +1,38 @@
+import { agentsWith, capabilityLimitation, findAgentProfile, getAgentProfile, hasCapability, type RoutingProvider } from './agent-registry'
 import { adjustConfigIssues, type RoutingAdjustConfig } from './routing-adjust-config'
 import gridData from './routing-grid.json'
 import { createExecutionCandidateId } from '../execution/catalogue'
 import type { NormalizedEffort } from '../execution/types'
 
+export type { RoutingProvider }
+
 /** The delegated task kinds of FR-AEX-008, in display order. */
 export const TASK_KINDS = ['exploration', 'scoped-edit', 'bug-fix', 'multi-file-feature', 'tests', 'review', 'planning', 'terminal-ci', 'prose'] as const
 export type TaskKind = (typeof TASK_KINDS)[number]
 
-/** Coding agents the grid has candidates for; other declared agents get no route. */
-export const ROUTING_PROVIDERS = ['claude-code', 'codex'] as const
-export type RoutingProvider = (typeof ROUTING_PROVIDERS)[number]
+/** Coding agents the grid has candidates for (their profile declares `capabilities.routing`); other declared agents get no route. */
+export const ROUTING_PROVIDERS: readonly RoutingProvider[] = Object.freeze(agentsWith('routing'))
 
 export const ROUTING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const
 export type RoutingEffort = (typeof ROUTING_EFFORTS)[number] & NormalizedEffort
 
 /**
- * The efforts each host can write in a subagent file (#929): Claude Code's `effort` frontmatter has no
- * `minimal` or `ultra`, Codex's `model_reasoning_effort` has no `minimal` on current models.
+ * The efforts each host can write in a subagent file (#929), as its profile declares them: Claude Code's `effort`
+ * frontmatter has no `minimal` or `ultra`, Codex's `model_reasoning_effort` has no `minimal` on current models.
  */
-export const PROVIDER_EFFORTS: Readonly<Record<RoutingProvider, readonly RoutingEffort[]>> = {
-  'claude-code': ['low', 'medium', 'high', 'xhigh', 'max'],
-  codex: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
-}
+export const PROVIDER_EFFORTS: Readonly<Record<RoutingProvider, readonly RoutingEffort[]>> = Object.freeze(
+  Object.fromEntries(
+    ROUTING_PROVIDERS.map((provider) => {
+      const efforts = getAgentProfile(provider).capabilities.routing!.efforts
+      const unknown = efforts.filter((effort) => !(ROUTING_EFFORTS as readonly string[]).includes(effort))
+      if (unknown.length) throw new Error(`Invalid capability block of agent profile ${provider}: routing.efforts names ${unknown.join(', ')}, which is not one of ${ROUTING_EFFORTS.join(', ')}.`)
+      return [provider, Object.freeze(efforts as RoutingEffort[])]
+    })
+  )
+) as Record<RoutingProvider, readonly RoutingEffort[]>
+
+/** The vendor the grid files a host's candidates under, from its profile. */
+const routingVendor = (provider: RoutingProvider): string => getAgentProfile(provider).capabilities.routing!.vendor
 
 export interface RoutingCandidate {
   model: string
@@ -57,7 +68,6 @@ export interface RoutingGrid {
   gridVersion: 1
   updated: string
   rule: string
-  providers: Record<RoutingProvider, { vendor: string }>
   tiers: Record<string, Record<RoutingProvider, RoutingCandidate>>
   kinds: Record<TaskKind, RoutingKindEntry>
 }
@@ -101,7 +111,7 @@ function isTaskKind(value: unknown): value is TaskKind {
 }
 
 function isProvider(value: unknown): value is RoutingProvider {
-  return typeof value === 'string' && (ROUTING_PROVIDERS as readonly string[]).includes(value)
+  return typeof value === 'string' && hasCapability(value, 'routing')
 }
 
 function candidateIssue(value: unknown, label: string, provider: RoutingProvider): string | undefined {
@@ -144,17 +154,11 @@ function excludedBy(exclusions: readonly RoutingExclusion[], provider: RoutingPr
 /** Validate the bundled grid: closed keys, every kind and provider covered, evidence for every entry. */
 export function validateRoutingGrid(value: unknown): asserts value is RoutingGrid {
   const issues: string[] = []
-  if (!object(value) || value.gridVersion !== 1 || !exactKeys(value, ['gridVersion', 'updated', 'rule', 'providers', 'tiers', 'kinds'])) {
-    throw new Error('Invalid routing grid: expected gridVersion 1 with updated, rule, providers, tiers and kinds.')
+  if (!object(value) || value.gridVersion !== 1 || !exactKeys(value, ['gridVersion', 'updated', 'rule', 'tiers', 'kinds'])) {
+    throw new Error('Invalid routing grid: expected gridVersion 1 with updated, rule, tiers and kinds.')
   }
   if (typeof value.updated !== 'string' || !DATE.test(value.updated)) issues.push('updated must be YYYY-MM-DD')
   if (typeof value.rule !== 'string' || !value.rule.trim()) issues.push('rule must describe the seeding rule')
-  if (!object(value.providers) || !exactKeys(value.providers, [...ROUTING_PROVIDERS])) issues.push(`providers must be exactly ${ROUTING_PROVIDERS.join(', ')}`)
-  else
-    for (const provider of ROUTING_PROVIDERS) {
-      const entry = value.providers[provider]
-      if (!object(entry) || !exactKeys(entry, ['vendor']) || typeof entry.vendor !== 'string' || !SAFE_ID.test(entry.vendor)) issues.push(`providers.${provider}.vendor must be an identifier`)
-    }
   const tiers = object(value.tiers) ? value.tiers : {}
   if (!object(value.tiers) || Object.keys(tiers).length === 0) issues.push('tiers must not be empty')
   for (const [tier, candidates] of Object.entries(tiers)) {
@@ -279,6 +283,31 @@ export function isRoutingProvider(value: unknown): value is RoutingProvider {
   return isProvider(value)
 }
 
+/** The routed agents, for a message that tells a developer which ones a command takes. */
+const routedAgents = (): string => `Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`
+
+/**
+ * Why an agent has no route, naming the limitation its profile documents (FR-MAH-020): never a bare "no routing". An
+ * agent nobody registered has no profile and so no reason, and is said to be unregistered.
+ */
+export function routingUnavailableReason(id: string): string {
+  const profile = findAgentProfile(id)
+  if (!profile) return `'${id}' is not a registered coding agent.`
+  return `${id} (${profile.displayName}) cannot be routed: ${capabilityLimitation(id, 'routing') ?? 'its profile declares no routing.'}`
+}
+
+/** An agent a command takes as `--provider`: a routed one, or an error that says why that agent is not. */
+export function parseRoutingProvider(value: unknown): RoutingProvider {
+  if (isProvider(value)) return value
+  throw new Error(`${routingUnavailableReason(String(value))} ${routedAgents()}`)
+}
+
+/** The error for a project that declares coding agents and none of them is routed: each one says why. */
+export function noRoutedAgentError(declared: readonly string[]): Error {
+  const reasons = declared.map(routingUnavailableReason).join(' ')
+  return new Error(`None of the declared coding agents (${declared.join(', ')}) has routing candidates. ${reasons} ${routedAgents()}`)
+}
+
 export function parseTaskKind(value: unknown): TaskKind {
   if (!isTaskKind(value)) throw new Error(`Unknown task kind '${String(value)}'. Task kinds: ${TASK_KINDS.join(', ')}.`)
   return value
@@ -322,7 +351,7 @@ export function resolveRoute(kind: TaskKind, provider: RoutingProvider, override
     kind,
     provider,
     tier,
-    candidate: { id: createExecutionCandidateId(shippedGrid.providers[provider].vendor, provider, candidate.model, candidate.effort), model: candidate.model, effort: candidate.effort },
+    candidate: { id: createExecutionCandidateId(routingVendor(provider), provider, candidate.model, candidate.effort), model: candidate.model, effort: candidate.effort },
     source,
     evidence: isShippedSeed ? { ...shipped.evidence[provider] } : null,
     excluded: excludedBy(shipped.excluded, provider, candidate)

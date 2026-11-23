@@ -34,6 +34,8 @@ export const REGION_HEADINGS = [
   'Coding-agent identity and onboarding',
   'Managed project capabilities',
   'Reading the project status',
+  'Ticket first, and an unreachable tool',
+  'UI work: mockup display and design tokens',
   'File edits and shell calls',
   'Execution capabilities',
   'Session orchestration and delegated ticket delivery',

@@ -32,6 +32,18 @@ sf workflow [subcommand] [args...]
 sf workflow show
 ```
 
+It ends with the statuses of the workflow, by name, in the order and the spelling of `workflow.statuses` (before 1.3.0 each one printed as `[object Object]`):
+
+```text
+📊 Workflow Statuses
+
+  1. Backlog
+  2. In progress
+  3. AI testing
+  4. In review
+  5. Done
+```
+
 ```bash
 # Use an existing template
 sf workflow use my-template
@@ -76,6 +88,33 @@ Team separates functional feature testing (`Human testing`) from code review (`I
 not generate complete status documents or arbitrary transition guards for new names. Extend the installed skill before using one as a delivery contract.
 
 `sf workflow validate` checks local manifest fields in v1; it does not compare the configured remote board.
+
+### Switching templates (`use`)
+
+`sf workflow use solo` and `sf workflow use saasfoundry` switch a project between the built-in presets in place. The switch starts from the project's current `workflow` block and replaces only:
+
+- `template`, `statuses` and `issueTypes`, taken from the preset;
+- `validated`, reset to `false`;
+- `projectUrl`, when `--project-url` or `--create-board` attaches another board, or when the tool changes.
+
+Every other field the project declares survives the switch, in particular `workingBranch`, `prTargetBranch`, `releaseBranch`, `localCi.requiredStatuses`, `requireCodeReview`, `branchNaming` and
+`commitFormat`. A saved template (`sf workflow save`) also replaces the tool and the branch, review and commit conventions it recorded; it never removes a field it does not carry.
+
+A status the project already names with another case keeps the project's spelling: a board whose options read `In progress`, `AI testing` and `In review` keeps them, and so does the manifest, although
+the presets spell them `In Progress`, `AI Testing` and `In Review`. Status names are compared without case everywhere: the board update matches options that way, and `update-status` lower-cases the
+target before every guard and finds the board option without case, so both spellings move a ticket the same way.
+
+Outside the manifest, a switch on a project that already has a workflow changes only the `sf-workflow` skill and the board:
+
+- the skill's `statuses/` folder holds the documents of the new preset and nothing else. A document of the previous preset is removed when it still holds the bytes the CLI wrote (its baseline in
+  `fileHashes`, or a shipped version); a document you edited is renamed `<name>.saasfoundry.old`, which the workflow CLI never reads, and the command names it. A document no preset ships, written for
+  a status of your own, stays where it is;
+- `SKILL.md` names the drafting documents of the preset it was installed for (`2a`–`2c` under Solo, `3a`–`3c` under Team);
+- the "Workflow System" section of `AGENTS.md` is refreshed when the file has one, and never added; the PR-review listener is deposited only when the project moves to GitHub Projects;
+- a project that tracks its harness in `fileHashes` gets baselines for the written files and loses those of the documents that left.
+
+The shared copy under `.agents/skills/sf-workflow` follows with `sf agents refresh --scope shared`, which applies the same rule to every projected skill: a copy the refresh no longer writes is removed
+with its baseline when it holds its recorded bytes, and kept and named in a warning on every refresh when you edited it.
 
 ### Local CI gate (`set-local-ci`)
 

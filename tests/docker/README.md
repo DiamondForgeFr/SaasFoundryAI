@@ -86,6 +86,6 @@ The workflow builds/exports the image once in its preparation job. Matrix childr
 `legacy-signal-replacements.ts` freezes all 23 retired scenario identifiers and maps every signal to an active lifecycle check or a named fast Jest file. The integration guard fails when a scenario is
 missing, a lifecycle target is inactive, or a Jest file disappears.
 
-The consolidated fresh lifecycles retain production boot, OpenAPI/client regeneration, PWA distribution artifacts, production audit, generated API unit tests, placeholder scans, topology-specific
-shared/inline assertions, real CLI placement, and a real harness run on a non-empty repository. Update lifecycles retain minimal-before/full-after builds, PostgreSQL and user-file canaries, late
-modules, browser inventory, and repeated-update idempotence.
+The consolidated fresh lifecycles retain production boot, OpenAPI/client regeneration, PWA distribution artifacts, production audit, generated API unit tests, the generated web E2E suite in CI mode
+(Playwright serving a build the pipeline makes, with the PWA service worker registered; #979), placeholder scans, topology-specific shared/inline assertions, real CLI placement, and a real harness run
+on a non-empty repository. Update lifecycles retain minimal-before/full-after builds, PostgreSQL and user-file canaries, late modules, browser inventory, and repeated-update idempotence.

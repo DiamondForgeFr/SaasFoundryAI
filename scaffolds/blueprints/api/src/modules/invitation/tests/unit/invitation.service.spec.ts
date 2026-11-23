@@ -1,7 +1,7 @@
 /**
  * Resources
  */
-import { BadRequestException, ForbiddenException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { Locale, TokenType } from '@/generated/prisma/client'
 
@@ -309,7 +309,7 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
           })
         })
 
-        it('should not create new user for existing active user', async () => {
+        it('refuses an existing active user with a 409 USER_ALREADY_ACTIVE and writes nothing (#988)', async () => {
           await successScenario.execute(async () => {
             // Arrange
             const existingActiveUser = {
@@ -325,16 +325,18 @@ class InvitationServiceTest extends ServiceTestBase<InvitationService> {
               .mockResolvedValueOnce(existingActiveUser) // For existing user check
 
             // Act
-            const result = await this.service.createInvitation(mockUser.id, createInvitationDto)
+            const attempt = this.service.createInvitation(mockUser.id, createInvitationDto)
 
-            // Assert
-            expect(result).toEqual({
-              message: expect.any(String)
-            })
+            // Assert: an explicit refusal naming the address, never a success
+            await expect(attempt).rejects.toBeInstanceOf(ConflictException)
+            await expect(attempt).rejects.toThrow(`USER_ALREADY_ACTIVE: ${createInvitationDto.email} already has an active account`)
 
-            // Verify - should not create a new user or token
+            // Verify - no user, token, invitation or link is written
             expect(prismaServiceAny.user.create).not.toHaveBeenCalled()
             expect(this.jwtService.sign).not.toHaveBeenCalled()
+            expect(this.authService.createUniqueToken).not.toHaveBeenCalled()
+            expect(prismaServiceAny.$transaction).not.toHaveBeenCalled()
+            expect(prismaServiceAny.invitation.create).not.toHaveBeenCalled()
           })
         })
       })

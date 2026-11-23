@@ -112,6 +112,69 @@ describe('sf update template refresh', () => {
     }, 240_000)
   })
 
+  describe('pinned versions and the lockfile (#1229)', () => {
+    const apiPackage = 'apps/api/package.json'
+    const printed = (): string =>
+      (console.log as jest.Mock).mock.calls
+        .map((call) => call.join(' '))
+        .join('\n')
+        .replace(/\u001b\[[0-9;]*m/g, '')
+    const npmCommands = (): string[] => (shelljs.exec as unknown as jest.Mock).mock.calls.map(([command]) => String(command)).filter((command) => /\bnpm (install|ci|ls)\b/.test(command))
+
+    /** A project recorded by an older CLI whose API pinned an older NestJS, as 1.1.0 did. */
+    const olderPinsProject = async (withLockfile: boolean) => {
+      const manifest = manifestFor()
+      const recorded = await generateProject(manifest)
+      const current = JSON.parse(await readFile(join(project, apiPackage), 'utf8'))
+      const pinned = current.dependencies['@nestjs/common']
+      const older = `${JSON.stringify({ ...current, dependencies: { ...current.dependencies, '@nestjs/common': '11.2.1' } }, null, 2)}\n`
+      await writeFile(join(project, apiPackage), older)
+      if (withLockfile) await writeFile(join(project, 'package-lock.json'), '{"lockfileVersion":3,"packages":{}}\n')
+      await writeFile(join(project, '.saasfoundry.json'), JSON.stringify({ ...manifest, fileHashes: { ...recorded, [apiPackage]: hashFileContent(older) } }, null, 2))
+      process.chdir(project)
+      return { pinned }
+    }
+
+    it('prints the command that resolves the lockfile again on a non-interactive run, and installs nothing', async () => {
+      const { pinned } = await olderPinsProject(true)
+
+      await updateCommand({ nonInteractive: true })
+
+      expect(JSON.parse(await readFile(join(project, apiPackage), 'utf8')).dependencies['@nestjs/common']).toBe(pinned)
+      const output = printed()
+      expect(output).toContain(`@nestjs/common 11.2.1 → ${pinned}`)
+      expect(output).toContain('package-lock.json still holds the previous ones')
+      expect(output).toContain('Resolve it again: rm -rf node_modules package-lock.json && npm install')
+      expect(output).toContain('npm ls @nestjs/common @nestjs/core react react-dom')
+      expect(npmCommands()).toEqual([])
+      expect((await readManifest()).version).toBe(cliVersion)
+    }, 180_000)
+
+    it('says nothing about a lockfile the project does not have', async () => {
+      await olderPinsProject(false)
+
+      await updateCommand({ nonInteractive: true })
+
+      expect(printed()).not.toContain('Resolve it again')
+    }, 180_000)
+
+    it('tells a package.json sidecar will need the lockfile resolved once merged', async () => {
+      const { pinned } = await olderPinsProject(true)
+      // The team edited the older package.json: the refresh becomes a conflict with a sidecar.
+      const edited = `${(await readFile(join(project, apiPackage), 'utf8')).trimEnd()}\n\n`
+      await writeFile(join(project, apiPackage), edited)
+
+      await updateCommand({ nonInteractive: true })
+
+      expect(await readFile(join(project, apiPackage), 'utf8')).toBe(edited)
+      const output = printed()
+      expect(output).toContain(`${apiPackage}.saasfoundry.new changes pinned versions`)
+      expect(output).toContain(`@nestjs/common 11.2.1 → ${pinned}`)
+      expect(output).toContain('Once merged, resolve the lockfile again: rm -rf node_modules package-lock.json && npm install')
+      expect(output).not.toContain('Resolve it again:')
+    }, 180_000)
+  })
+
   describe('conflicts (#856)', () => {
     const template = 'apps/api/src/main.ts'
 

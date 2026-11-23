@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'fs'
 import { mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -149,13 +150,23 @@ describe('harness-provisioning', () => {
   })
 
   describe('buildWorkflowLabels', () => {
-    it('includes complexity + nature labels and excludes feedback labels', () => {
+    it('includes complexity + nature + ui labels and excludes feedback labels', () => {
       const names = buildWorkflowLabels({ srs: false }).map((l) => l.name)
-      expect(names).toEqual(expect.arrayContaining(['complexity: bug', 'complexity: low', 'complexity: medium', 'complexity: complex', 'nature:user-facing', 'nature:internal', 'nature:bundled-pr']))
+      expect(names).toEqual(
+        expect.arrayContaining(['complexity: bug', 'complexity: low', 'complexity: medium', 'complexity: complex', 'nature:user-facing', 'nature:internal', 'nature:bundled-pr', 'ui'])
+      )
       expect(names).not.toContain('module-request')
       expect(names).not.toContain('cli-bug')
       expect(names).not.toContain('scaffold-bug')
       expect(names.some((n) => n.startsWith('srs:'))).toBe(false)
+    })
+
+    it('creates the ui label the way the board CLI does when it has to (#1305)', () => {
+      const ui = buildWorkflowLabels({ srs: false }).find((l) => l.name === 'ui')
+      const cli = readFileSync(join(__dirname, '../../../../scaffolds/skills-templates/tools/github-projects/github-projects-cli.sh'), 'utf8')
+
+      expect(ui).toBeDefined()
+      expect(cli).toContain(`gh label create "$UI_LABEL" --color ${ui?.color} --description "${ui?.description}"`)
     })
 
     it('adds the srs labels only when srs is enabled', () => {
@@ -174,10 +185,10 @@ describe('harness-provisioning', () => {
 
       const result = ensureWorkflowLabels('acme/notulias', { srs: true }, run)
 
-      expect(result.created).toHaveLength(10)
+      expect(result.created).toHaveLength(11)
       expect(result.existing).toHaveLength(0)
       expect(result.failed).toHaveLength(0)
-      expect(calls).toHaveLength(10)
+      expect(calls).toHaveLength(11)
       expect(calls[0]).toContain('gh label create')
       expect(calls[0]).toContain("--repo 'acme/notulias'")
     })
@@ -190,7 +201,7 @@ describe('harness-provisioning', () => {
       const result = ensureWorkflowLabels('acme/notulias', { srs: false }, run)
 
       expect(result.created).toHaveLength(0)
-      expect(result.existing).toHaveLength(7)
+      expect(result.existing).toHaveLength(8)
       expect(result.failed).toHaveLength(0)
     })
 
@@ -201,7 +212,7 @@ describe('harness-provisioning', () => {
 
       const result = ensureWorkflowLabels('acme/notulias', { srs: false }, run)
 
-      expect(result.failed).toHaveLength(7)
+      expect(result.failed).toHaveLength(8)
       expect(result.existing).toHaveLength(0)
     })
   })
@@ -231,8 +242,8 @@ describe('harness-provisioning', () => {
 
       const notes = provisionWorkflowLabels({ srs: true, dirs: ['.'] }, gh.runnerFor)
 
-      expect(notes).toEqual([{ ok: true, message: 'Created 10 workflow labels on acme/acme' }])
-      expect(gh.labelCalls).toHaveLength(10)
+      expect(notes).toEqual([{ ok: true, message: 'Created 11 workflow labels on acme/acme' }])
+      expect(gh.labelCalls).toHaveLength(11)
       expect(gh.labelCalls.every((call) => call.dir === '.' && call.cmd.includes("--repo 'acme/acme'"))).toBe(true)
     })
 
@@ -241,16 +252,16 @@ describe('harness-provisioning', () => {
 
       const notes = provisionWorkflowLabels({ srs: false, dirs: ['apps/acme-api', 'apps/acme-web'] }, gh.runnerFor)
 
-      expect(notes.map((note) => note.message)).toEqual(['Created 7 workflow labels on acme/acme-api', 'Created 7 workflow labels on acme/acme-web'])
-      expect(gh.labelCalls.filter((call) => call.dir === 'apps/acme-api')).toHaveLength(7)
-      expect(gh.labelCalls.filter((call) => call.dir === 'apps/acme-web')).toHaveLength(7)
+      expect(notes.map((note) => note.message)).toEqual(['Created 8 workflow labels on acme/acme-api', 'Created 8 workflow labels on acme/acme-web'])
+      expect(gh.labelCalls.filter((call) => call.dir === 'apps/acme-api')).toHaveLength(8)
+      expect(gh.labelCalls.filter((call) => call.dir === 'apps/acme-web')).toHaveLength(8)
     })
 
     it('provisions a repository shared by two directories once', () => {
       const gh = fakeGh({ a: 'acme/acme', b: 'acme/acme' })
 
       expect(provisionWorkflowLabels({ srs: false, dirs: ['a', 'b'] }, gh.runnerFor)).toHaveLength(1)
-      expect(gh.labelCalls).toHaveLength(7)
+      expect(gh.labelCalls).toHaveLength(8)
     })
 
     it('says so when every label was already there', () => {
@@ -258,7 +269,7 @@ describe('harness-provisioning', () => {
         throw Object.assign(new Error('exit 1'), { stderr: 'label with name "x" already exists' })
       })
 
-      expect(provisionWorkflowLabels({ srs: false, dirs: ['.'] }, gh.runnerFor)).toEqual([{ ok: true, message: 'All 7 workflow labels already exist on acme/acme' }])
+      expect(provisionWorkflowLabels({ srs: false, dirs: ['.'] }, gh.runnerFor)).toEqual([{ ok: true, message: 'All 8 workflow labels already exist on acme/acme' }])
     })
 
     it('warns about the labels it could not create', () => {
@@ -266,7 +277,7 @@ describe('harness-provisioning', () => {
         throw Object.assign(new Error('HTTP 403'), { stderr: 'must have admin rights' })
       })
 
-      expect(provisionWorkflowLabels({ srs: false, dirs: ['.'] }, gh.runnerFor)).toEqual([{ ok: false, message: "7 label(s) could not be created on acme/acme — check 'gh auth status' (repo scope)" }])
+      expect(provisionWorkflowLabels({ srs: false, dirs: ['.'] }, gh.runnerFor)).toEqual([{ ok: false, message: "8 label(s) could not be created on acme/acme — check 'gh auth status' (repo scope)" }])
     })
 
     it('warns, naming the directory and the way out, when the repository cannot be resolved', () => {

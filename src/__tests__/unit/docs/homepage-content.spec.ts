@@ -188,6 +188,17 @@ describe('the bilingual product landing (#395)', () => {
     expect(theme).toMatch(/\.sf-workflow-choice > div[\s\S]+border-radius: var\(--sf-radius\)/)
   })
 
+  it('squares the appearance switch knob like its track (#1226)', () => {
+    // VitePress draws the knob (.check) as a circle with its own scoped rule, so the theme rule must
+    // name it and carry !important, the way it does for the track.
+    const css = theme.replace(/\/\*[\s\S]*?\*\//g, '')
+    const squaredSelectors = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, , declarations]) => /border-radius:\s*var\(--sf-radius\)\s*!important/.test(declarations))
+      .flatMap(([, selectors]) => selectors.split(',').map((selector) => selector.trim()))
+    expect(squaredSelectors).toContain('.VPSwitch')
+    expect(squaredSelectors).toContain('.VPSwitch .check')
+  })
+
   it('keeps the light-theme brand color readable for links, focus rings and buttons', () => {
     const brand = theme.match(/--vp-c-brand-1:\s*(#[0-9a-f]{6})/i)?.[1]
     const button = theme.match(/--vp-button-brand-bg:\s*(#[0-9a-f]{6})/i)?.[1]

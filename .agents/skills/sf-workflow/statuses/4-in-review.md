@@ -1,0 +1,67 @@
+---
+status: In Review
+banner_ai: Monitor CI until green, answer review comments, implement requested changes
+banner_human: Review + merge the PR — this is the human gate of the solo workflow; your merge triggers Done
+complexity_profiles: [bug, low, medium, complex]
+entry_conditions:
+  - AI Testing passed with the `## Test report` comment posted
+  - '**An open, non-draft Pull Request exists for the ticket** (PR-existence guard — `In Review` without a PR is rejected by the CLI)'
+  - Ticket is **not** `nature:bundled-pr` — bundled children go AI Testing → Done directly (no individual child PR)
+mandatory_actions:
+  - Confirm the PR is out of draft (you ran `ready-pr` at the end of AI Testing) and its description carries the title, test plan, test list and ticket link
+  - Move ticket to `In Review`
+  - Monitor CI until green
+  - Answer reviewer comments and implement requested changes
+  - Add tests when the reviewer asks; verify locally, commit, push, wait for green CI
+  - Wait for approval AND green CI — do NOT merge
+exit_conditions:
+  - PR approved by the developer
+  - CI is green
+  - Developer merged the PR to the target branch
+next_status: Done
+---
+
+# STATUS: In Review
+
+**The human gate of the solo workflow.** There is no separate manual-testing status — the developer validates here: reviewing the diff, reading the `## Test report` comment, and testing manually when
+the change warrants it. The AI's job is to make that review effortless (clear PR description, complete test report, green CI).
+
+## Ticket type
+
+- **Epic** — never enters In Review and never produces a PR. It stays `In progress` until every delivery-parent child is `Done`; a Story, Task, or Issue delivery parent owns any bundled PR.
+- **Story / Task / Issue with its own PR** — full flow below, one PR per ticket.
+- **`nature:bundled-pr` child** — **never enters `In Review`**. Goes AI Testing → Done directly. The CLI rejects `update-status <ticket> "In review"` for these tickets.
+
+## Action checklist
+
+- [ ] **Ready PR** — the draft opened during AI Testing, marked ready by you with `ready-pr <ticket>`; title = ticket title; description = ticket link + change summary + test plan (copy from ticket) +
+      created tests
+- [ ] **Move ticket** to `In Review` via `workflow-cli.sh update-status`
+- [ ] **Monitor CI** — on red: analyze logs, fix, commit, push, wait for green
+- [ ] **Monitor the review** — answer questions, implement requested changes
+- [ ] **Reviewer asks for extra tests** — create them, run locally, commit, push, wait for green CI, resolve conversation
+- [ ] **Delegated ticket** — a defect found in review, a red CI or a requested change goes back to the ticket's own agent, in the same worktree and on the same branch; the session answers the reviewer
+      and does not code it. The agent returns the ticket to AI Testing when the change calls for retesting (SKILL.md → Delegated ticket delivery)
+- [ ] **Wait for approval + green CI** — do nothing until the developer merges
+
+## Errors to avoid
+
+- Asking the developer to merge with red CI
+- Ignoring test failures in CI
+- Merging yourself (unless explicitly instructed)
+- The session coding a review fix itself while delegation is `allowed`: it goes back to the ticket's own agent
+- Treating the review as a formality — in solo it replaces Human Testing; surface anything the reviewer should look at manually
+
+## Guard
+
+`workflow-cli.sh update-status <N> "In review"` exits non-zero when no open PR has a head branch matching `feature/<N>-…` or `fix/<N>-…`. A PR opened from a differently-named branch is the one case
+for an escape hatch, and the hatch is the developer's to apply (`escape-hatches.md`).
+
+> [!note] Convention sanity check
+>
+> This guard — and the `→ Done` PR-merged guard — only match when branches carry the ticket number, exactly the convention declared in `.saasfoundry.json` → `workflow.branchNaming`
+> (`feature/{N}-{description}`, `fix/{N}-{description}`). The two must stay in lock-step. Quick check (the exit code should be 0):
+> `echo "fix/32-detection-dropdown" | grep -Eq '^(feature|fix)/32(-|$)'`. A branch missing the `{N}` ticket prefix (e.g. `fix/some-name`) silently fails the guard and forces an escape hatch on every
+> ticket — realign `branchNaming`, never "fix" the regex. A non-regression test locks both sides together: `src/__tests__/unit/skill/branch-naming-pr-regex.spec.ts`.
+
+If a draft already exists, use `workflow-cli.sh ready-pr <ticket>` before entering In Review. Draft-skipped CI checks do not count as validation.

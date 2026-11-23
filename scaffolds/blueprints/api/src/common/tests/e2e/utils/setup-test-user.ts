@@ -17,11 +17,21 @@ export interface TestUserConfig {
   firstname: string
   /** Last name of the test user */
   lastname: string
-  /** Roles to assign to the user */
+  /** Roles to assign to the user. They are assigned as they are: the helper never changes their grants. */
   roles: string[]
-  /** Permissions to ensure the user has */
+  /**
+   * Extra permissions for this user only, held in its own test account. They are carried by a custom
+   * role created for the user (see `TEST_GRANTS_ROLE_NAME`), never added to the roles listed in `roles`:
+   * those are usually system roles shared by every user of the e2e run.
+   */
   permissions?: string[]
 }
+
+/**
+ * Name of the custom role that carries the extra `permissions` of a test user. One per test account
+ * (role names are unique per account), so it never reaches another user of the run.
+ */
+export const TEST_GRANTS_ROLE_NAME = 'e2e-test-grants'
 
 /**
  * Test user result
@@ -36,7 +46,12 @@ export interface TestUser {
 }
 
 /**
- * Create a test user with specific roles and permissions
+ * Create a test user with specific roles and permissions.
+ *
+ * The e2e database is shared by every spec of a run, so the helper never changes what a role grants:
+ * `roles` are assigned as seeded, and `permissions` are carried by a custom role of the user's own test
+ * account, assigned to that user only. A later user of the same system role holds exactly the seeded
+ * grants, whatever ran before it.
  * @param prisma The Prisma service
  * @param config The user configuration
  * @returns The created user data
@@ -131,9 +146,10 @@ export async function setupTestUser(prisma: PrismaService, config: TestUserConfi
     }
   })
 
-  // If permissions are specified, ensure the roles have those permissions
+  // Extra permissions go to a custom role of the user's own account, never to the roles above (#987):
+  // those are shared by every user of the run, so granting them there would leak to later specs.
   if (config.permissions?.length) {
-    await ensureRolesHavePermissions(prisma, roles.filter(Boolean) as Array<{ id: number }>, config.permissions)
+    await grantTestPermissions(prisma, user.id, account.id, config.permissions)
   }
 
   return {
@@ -144,111 +160,43 @@ export async function setupTestUser(prisma: PrismaService, config: TestUserConfi
 }
 
 /**
- * Ensure that roles have the required permissions
+ * Give one test user extra permissions in its own account, through a custom ACCOUNT role created for
+ * it: the role belongs to the user's test account, is assigned to that user only, and is removed by
+ * `cleanupTestUser`. System roles are never written to.
  * @param prisma The Prisma service
- * @param roles The roles to check and update
- * @param requiredPermissions The permissions that need to be assigned
+ * @param userId The test user
+ * @param accountId The test user's own account
+ * @param permissionNames The seeded permissions to grant
  */
-async function ensureRolesHavePermissions(prisma: PrismaService, roles: { id: number }[], requiredPermissions: string[]): Promise<void> {
-  // Get role permissions
-  const rolesWithPermissions = await Promise.all(
-    roles.map((role) =>
-      prisma.role.findUnique({
-        where: { id: role.id },
-        include: {
-          permissionsLinked: {
-            include: {
-              permission: true
-            }
-          }
-        }
-      })
-    )
-  )
+async function grantTestPermissions(prisma: PrismaService, userId: string, accountId: string, permissionNames: string[]): Promise<void> {
+  const names = [...new Set(permissionNames)]
+  const permissions = await prisma.modulePermission.findMany({ where: { name: { in: names } } })
 
-  // For each role, check if it has the required permissions
-  for (const role of rolesWithPermissions) {
-    if (!role) continue
+  // A permission the seed does not define is a typo or a missing dataset row: fail loudly instead of
+  // inventing one in the shared catalog.
+  const missing = names.filter((name) => !permissions.some((permission) => permission.name === name))
+  if (missing.length) throw new Error(`setupTestUser: permissions not found in the seeded catalog: ${missing.join(', ')}`)
 
-    // Check if role has each required permission
-    for (const permName of requiredPermissions) {
-      const hasPermission = role.permissionsLinked.some((link) => link.permission.name === permName)
-
-      if (!hasPermission) {
-        // Find or create the permission
-        const module = await findModuleForPermission(prisma, permName)
-
-        if (!module) {
-          console.warn(`Could not find appropriate module for permission: ${permName}`)
-          continue
-        }
-
-        // Find or create the permission
-        const permission =
-          (await prisma.modulePermission.findFirst({
-            where: { name: permName }
-          })) ||
-          (await prisma.modulePermission.create({
-            data: {
-              name: permName,
-              description: `Auto-created permission: ${permName}`,
-              moduleId: module.id
-            }
-          }))
-
-        // RBAC v2 integrity trigger requires the role to hold the permission's prerequisites before
-        // the link is inserted: the parent module, and — when the permission is attached to a
-        // sub-module — that sub-module too. Grant them idempotently first.
-        await prisma.roleModuleLink.upsert({
-          where: { roleId_moduleId: { roleId: role.id, moduleId: permission.moduleId } },
-          update: {},
-          create: { roleId: role.id, moduleId: permission.moduleId }
-        })
-
-        if (permission.subModuleId) {
-          await prisma.roleSubModuleLink.upsert({
-            where: { roleId_subModuleId: { roleId: role.id, subModuleId: permission.subModuleId } },
-            update: {},
-            create: { roleId: role.id, subModuleId: permission.subModuleId }
-          })
-        }
-
-        // Link permission to role
-        await prisma.rolePermissionLink.create({
-          data: {
-            roleId: role.id,
-            permissionId: permission.id
-          }
-        })
-      }
+  const role = await prisma.role.create({
+    data: {
+      name: TEST_GRANTS_ROLE_NAME,
+      description: 'Extra e2e grants of one test user',
+      scope: 'ACCOUNT',
+      isSystem: false,
+      isActive: true,
+      accountId
     }
-  }
-}
-
-/**
- * Find appropriate module for a permission based on naming convention
- * @param prisma The Prisma service
- * @param permissionName The permission name
- * @returns The found module or null
- */
-async function findModuleForPermission(prisma: PrismaService, permissionName: string): Promise<{ id: number } | null> {
-  // Try to derive module name from permission name (e.g. ORGANIZATION_CREATION -> ORGANIZATION_ADMINISTRATION)
-  const parts = permissionName.split('_')
-  if (parts.length > 0) {
-    const entity = parts[0]
-    const moduleName = `${entity}_ADMINISTRATION`
-
-    const module = await prisma.module.findFirst({
-      where: { name: moduleName }
-    })
-
-    if (module) return module
-  }
-
-  // Fallback to ACCOUNT_ADMINISTRATION
-  return prisma.module.findFirst({
-    where: { name: 'ACCOUNT_ADMINISTRATION' }
   })
+
+  // The RBAC v2 integrity trigger wants the role to hold a permission's module, then its sub-module,
+  // before the permission itself: insert them in that order.
+  const moduleIds = [...new Set(permissions.map((permission) => permission.moduleId))]
+  const subModuleIds = [...new Set(permissions.map((permission) => permission.subModuleId).filter((id): id is number => id !== null))]
+  await prisma.roleModuleLink.createMany({ data: moduleIds.map((moduleId) => ({ roleId: role.id, moduleId })) })
+  await prisma.roleSubModuleLink.createMany({ data: subModuleIds.map((subModuleId) => ({ roleId: role.id, subModuleId })) })
+  await prisma.rolePermissionLink.createMany({ data: permissions.map((permission) => ({ roleId: role.id, permissionId: permission.id })) })
+
+  await prisma.userRoleAssignment.create({ data: { userId, roleId: role.id, accountId } })
 }
 
 /**
@@ -287,13 +235,27 @@ export async function cleanupTestUser(prisma: PrismaService, email: string): Pro
   })
 
   if (user) {
+    // The grants role created for this user goes with it (only the one it holds: a user linked to another
+    // test account must not take that account's grants away). Deleting the account alone would not remove
+    // it: the role's account reference is set to null, which would turn it into a global role of every account.
+    const grantsRoles = await prisma.role.findMany({
+      where: { name: TEST_GRANTS_ROLE_NAME, isSystem: false, assignments: { some: { userId: user.id } } },
+      select: { id: true }
+    })
+    const grantsRoleIds = grantsRoles.map((role) => role.id)
+
     // Delete the user (should cascade delete most relationships)
     await prisma.user.delete({
       where: { id: user.id }
     })
 
-    // Clean up account if it exists and no other users are linked
+    if (grantsRoleIds.length) {
+      await prisma.userRoleAssignment.deleteMany({ where: { roleId: { in: grantsRoleIds } } })
+      await prisma.role.deleteMany({ where: { id: { in: grantsRoleIds } } })
+    }
+
     for (const link of user.accountsLinked) {
+      // Clean up account if it exists and no other users are linked
       const otherUsers = await prisma.userAccountLink.findMany({
         where: {
           accountId: link.accountId,

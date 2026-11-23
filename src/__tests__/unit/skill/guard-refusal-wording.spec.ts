@@ -122,6 +122,7 @@ describe('guard refusals point to the developer (#1106)', () => {
       currentStatus?: string
       nature?: 'bundled-pr' | 'internal'
       noComplexity?: boolean
+      ui?: boolean
       childStatuses?: string
       parent?: number | null
     }
@@ -136,7 +137,7 @@ describe('guard refusals point to the developer (#1106)', () => {
       await mkdir(toolDir, { recursive: true })
       await mkdir(binDir, { recursive: true })
       await writeFile(path.join(dir, '.saasfoundry.json'), JSON.stringify({ workflow: { tool: 'github-projects', projectUrl: 'https://github.com/orgs/Fake/projects/42', workingBranch: 'develop' } }))
-      const labels = [...(options.noComplexity ? [] : ['complexity: low']), ...(options.nature ? [`nature:${options.nature}`] : [])]
+      const labels = [...(options.noComplexity ? [] : ['complexity: low']), ...(options.nature ? [`nature:${options.nature}`] : []), ...(options.ui ? ['ui'] : [])]
       const parent = options.parent === undefined ? null : options.parent
       const tool = `#!/bin/bash
 case "$1" in
@@ -214,6 +215,18 @@ esac
       expect(result.code).toBe(2)
       expect(result.stderr).toContain('workflow-cli.sh update-status 42 Done')
       expect(result.stderr).toContain('"Nature guard"')
+      expectNoWayAround(result.stderr)
+    })
+
+    it('UI mockup (#1305): names the record to make, from a validated mockup or from supplied visuals, and leaves the marker to be cleared with the developer', async () => {
+      const result = await updateStatus(await sandbox({ nature: 'internal', ui: true }), 'In review')
+
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('workflow-cli.sh record-ui-validation 42 --mockup <link-or-path> --approved-by <name>')
+      expect(result.stderr).toContain('workflow-cli.sh record-ui-validation 42 --supplied "<what the developer supplied>"')
+      expect(result.stderr).toContain('tell the developer, then clear the marker')
+      expect(result.stderr).toContain('workflow-cli.sh clear-ui 42')
+      expect(result.stderr).toContain('"UI mockup guard"')
       expectNoWayAround(result.stderr)
     })
 

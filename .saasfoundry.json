@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/DiamondForgeFr/SaasFoundryAI/master/schemas/saasfoundry-manifest.schema.json",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "projectName": "saasfoundryai-cli",
   "structure": "cli",
   "language": {
@@ -10,7 +10,7 @@
   },
   "workflow": {
     "tool": "github-projects",
-    "template": "SaaSFoundry AI",
+    "template": "SaaSFoundry Solo",
     "projectUrl": "https://github.com/orgs/DiamondForgeFr/projects/1",
     "workingBranch": "develop",
     "prTargetBranch": "develop",
@@ -28,30 +28,27 @@
     "statuses": [
       {
         "name": "Backlog",
+        "description": "Raw ideas and specs waiting to be challenged. AI must challenge the ticket with the developer to clarify requirements, identify edge cases, and validate approach before starting. Complexity label is mandatory before leaving Backlog.",
         "color": "GRAY"
       },
       {
-        "name": "Ready",
-        "color": "YELLOW"
-      },
-      {
         "name": "In progress",
+        "description": "Task currently being worked on by AI after the developer confirmed pickup. One commit per subtask. When all subtasks are done: run existing tests (unit, E2E, lint, TypeScript), commit and push all changes, then move to AI Testing and generate a test plan.",
         "color": "BLUE"
       },
       {
         "name": "AI testing",
+        "description": "Validation phase. Execute the generated test plan step by step, document findings in ticket comments, fix and re-test on failure. When all tests pass: post the test report, create the pull request and move to In Review — the PR review is where the developer validates.",
         "color": "PURPLE"
       },
       {
-        "name": "Human testing",
-        "color": "ORANGE"
-      },
-      {
         "name": "In review",
+        "description": "Pull request open — this is the human gate of the solo workflow. The developer reviews the changes (and tests manually if needed); AI monitors CI and review comments and addresses feedback. The developer merging the PR is what moves the ticket to Done.",
         "color": "PINK"
       },
       {
         "name": "Done",
+        "description": "PR merged to the working branch. Close the ticket, clean up local branches, and update any related documentation.",
         "color": "GREEN"
       }
     ],
@@ -91,7 +88,8 @@
         "local-docs-integrity",
         "local-docker-normal"
       ]
-    }
+    },
+    "validated": false
   },
   "tools": {
     "srs": {
@@ -110,7 +108,7 @@
   "modules": {
     "harness": {
       "version": 5,
-      "agents": ["claude-code", "codex"],
+      "agents": ["claude-code", "codex", "kimi"],
       "managed": true,
       "delegation": {
         "ticketDelivery": "allowed",
@@ -124,14 +122,14 @@
   },
   "fileHashes": {
     "GEMINI.md": "bc151271e752fb7d81079960549699344f07dc69c33508d296d888987a34b8f9",
-    ".agents/skills/sf-integration-rules/backend.md": "7a07007f45d9fb05145c03030e44e4d2a859cfb58fec6b2e207b2cc7bfd28738",
+    ".agents/skills/sf-integration-rules/backend.md": "65dad96f9e53683b2a36f18e11f270a9da841258d8910b704bc7ac5131df718d",
     ".agents/skills/sf-integration-rules/frontend.md": "6a07fcdb592f4fcddddef37a44796a477364f6bdea72a55ff0ada343c11f2112",
-    ".agents/skills/sf-integration-rules/SKILL.md": "bf622828ed963d99133a17276ec61f05ea1770984a7e81ad4f769226c6bd86ce",
+    ".agents/skills/sf-integration-rules/SKILL.md": "cafccceb5666d120e9854eecf77da405700a0af13830d4e14be758847f796056",
     ".agents/skills/sf-integration-rules/topology.md": "6963e6bfae2de4febd56027cc456de1ebe604515da868cb857828245a54282ca",
     ".agents/skills/sf-srs/data/clustering-rules.json": "3110294b18bf3229a320ea70f5878d18c1e874b8bbc511e61ee0c948dcf0bfee",
     ".agents/skills/sf-srs/scripts/detect-eval-signals.sh": "59bdb4d7757b91d9b7c833350f28c5d609c323fd19fe804c61a9c3a89032c481",
     ".agents/skills/sf-srs/scripts/srs-cli.sh": "2c4d6d8654dd54dfd49ee3901c5714447fcfb8042739a1a06a52fbcf943fb406",
-    ".agents/skills/sf-srs/SKILL.md": "8366f8e345bf1048e22211ef6c3c093a0b10ee156620a4cd9231dac641e671ca",
+    ".agents/skills/sf-srs/SKILL.md": "c713a2fc0860737cad0adf3a7608913948aea75d3d638607fa89e1fecabcf670",
     ".agents/skills/sf-srs/templates/examples/example-epic.md": "353c7ab168a78283a0051f48b91775550b218ff25bf9e87ff9b668fdefa9864f",
     ".agents/skills/sf-srs/templates/examples/example-epic.spec.json": "028ec65c05b42717ad94ef207263754625431ad3ce2b482d0439dd994acbc52d",
     ".agents/skills/sf-srs/templates/examples/example-three-levels.spec.json": "710c232072e333a0fb6918629e25d3caa73952ea2bf4d11b284703cd0fbcb41c",
@@ -141,43 +139,48 @@
     ".agents/skills/sf-srs/templates/tickets/examples/story.md": "b061472b1540b1342f3424b777a0ddb5849ce1e62d2544627645a07e2f7a301f",
     ".agents/skills/sf-srs/templates/tickets/examples/task.md": "d3e00d8872d580137055917cce2729d1100a36e5cc9e655b0612333ea84c6364",
     ".agents/skills/sf-srs/templates/tickets/README.md": "86a02da6116ff743c16415bfe0288abf46cd67a7b3424571a245a693768f873f",
-    ".agents/skills/sf-tool-github-projects/github-projects-cli.sh": "5ee3a414651ad26514fbc23bbaafe48e75b3272a14c4f01fd1c81c00ac6e5ad2",
-    ".agents/skills/sf-tool-github-projects/SKILL.md": "89ca28f5bdadb07f0fdc2c5c40826c172d546bc6927865124aa780cd1f51e7ca",
+    ".agents/skills/sf-tool-github-projects/github-projects-cli.sh": "420e2fd7c29ce54238a099baac5aea38684ea160a0ebb690fed31b2533cf705c",
+    ".agents/skills/sf-tool-github-projects/SKILL.md": "2df667b97b46304dd85847d9a3c246223f69496e2b94a46235a8e2fe4400fa5c",
     ".agents/skills/sf-workflow/complexity/bug.yml": "ede99f1f666c405ad4a9b80a1ece8b4edbd0834d5dc6a8fc846ca7895981ebbe",
     ".agents/skills/sf-workflow/complexity/complex.yml": "efe47d05f43b67c4245de5ce0a83c1ad3d010e9052a696bbd4af6168e80909a0",
     ".agents/skills/sf-workflow/complexity/low.yml": "b0052bfedaad3cd31fdea553bce7264e9bcdc4422d9567bae3669a991b302de0",
     ".agents/skills/sf-workflow/complexity/medium.yml": "e7d4945533ef210c24ab3f10bbc48e2b39304a1af6664faf371d01662db2927e",
     ".agents/skills/sf-workflow/complexity/README.md": "5718e7552be53c5f01db67390d819092e689797caf60423594e7eb0cb1797054",
-    ".agents/skills/sf-workflow/escape-hatches.md": "ce41ba458117a6541e3e010a3242eb3b6fe6927ad34c31ae43558b0eec9722c4",
+    ".agents/skills/sf-workflow/escape-hatches.md": "5fd59131319fec8f05bdcf5e74de16550f19a817305cfa203e07facc93835e6c",
     ".agents/skills/sf-workflow/scripts/analyze.sh": "6adacead583f76ba6efa86c95861725299b19875aaaa71f55a174bed88ddd0e5",
     ".agents/skills/sf-workflow/scripts/detect-complexity.sh": "ffc15a241693cdc74e8ea83293feee6f3f15c2979b57d768704b6363f71a75d9",
     ".agents/skills/sf-workflow/scripts/examine.sh": "54a0e9e90f529a2de21db25a938be2563104695d42663c92b45eb7867db4ae06",
     ".agents/skills/sf-workflow/scripts/plan.sh": "cec9907f9800b41a22251352ef8cc2d589a6e55212f75ce743dcbc1f7a9cbac6",
-    ".agents/skills/sf-workflow/SKILL.md": "5a3a75dc202ca77d17bdc02950f2724ff2b82a1c0f81d7a69f47466a03bf73e5",
-    ".agents/skills/sf-workflow/statuses/1-backlog.md": "35aae23e623e0dc76ee6c1bb4e6aa3b4579e604dc739529a226c933178a08feb",
-    ".agents/skills/sf-workflow/statuses/2-ready.md": "cc67916a7cdedd0c8f8bb6184848b3ad5daa8cc87c146d2a1ab4f50d9c161137",
-    ".agents/skills/sf-workflow/statuses/3-in-progress.md": "7c928847d43edf7ff4b371b7c29d201bf249e6f486889e7f94350b0e87540dcb",
-    ".agents/skills/sf-workflow/statuses/3a-ai-drafting.md": "4c53767e3208b43135f4cd4b00326895793f55197b8ef5293b97437a25259e75",
-    ".agents/skills/sf-workflow/statuses/3b-human-review.md": "f6d10de01cb2e5c0b5c7271c3cfef12e57f013c655312e4e445cd11b962b1bb3",
-    ".agents/skills/sf-workflow/statuses/3c-spawning.md": "c33b53d202fba9b9f12090a3caf0d16b2ddfee46b3a2b16b90e2368844fdb1f0",
-    ".agents/skills/sf-workflow/statuses/4-ai-testing.md": "ca25063e2dac7d326a65750a85f3602cbecba1146b09dd17152c95ab3f34fb6a",
-    ".agents/skills/sf-workflow/statuses/5-human-testing.md": "62ac07b0dcc9d1f51b4ec746794251019e7e43b399935da35af5d41edea1e282",
-    ".agents/skills/sf-workflow/statuses/6-in-review.md": "02bea0959bf7f105dfa1d243783fa8282cadf5e95a7ec79946ac26d9a294c58d",
-    ".agents/skills/sf-workflow/statuses/7-done.md": "60fac17093b648f858d60b488853efdf47d91eb87cb3591acfa2fda41aa4f634",
-    ".agents/skills/sf-workflow/workflow-cli.sh": "def38b9e2b1c0895d73ddcbe101d46d5f2119da176fcd6ac9a4747116b829f41",
-    ".claude/rules/claude-code.md": "9e4ea3dc9b995b811ea37dfc310799a05e505e7e9313f5c05cdbf9bf0fc9ec5a",
-    ".claude/agents/sf-light.md": "d4cc6d772c9b0243ac08b48299e6ebc23a54204662f854c32fac98586edfc301",
-    ".claude/agents/sf-edit.md": "a9224db753554420aedde81035e0aaf4c85d63d345ca5b20a9ef4fbed24bda75",
-    ".claude/agents/sf-build.md": "9ed5e71415ec9322a276707a4669f3f202467d52dd34db2fb0dc32039c5ef2c9",
-    ".claude/agents/sf-fix.md": "86022caa2fb99c9de473a16fbf246216f9430cc765c20dce4d9e7fda853d62c3",
-    ".claude/agents/sf-plan.md": "6dd5a25ae673d6ed892550d605f2cf1059ac26b576345be73bf6f7c7ded7e7b1",
-    ".claude/agents/sf-terminal.md": "70200708b6ef10c2a32fdc373c64402552138498f7a7567eaa0ee201d01df927",
-    ".codex/agents/sf-light.toml": "1860582b8ebf22cf58b8cfe446ade0f47b166c8893029ea3a695c49a17bd04e7",
-    ".codex/agents/sf-edit.toml": "160d3bff1e1a7dd8d6358eea1165c67adee0a4e63c9491af380ed01158843989",
-    ".codex/agents/sf-build.toml": "deb84387d57e5b77f2c072919d42a57a8f9e9268f2891c9766e9c1f525fad99a",
-    ".codex/agents/sf-fix.toml": "67fd2c7373823da93e7986f5b20ef74148e93907b07bfc498cc417133776a245",
-    ".codex/agents/sf-plan.toml": "41b78543bfbde4d56aafcb6f022e6b04c0169a7060b93f60a117049c54ae236a",
-    ".codex/agents/sf-terminal.toml": "10b779301f0dc145313ab4f141025a013e4c27a6ceee83b05e4d2c1588685dd6"
+    ".agents/skills/sf-workflow/SKILL.md": "13db64b782ccd9bb453464673f47fa416f38841e72efd6b1ae11188120f4bc2a",
+    ".agents/skills/sf-workflow/statuses/1-backlog.md": "3b746f01e6c15a8db3260b8272289e9104552eb9f8c52a8f90f1eaf84a425f09",
+    ".agents/skills/sf-workflow/workflow-cli.sh": "6af37ea8a77d16bd72138b54f8e613289e4d690f73369c1256e5728c9ea9e417",
+    ".claude/rules/claude-code.md": "2eafdde282421c15bfea3645b722ac0dfffbe0c5c04c3ce7fe3763b341717178",
+    ".claude/agents/sf-light.md": "e8304d2408100d144ce2c7919ea559dc04073057385ec1624b531a25e894a05b",
+    ".claude/agents/sf-edit.md": "473dd0e265d0788b1aca0e37c34ade429fd40158a146f1988d6df70818b21594",
+    ".claude/agents/sf-build.md": "fbca0925bb47a918624b36b3e40d7a8f9387ab97acca330064faa89cc3dabfb6",
+    ".claude/agents/sf-fix.md": "5478575ff1fc69bbb24e26ffcdf89399c450d18c1a520996e68679644e9a6218",
+    ".claude/agents/sf-plan.md": "1fe45a0d1c74509975ea00e6bb3a10069431844179e4ab4c08d7a7d4aae15bee",
+    ".claude/agents/sf-terminal.md": "23989e4c1216f23fcec5954efecedb9554488f795ff4a3985a70ed6aa3de4df8",
+    ".codex/agents/sf-light.toml": "d0bf7f17e7c5ea2e0db6b06482ff4570af6430454f79ca17c81a9ac6cc7a8c6d",
+    ".codex/agents/sf-edit.toml": "548cdbd0bde956c98101cc7929abb83f609e36d047bc766d7687ae052788504d",
+    ".codex/agents/sf-build.toml": "7da73905a951b4cdec723c7fc230ee536615f71e5121bffb12d960a97f5a8b89",
+    ".codex/agents/sf-fix.toml": "76ffa58ca24ee846071729339e4480a0749a0f5f3a1896363bf1208ffdb341bc",
+    ".codex/agents/sf-plan.toml": "a55a0dba7b4ab1de612cc4e0ccf43b1de8388efe46050e210f3aa4eac33e5d8d",
+    ".codex/agents/sf-terminal.toml": "f0beec9cf7be93343f5fca1d2138df04bba3d5b66a8cf6d08dfc49d1cb8213f1",
+    ".agents/skills/sf-workflow/statuses/2-in-progress.md": "7268606881a810a0bb3e7505cf30f72af047bff3b3f4550e47122ad6b1c08951",
+    ".agents/skills/sf-workflow/statuses/2a-ai-drafting.md": "cfa2159ae86c6402c3ed7f41a3f55be935472072a7d3c74008bad9493d33e373",
+    ".agents/skills/sf-workflow/statuses/2b-human-review.md": "0866da898a41a86523517b8a2bbf9a187c56b59e3f22ee13ab7ffa565e3354b9",
+    ".agents/skills/sf-workflow/statuses/2c-spawning.md": "b82ff50dd8d2bb7adc82fbd5a01c396f6afcb618e92e8d3b2d8746eebef7d873",
+    ".agents/skills/sf-workflow/statuses/3-ai-testing.md": "7f6638a6d6c44bbd99657846b7567c979c464ebe339de91886c45dcbe865f7aa",
+    ".agents/skills/sf-workflow/statuses/4-in-review.md": "f373fb90a007f4388c6bf3573d5e9f89598a784cb75792d35b79d0602ad327a6",
+    ".agents/skills/sf-workflow/statuses/5-done.md": "13f0767a26e391ade5b2494ef23b626e5d98a75672b216304b17d55dd3940684",
+    ".kimi-code/agents/sf-light.md": "a583205cebba7163d9d1b082409a466888f07b419b3df398f91cc028f9a2a4a1",
+    ".kimi-code/agents/sf-edit.md": "611b69fc0fbc6a6343c3639f26d3775852744c7a56f01b45f77f8d61222bcaf6",
+    ".kimi-code/agents/sf-build.md": "266eaba9fe053a4b485de29a732eff6c911610cd6d702181c4e05be1fd8097e9",
+    ".kimi-code/agents/sf-fix.md": "6c7e14cf248f9fefea85a6ddb52b1525d671475bf0621750ee4c6b0222386a6d",
+    ".kimi-code/agents/sf-plan.md": "af377817ca70a819dc0f6438b0327e6a1f48a325d908871f18300ef95e43f9b5",
+    ".kimi-code/agents/sf-terminal.md": "9fa668b69c3ece4f895ff012d18ac497eec2741dd741aea29fb1ea4a5a3621f7",
+    ".agents/skills/sf-workflow/ui-checklist.md": "3a459602f503cd8c16908980b41e1604fa7a12a99a777d31e9552ff148d95df2"
   },
   "manifestVersion": 4
 }

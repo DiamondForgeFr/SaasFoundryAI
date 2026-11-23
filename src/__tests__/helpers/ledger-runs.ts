@@ -1,5 +1,5 @@
-import { buildRouteRecord, buildRunRecord, foldLedger, type Complexity, type LedgerRoute, type LedgerRun, type Nature } from '../../harness/delegation-ledger'
-import type { TaskKind } from '../../harness/routing-grid'
+import { buildRouteRecord, buildRunRecord, foldLedger, type Complexity, type LedgerHost, type LedgerRoute, type LedgerRun, type Nature } from '../../harness/delegation-ledger'
+import type { RoutingProvider, TaskKind } from '../../harness/routing-grid'
 
 /**
  * Ledger runs for the routing specs (#1035): a scenario states the outcome, the cost and the duration of a
@@ -20,9 +20,9 @@ export const TIERS = {
 export type RunSpec = {
   tier?: keyof typeof TIERS
   kind?: TaskKind | null
-  provider?: 'claude-code' | 'codex'
-  /** `manual`: recorded by hand, rated for the report and never decisive. */
-  host?: 'claude-code' | 'codex' | 'manual'
+  provider?: RoutingProvider
+  /** `manual`: recorded by hand, rated for the report and never decisive (the only host a coding agent without a capture hook has). */
+  host?: LedgerHost
   retryOf?: string
   eventKey?: string
   outcome?: 'success' | 'fail' | 'cancelled' | 'candidate-unavailable' | 'outcome-unknown'
@@ -77,7 +77,7 @@ export const sequence = (pattern: string, spec: RunSpec = {}): LedgerRun[] => [.
 export const history = (...groups: LedgerRun[][]): LedgerRun[] => groups.flat().sort((left, right) => (left.at < right.at ? -1 : left.at > right.at ? 1 : 0))
 
 /** A route `sf agents route --record` issued and no run has echoed yet: it reserves its place in the trial share. */
-export function pending(spec: { kind?: TaskKind; provider?: 'claude-code' | 'codex'; tier?: keyof typeof TIERS; trial?: boolean; now: Date }): LedgerRoute {
+export function pending(spec: { kind?: TaskKind; provider?: RoutingProvider; tier?: keyof typeof TIERS; trial?: boolean; now: Date }): LedgerRoute {
   const route = buildRouteRecord({
     taskKind: spec.kind ?? 'multi-file-feature',
     provider: spec.provider ?? 'claude-code',

@@ -148,6 +148,21 @@ describe('sf agents routing report (#1035, AC-3)', () => {
       ])
     })
 
+    // FR-MAH-021: a run recorded by hand for Kimi Code is a row of its own, on the Kimi tier, never mixed into another agent's
+    it('lists the runs recorded for kimi as their own rows, with the tier Kimi is routed to', async () => {
+      // Kimi has no price in the catalogue: its runs carry no cost, and the report says which model ran unpriced
+      const kimi = { provider: 'kimi', host: 'manual', model: 'k3.1-pro', effort: 'high', cost: null } as const
+      const all = history(runs(2, { kind: 'tests', ...kimi }), runs(2, { kind: 'tests' }))
+      const report = await buildRoutingReport(state(all, { agents: ['claude-code', 'kimi'] }), NOW, { probe: probe(true) })
+      expect(report.kinds.map((row) => [row.kind, row.provider, row.routedTier, row.source])).toEqual([
+        ['tests', 'claude-code', 'build', 'shipped'],
+        ['tests', 'kimi', 'build', 'shipped']
+      ])
+      expect(report.kinds[0].tiers).toMatchObject([{ tier: 'build', candidate: { model: 'claude-sonnet-5-5', effort: 'xhigh' }, runs: 2, rated: 2 }])
+      expect(report.kinds[1].tiers).toMatchObject([{ tier: 'build', candidate: { model: 'k3.1-pro', effort: 'high' }, runs: 2, rated: 2, cost: { priced: 0 } }])
+      expect(report.unpricedModels).toEqual(['k3.1-pro'])
+    })
+
     it('says which tier the kind is routed to and where that choice comes from', async () => {
       const local: LocalRouting = { ...emptyLocalRouting(), kinds: { 'multi-file-feature': { 'claude-code': { tier: 'fix', from: 'build', action: 'escalate', at: NOW.toISOString(), evidence } } } }
       const report = await buildRoutingReport(state(history(runs(2, { tier: 'build' }), runs(2, { tier: 'fix' })), { local }), NOW, { probe: probe(true) })
@@ -180,6 +195,31 @@ describe('sf agents routing report (#1035, AC-3)', () => {
       expect(report.ledger).toMatchObject({ runs: 1, stops: 2, rated: 1 })
       expect(report.kinds[0].tiers[0]).toMatchObject({ runs: 1, cost: { priced: 1, mean: '4.000000' }, durationMs: { median: 20_000, p95: 20_000 } })
       expect(renderRoutingReport(report)).toContain('1 further stop of resumed agents are counted in their delegation.')
+    })
+
+    // The report and the adjustment read the same fold: an agent whose latest stop is interim is a failure in neither (#1241)
+    it('counts a delegation whose latest stop is interim as censored, never as the verdict an earlier stop gave', async () => {
+      const agent = agentToken('a2')
+      const stop = (eventKey: string, from: number, to: number, minutes: number, extra: Partial<Parameters<typeof buildRunRecord>[0]> = {}) =>
+        buildRunRecord({
+          host: 'claude-code',
+          provider: 'claude-code',
+          tier: 'fix',
+          taskKind: 'bug-fix',
+          model: 'claude-opus-5-5',
+          effort: 'medium',
+          eventKey,
+          agentId: agent,
+          segment: { from, to },
+          at: new Date(NOW.getTime() + minutes * 60_000).toISOString(),
+          durationMs: 10_000,
+          tokens: { input: 1, output: 0, cacheRead: 0, cacheWrite: 0 },
+          ...extra
+        })
+      const fold = foldLedger([stop('one', 0, 10, 0, { outcome: 'fail', checks: ['type-check'] }), stop('two', 10, 20, 5, { evidenceRefs: ['interim-stop'] })])
+      const report = await buildRoutingReport({ ...state(fold.runs), ledger: fold }, NOW, { probe: probe(true) })
+      expect(report.ledger).toMatchObject({ runs: 1, stops: 2, rated: 0, censored: 1, interim: 1 })
+      expect(renderRoutingReport(report)).toContain('1 delegation is still at an interim stop')
     })
   })
 

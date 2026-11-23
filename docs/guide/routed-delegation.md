@@ -37,14 +37,72 @@ nearest proxy, with no score yet).
 A project can change the grid in `modules.harness.routing`: `kinds` moves a task kind to another tier, and `tiers` changes a tier's candidate for one agent. The manifest schema validates both, and an
 invalid override makes the command fail instead of silently using the grid. The full syntax is in [`sf agents`](/cli/sf-agents#delegation-routing-sf-agents-route).
 
+### Kimi Code
+
+Kimi Code has a candidate in every tier, declared as data in its profile and in the grid. All of them are **provisional**: no public benchmark measures them with a cost, so each route says
+`provisional: No Kimi measurement exists yet` until the maintainers' replay bench replaces it with a measurement. The `highspeed` aliases are not used, because they bill twice.
+
+| Tier       | Task kinds                    | Kimi Code candidate (model, effort) |
+| ---------- | ----------------------------- | ----------------------------------- |
+| `light`    | `exploration`, `prose`        | `k3`, `low`                         |
+| `edit`     | `scoped-edit`                 | `k3`, `high`                        |
+| `build`    | `multi-file-feature`, `tests` | `k3.1-pro`, `high`                  |
+| `fix`      | `bug-fix`, `review`           | `k3.1-pro`, `high`                  |
+| `plan`     | `planning`                    | `k3.1-pro`, `high`                  |
+| `terminal` | `terminal-ci`                 | `k3.1-pro`, `max`                   |
+
+Kimi Code expresses three efforts, `low`, `high` and `max`: an override at any other effort is refused. Kimi Code works differently from the other two hosts in three ways:
+
+- **Tier agents without a model, and an alias per call.** The harness writes `.kimi-code/agents/sf-<tier>.md` for every tier, like the other hosts, but Kimi Code binds no model in an agent file. A
+  call to its `Agent` tool passes `model: <alias>`, a key of the `[secondary_model.models]` pool in **your own** `~/.kimi-code/config.toml` (or `$KIMI_CODE_HOME/config.toml`). So the route names the
+  alias next to the candidate, and the session copies it:
+
+  ```bash
+  sf agents route --task bug-fix --provider kimi
+  # bug-fix → fix (shipped) kimi: k3.1-pro, effort high, alias sf-k3-1-pro-high — provisional: …
+  ```
+
+  The alias is named after the candidate, never the tier, so it follows an override of a tier's candidate, an automatic move, a trial or a retry. A dot in the model name is written as `-`:
+
+  | Alias              | Candidate (model, effort) | Tiers                  |
+  | ------------------ | ------------------------- | ---------------------- |
+  | `sf-k3-low`        | `k3`, `low`               | `light`                |
+  | `sf-k3-high`       | `k3`, `high`              | `edit`                 |
+  | `sf-k3-1-pro-high` | `k3.1-pro`, `high`        | `build`, `fix`, `plan` |
+  | `sf-k3-1-pro-max`  | `k3.1-pro`, `max`         | `terminal`             |
+
+  This is the one exception to "never name a model": the session passes the alias exactly as the route prints it, and never composes one.
+
+- **Declaring the aliases is yours.** sf never writes `~/.kimi-code`. It reads the key names of your pool and, when a route's alias is missing, prints on stderr the TOML to paste; `sf agents enable`,
+  `replace` and `refresh` print the same for every tier alias, as a warning. Paste the `[models.<alias>]` tables first (each carries the `default_effort` of its alias, and the `provider` and context
+  size copied from your entry of the same model when there is one), then the lines under your existing `[secondary_model.models]` table. Do not repeat that header. If
+  `[secondary_model].default_effort` is set, it outranks the effort of every alias: remove it to let each alias run at its own. With a one-entry pool Kimi Code does not offer the `model` parameter, so
+  keep at least two.
+- **Sub-tasks in the current worktree only.** Kimi Code has no worktree tool the harness uses, so a delegation to it is limited to sub-tasks of the current worktree until a whole-ticket worktree run
+  is verified. Each of its tier agents is handed a sub-task and never a whole ticket, and the session delivers the ticket itself. When a route is refused, or a delegation cannot start, the session
+  runs the step itself: it never starts another coding agent's CLI (`claude`, `codex`, or any other) or a background session of another host to delegate anyway.
+
+One more limit: **no hook.** Kimi Code reads its hooks from the user's own configuration, never from the project, so the harness installs neither a guard nor a capture hook. `sf status` says
+`guard unavailable` and `capture unavailable`, with that reason, and the delegations are recorded by hand with `sf agents outcome record --provider kimi`. The CLI's own guards still refuse an escape
+hatch. Whether Kimi Code resolves `subagent_type: "sf-<tier>"` and honours the alias on a call is declared from its documentation and not checked (`runtime: not-checked`).
+
+The agent is named `kimi`, explicitly: no model name or look-alike (`kimi-code`, `k3`, `moonshot`) is read as that agent. A CLI older than this release does not know `kimi` as a routed agent: it
+refuses `sf agents route --provider kimi`, and skips (and counts) a ledger line whose provider is `kimi`, so upgrade every clone that shares a ledger first.
+
 ## The tier agents
 
-For each declared coding agent that the grid routes, the harness writes one subagent per tier. For Claude Code these are `.claude/agents/sf-<tier>.md`, with the model and effort in their frontmatter;
-for Codex they are `.codex/agents/sf-<tier>.toml`. Each description lists the task kinds the tier serves, so Claude Code can pick the right agent from its description alone.
+For each declared coding agent that the grid routes and whose profile declares tier agents, the harness writes one subagent per tier. For Claude Code these are `.claude/agents/sf-<tier>.md`, with the
+model and effort in their frontmatter; for Codex they are `.codex/agents/sf-<tier>.toml`; for Kimi Code they are `.kimi-code/agents/sf-<tier>.md`, which name no model (the call passes the
+[alias the route names](#kimi-code)). Each description lists the task kinds the tier serves, so Claude Code can pick the right agent from its description alone; a Kimi file puts them in `whenToUse`.
+
+Which agents are routed, which efforts a tier agent can carry, and which folder and format it is written in are not decided by the harness's code: each coding-agent profile declares them in its
+`capabilities` block ([`sf agents`](/cli/sf-agents#the-capability-block-of-a-profile)). A tool whose profile declares no routing has no route and no tier agent, and a command that needs one tells you
+why in the words of that profile, for example that the harness ships no routing candidates for Gemini CLI. A routed tool whose profile declares no tier agents has a route and no file. The same rule
+covers every capability a profile lacks: it says why, or the registry refuses it.
 
 The files are generated and tracked. `sf agents enable`, `replace`, `refresh` and `sf update` rewrite an untouched file and leave an edited one beside a `.saasfoundry.new` sidecar.
-[`sf status`](/cli/sf-status#tier-agents) warns when one is missing, edited or outdated. The tier agents only name a model and an effort; they do not carry credentials, and a missing provider account
-makes the delegation fail, it does not fall back silently.
+[`sf status`](/cli/sf-status#tier-agents) warns when one is missing, edited or outdated. The tier agents only name a model and an effort (Kimi Code: an alias); they do not carry credentials, and a
+missing provider account, or an alias your pool does not declare, makes the delegation fail, it does not fall back silently.
 
 ## Consent
 
@@ -82,7 +140,8 @@ When delegation is `allowed`, a ticket that is more than a trivial change (one k
    | `medium` and `complex`, once decomposed                       | `multi-file-feature` |
 
 2. **A background agent receives the ticket** in its own Git worktree, on the branch `feature/<N>-<description>` cut from the remote working branch (or the branch the host named, pushed to the ticket
-   branch). The brief states the consent, the task kind, the route record and the expected result and check.
+   branch). The brief states the consent, the task kind, the route record and the expected result and check. For a ticket marked `ui` it adds one clause: hold the visual part until the session relays
+   the developer's OK, and follow the validated mockup (see [How an agent works a `ui` ticket](/guide/workflow-system#how-an-agent-works-a-ui-ticket)).
 3. **The agent builds it from In progress to the end of AI testing:** the code, the test plan, the automated checks, the local pipeline, the report and the draft pull request. It does not hand the
    ticket on.
 4. **The agent stops at the green report.** It leaves the ticket in AI testing and the pull request as a draft. It never runs `ready-pr`, never merges, never records the delegation consent and never
@@ -104,11 +163,13 @@ The harness does not trust a delegate's own account of its work. It measures thr
   echoes within seven days expires.
 - **The verdict line.** Each tier agent ends its final message with `SF-DELEGATION: <pass|fail> route=<id> checks=<codes>`. `pass` means the check the brief named was run and met. A delegate that ends
   without the line is asked for it once, while it is still running: the capture hook answers its stop with a block that carries the exact line to write, and the answer is the next stop of the same
-  delegation. A message that still has no line is an unknown outcome.
+  delegation. A message that still has no line is an unknown outcome. A delegate waits for the background jobs it started before its final message; a turn that ends while one still runs (Claude Code
+  lists the running tasks in the stop, or the delegate writes `SF-DELEGATION: pending route=<id>`) is an interim stop: it keeps its cost, records no outcome and asks nothing, and only the final stop's
+  verdict reaches the routing (see [`sf agents`](../cli/sf-agents.md#interim-stops)).
 - **The ledger.** `<git-common-dir>/saasfoundry/delegations.jsonl` is an append-only file that holds the runs (tokens, cost, active time, outcome, checks, tier and candidate), the route records, and
-  the signals. On Claude Code, `SubagentStop` and `PostToolUse` hooks capture each run automatically. Other hosts record by hand with `sf agents outcome record`. A cost is never guessed: a model
-  without a published price keeps its reliability but has no cost until the project declares one. A capture that fails is not silent: it is logged next to the ledger, and `sf status` and
-  `sf agents routing report` count the errors of the last 7 days.
+  the signals. On Claude Code, `SubagentStop` and `PostToolUse` hooks capture each run automatically. Other hosts, Kimi Code included, record by hand with `sf agents outcome record`. A cost is never
+  guessed: a model without a published price keeps its reliability but has no cost until the project declares one. A capture that fails is not silent: it is logged next to the ledger, and `sf status`
+  and `sf agents routing report` count the errors of the last 7 days.
 
 A later verdict is added as a signal, and the original line is never edited. The session marks a delivery that it had to redo with `sf agents outcome mark <ticket> rework`, and a defect that comes
 back from Human Testing or review with `human-defect`. Both writes ask for permission in the coding agent, because they change what the routing does next.

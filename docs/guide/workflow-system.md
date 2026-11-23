@@ -131,6 +131,63 @@ is then the human gate.
 A recorded list is pinned: a job added to `.molten/project.json` afterwards is not required until the list is recorded again, or cleared with `sf workflow set-local-ci --clear` to follow the pipeline.
 `sf workflow show` and `sf status` print the effective list and where it comes from.
 
+## The UI mockup gate
+
+A ticket that changes the user interface is validated on a mockup before its visual work reaches your review: you see the look first, not in the screenshots of a finished pull request. Three things
+carry the gate, with GitHub Projects as the workflow tool.
+
+- **The `ui` marker.** The session labels a ticket `ui` when it creates it (`create-ticket … --ui`, `create-subtask … --ui`) or later with `set-ui <ticket>`, and `clear-ui <ticket>` removes it. The
+  label is not a nature label and is not reserved to you: the session sets it, `sf new` provisions it, and `set-ui` creates it when the repository lacks it.
+- **The validation record.** Once you have approved a mockup, the session records the mockup's link or path, the date and who approved it. When you supplied the visuals yourself (your own mockup, or
+  an exact target screenshot), it records that and what you supplied instead, and no mockup is made. The record is a ticket comment, written by `record-ui-validation` and read back by
+  `get-ui-validation`.
+- **The guard.** `update-status` refuses a `ui` ticket that has no complete record on its way to your review: `→ In review` under the Solo preset, `→ Human testing` (and `→ In review` for a ticket
+  that skips Human testing) under the Team preset. The refusal names the `record-ui-validation` command to run, and it comes before the guards of the pull request. A ticket without the marker passes
+  exactly as before.
+
+```bash
+WORKFLOW=.claude/skills/sf-workflow/workflow-cli.sh
+
+# mark a new ticket, or an existing one (clear-ui removes the marker)
+$WORKFLOW create-ticket story "Redesign the login screen" --complexity medium --ui
+$WORKFLOW set-ui 42
+
+# record the approval of a mockup, or the visuals you supplied (one of the two)
+$WORKFLOW record-ui-validation 42 --mockup docs/mockups/login.html --approved-by "Ada Lovelace" --date 2026-11-23
+$WORKFLOW record-ui-validation 42 --supplied "an exact target screenshot, login-target.png"
+
+# read the record the guard reads
+$WORKFLOW get-ui-validation 42
+```
+
+`--date` defaults to today. `get-ui-validation` prints the latest complete record as one line of JSON, and nothing when there is none. A comment that only quotes the marker, or that lacks one of its
+fields (the mockup, the approver and the date; or what was supplied and the date), is not a record.
+
+The guard fails open when the ticket's labels cannot be read (an offline `gh`, an expired token), like the nature guard, so that infrastructure trouble does not wedge the workflow. It fails closed
+when the ticket carries the marker and its comments cannot be read: a read that failed is never taken for a ticket with no record. The other workflow tools (Jira, Linear, Notion) refuse the marker and
+record commands with exit code `2`, and their `update-status` does not read a record.
+
+The refusal is lifted by `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`, an [escape hatch](#escape-hatches) that is yours to apply, announced and recorded on the ticket like the others. The guard hook refuses
+an agent that sets it.
+
+### How an agent works a `ui` ticket
+
+The workflow skill gives every coding agent (Claude Code, Codex, Kimi Code or any other) the same instructions for a `ui` ticket. They name capabilities, never the tool of one host:
+
+- **Design skills.** The agent loads the design and UX skills its host offers before it draws anything, and works as a UI/UX professional, with the project's design tokens and components.
+- **A short checklist.** `ui-checklist.md` ships next to the skill's `SKILL.md`: hierarchy; spacing and design tokens; states (empty, loading, error, disabled); accessibility (contrast, keyboard,
+  focus, labels); copy.
+- **One HTML file as the mockup.** The floor is a single self-contained HTML file: inline CSS, no build step, and it opens in any browser. It is kept with the ticket's evidence (committed on the
+  ticket's branch, in `docs/mockups/` unless your `AGENTS.md` names another folder), and its path or link goes into `record-ui-validation`. A richer surface the host offers, such as a Claude artifact
+  or a Figma frame, may be added next to it, never in its place.
+- **You see it first.** The mockup is shown to you before the visual implementation. The spec, the model, the data and the tests may start meanwhile; only the visual part waits for your OK. When you
+  supply the visuals yourself, the session records that with `record-ui-validation --supplied` and no mockup is made.
+- **A delegated agent waits for your OK.** The brief of a delegated `ui` ticket says to hold the visual part until the session relays your OK, and to follow the validated mockup. The session is the
+  one that shows you the mockup and records your approval; an agent never records an approval you did not give.
+
+Where your project shows a mockup (for example the browser panel of your terminal) and which design tokens it uses are yours to state, in your own `AGENTS.md` and outside its generated region. The
+generated region tells the agents to look there; without a statement, the agent gives you the mockup file's path to open in a browser.
+
 ## The first ticket
 
 Create tickets through the CLI, so they land on the board in Backlog with their issue type and complexity label:
@@ -151,6 +208,25 @@ A repository with no commit yet has no working branch to branch from and no pull
 ```
 
 The Done guard accepts that ticket because the repository's single root commit names it. Every later ticket needs a merged pull request, and no bypass variable is involved.
+
+A project that `sf new` has just generated with a workflow is in this state: `sf new` makes no root commit of its own, so that `bootstrap` can make its own. See
+[What `sf new` commits](/cli/sf-new#what-sf-new-commits).
+
+## The ticket comes first
+
+No line of code is written before its ticket exists: the ticket number names the branch (`workflow.branchNaming`) and every commit (`<type>(#<N>): …`). When the ticket tool or the remote is
+unreachable (an expired `gh` token, no network), the agent stops, reports the blocker to you with the failing command, and proposes temporary alternatives for you to choose from. It does not pick a
+workaround on its own: an agent that once did committed 19 fixes as `fix(#TBD): …` on unnumbered local branches and pushed nothing, and nobody saw the work for two days (#1232). The generated
+`AGENTS.md` region and the In progress status document say so.
+
+A project generated with its application stack also enforces it in its git hooks:
+
+- `commit-msg`: commitlint refuses a ticket reference that is not a number (`#TBD`, `#XXX`). There is no hatch: reword the subject once the ticket exists.
+- `pre-commit` and `pre-push`: `.husky/workflow-branch-guard.mjs` refuses a branch the workflow does not name. It accepts the `workflow.branchNaming` patterns, `rc-*`, and the main, working,
+  pull-request target and release branches. A detached HEAD (every rebase step) and a branch the host named (`worktree-agent-<id>`, Claude Code's isolated worktree) commit freely; the push is checked
+  instead, so such an agent pushes to its ticket branch with `git push origin HEAD:<ticket branch>`. A project with no `workflow` block is not checked.
+
+A project installed with the harness alone has no git hooks of SaaSFoundryAI: the instructions carry the rule there.
 
 ## Status and configuration commands
 
@@ -229,11 +305,13 @@ legitimate command and sends the agent back to you, and a hook refuses the agent
 | `SF_WORKFLOW_BYPASS_SRS_GUARD=1`                                                           | Keeps `srs:*` tickets off the code-path statuses                             |
 | `SF_WORKFLOW_BYPASS_COMPLEXITY_GUARD=1`                                                    | Requires a `complexity:` label to leave Backlog                              |
 | `SF_WORKFLOW_BYPASS_NATURE_GUARD=1`                                                        | Routes by `nature:*` (Human testing, In review, bundled-PR to Done)          |
+| `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD=1`                                                     | Requires a `ui` ticket's mockup validation before In review or Human testing |
 | `SF_WORKFLOW_BYPASS_CHILDREN_GUARD=1`                                                      | Requires every native child to be Done before the parent                     |
 | `SF_WORKFLOW_BYPASS_BUNDLED_PARENT_GUARD=1`                                                | Requires a verified, non-Epic native parent for a bundled-PR child           |
 | `SF_WORKFLOW_BYPASS_PUSHED_GUARD=1`                                                        | Requires the ticket work to be committed and pushed before AI testing        |
 | `SF_WORKFLOW_BYPASS_PR_EXISTENCE_GUARD=1`                                                  | Requires a matching open PR (draft or ready) for Human testing and In review |
 | `SF_WORKFLOW_BYPASS_PR_MERGED_GUARD=1`                                                     | Requires a verified merged PR before Done                                    |
+| `SF_WORKFLOW_BYPASS_BRANCH_GUARD=1` on `git commit` or `git push`                          | The git hooks' branch guard: work lands on a branch the workflow names       |
 | `--bypass-srs <reason>` on `create-ticket`, `create-subtask`, `create-epic`                | Rule 8: tickets of an SRS-enabled project come from the SRS spawner          |
 | `--bypass-reason <text>` on `srs-cli.sh spawn`                                             | Sets the `--bypass-srs` reason of spawned tickets; disables no check         |
 | `--skip-local-ci "<reason>"` on `create-pr`, `ready-pr`, `update-status … "Human testing"` | Requires the local CI statuses to be green on the head commit                |
@@ -266,6 +344,16 @@ You apply a hatch from the primary checkout, in either of two ways:
 - **Any host:** your own terminal, at the root of the primary checkout. `update-status` and `local-ci-gate` find the ticket's worktree or pull request from there.
 
 Nature labels are added by you on GitHub, or with `!` in Claude Code.
+
+The same hook also keeps an agent to **one plain command per shell call**, which `AGENTS.md` asks of it. A host cannot analyse a line that chains commands (`&&`, `;`, `||`, a newline), substitutes the
+output of one into another (`$(…)`, backticks), loops, runs an inline script (`node -e`, `python3 -c`, `bash -c`, `eval`) or writes a file through a heredoc, so it asks you for a permission on every
+such call, even when each command in it is allowed. The hook refuses the line and names the split to make, so the agent rewrites its call instead of asking you. That is not an escape hatch: nothing is
+left for you to apply. It is on by default (`modules.harness.guard.shellShape` is `refuse` when nothing is recorded, and `sf update` writes nothing), and which mode a project uses is your decision:
+`sf agents shell-guard warn` makes the hook warn the agent without refusing (the host's own permission prompt still applies), and `sf agents shell-guard off` stops reading the shape of a line. The
+refusal of an escape hatch, a nature label and a delegated merge holds in every mode. Claude Code does not ask about `git commit -m "$(cat <<'EOF' … EOF)"` or
+`gh pr create --body "$(cat <<'EOF' … EOF)"` with a single-quoted delimiter (measured on 2.1.325), so the hook leaves those two forms alone on Claude Code; on Codex, and for any other command, text
+goes through a file (`git commit -F <file>`, `--body-file <file>`). The details, the table of constructs and the measurement are in
+[`sf agents guard`](/cli/sf-agents#a-shell-line-that-is-not-one-plain-command).
 
 The hook is a guardrail against the ordinary path the refusals used to teach, not a security boundary: it reads the command the agent wrote, covers the Bash tool only, and fails open (no CLI, an old
 CLI or a payload it cannot read lets the call through). `sf status` says so on its `routing:` line (`guard enforced`, `guard declared`, `guard hook missing`…) and warns when the hook cannot work.

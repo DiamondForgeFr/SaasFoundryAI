@@ -2,6 +2,8 @@ import { lstat, open } from 'fs/promises'
 import { homedir } from 'os'
 import { isAbsolute, join } from 'path'
 
+import { agentsWith } from './agent-registry'
+import type { CaptureHost } from './delegation-hooks'
 import {
   agentToken,
   appendEntry,
@@ -10,6 +12,7 @@ import {
   buildRunRecord,
   findAgentSegments,
   findRoute,
+  INTERIM_STOP_REF,
   LEDGER_DIR,
   type AppendResult,
   type DelegationRunRecord,
@@ -40,9 +43,13 @@ import { CHECKS } from '../execution/calibration'
  *
  * An agent can be resumed (the session hands a result back to it): each stop is its own run, which
  * continues the agent's earlier one and counts only the transcript bytes written since that stop.
+ *
+ * A stop is not always the end (#1241): a delegate that ends a turn while a job it started in the background still
+ * runs is woken by the host when the job reports. Such an interim stop carries no outcome, so a routing adjustment
+ * that runs in between never reads a `fail` written about unfinished work.
  */
-export const CAPTURE_HOSTS = ['claude-code', 'codex'] as const
-export type CaptureHost = (typeof CAPTURE_HOSTS)[number]
+export const CAPTURE_HOSTS: readonly CaptureHost[] = agentsWith('hooks')
+export type { CaptureHost }
 
 /** The most a single stop reads: a transcript beyond it is picked up by the next stop of the agent. */
 const MAX_SEGMENT_BYTES = 64 * 1024 * 1024
@@ -52,7 +59,8 @@ const GAP_CAP_MS = 5 * 60_000
 // --- the delegate's own line --------------------------------------------------------------------------
 
 export interface DelegationReport {
-  verdict: 'pass' | 'fail'
+  /** `pending`: the delegate ends a turn with work of its own still running (#1241). It is not a verdict and asks nothing. */
+  verdict: 'pass' | 'fail' | 'pending'
   /** The route id the delegate echoed: where the task kind, the tier, the ticket and the trial come from. */
   route: string | null
   checks: string[]
@@ -60,7 +68,7 @@ export interface DelegationReport {
   ignored: string[]
 }
 
-const DELEGATION_LINE = /^[\s*_`-]*SF-DELEGATION:[ \t]*(pass|fail)(?![A-Za-z0-9_])(.*)$/i
+const DELEGATION_LINE = /^[\s*_`-]*SF-DELEGATION:[ \t]*(pass|fail|pending)(?![A-Za-z0-9_])(.*)$/i
 const FENCE = /^\s*(`{3,}|~{3,})(.*)$/
 const ROUTE_ID = /^[0-9a-f]{20}$/
 
@@ -108,7 +116,7 @@ export function parseDelegationLine(message: unknown): DelegationReport | undefi
     .map((entry) => entry.trim())
     .filter((entry) => (CHECKS as readonly string[]).includes(entry))
   return {
-    verdict: match[1].toLowerCase() as 'pass' | 'fail',
+    verdict: match[1].toLowerCase() as DelegationReport['verdict'],
     route: ROUTE_ID.test(route) ? route : null,
     checks: [...new Set(checks)],
     ignored: [...fields.keys()].filter((key) => key !== 'route' && key !== 'checks')
@@ -177,6 +185,69 @@ export function routesInBrief(lines: readonly string[]): string[] {
     for (const text of promptTexts(entry)) for (const match of text.matchAll(BRIEF_ROUTE)) if (!found.includes(match[1])) found.push(match[1])
   }
   return found
+}
+
+// --- background work still running --------------------------------------------------------------------
+
+/**
+ * The ids of the host's background tasks that are still running at a stop (#1241). Claude Code puts the session's whole
+ * task registry in every `Stop` and `SubagentStop` payload (`background_tasks`: id, type, status, description): the
+ * shells and monitors of every agent of the session, the stopping subagent itself included. Undefined when the payload
+ * has no such list (Codex, an older Claude Code): the host then says nothing, and only a `pending` line marks a stop interim.
+ */
+export function runningHostTasks(payload: Record<string, unknown>): string[] | undefined {
+  if (!Array.isArray(payload.background_tasks)) return undefined
+  return payload.background_tasks.flatMap((task) => (object(task) && typeof task.id === 'string' && task.id && (task.status === 'running' || task.status === 'pending') ? [task.id] : []))
+}
+
+const MONITOR_STARTED = /^Monitor started \(task /
+
+/**
+ * The background tasks an agent launched itself, read from its own transcript: a shell run in the background
+ * (`toolUseResult.backgroundTaskId`), a monitor (`taskId` of a result that reads "Monitor started (task …"), a subagent
+ * launched in the background (`async_launched` with its `agentId`). The registry of the host is the session's, so this is
+ * what tells the agent's own work from that of the other delegates running beside it.
+ */
+export function launchedTaskIds(lines: readonly string[]): Set<string> {
+  const ids = new Set<string>()
+  for (const line of lines) {
+    if (!line.includes('"toolUseResult"')) continue
+    if (!line.includes('backgroundTaskId') && !line.includes('Monitor started') && !line.includes('async_launched')) continue
+    const entry = parseObject(line)
+    const result = entry && object(entry.toolUseResult) ? entry.toolUseResult : undefined
+    if (!entry || entry.type !== 'user' || !result) continue
+    if (typeof result.backgroundTaskId === 'string') ids.add(result.backgroundTaskId)
+    if (typeof result.taskId === 'string' && toolResultTexts(entry).some((text) => MONITOR_STARTED.test(text))) ids.add(result.taskId)
+    if (result.status === 'async_launched' && typeof result.agentId === 'string') ids.add(result.agentId)
+  }
+  return ids
+}
+
+/** The evidence ref of an interim stop the host's task list showed: some of the agent's own background work was still running. */
+export const BACKGROUND_WORK_REF = 'background-work-running'
+
+/**
+ * The background tasks of the stopping agent that still run: the host's running tasks that the agent's own transcript
+ * launched. The whole transcript is read, since a task may have started in an earlier segment, and only when the host
+ * lists a running task at all, which most stops do not.
+ */
+async function liveOwnTasks(payload: Record<string, unknown>, transcriptPath: unknown, slice: TranscriptSlice | undefined): Promise<string[]> {
+  const running = runningHostTasks(payload)
+  if (!running?.length) return []
+  const whole = slice && slice.from === 0 && !slice.truncated ? slice : await readTranscriptSlice(transcriptPath, 0)
+  if (!whole) return []
+  const own = launchedTaskIds(whole.lines)
+  return running.filter((id) => own.has(id))
+}
+
+function toolResultTexts(entry: Record<string, unknown>): string[] {
+  const content = object(entry.message) ? entry.message.content : undefined
+  if (!Array.isArray(content)) return []
+  return content.flatMap((block) => {
+    if (!object(block) || block.type !== 'tool_result') return []
+    if (typeof block.content === 'string') return [block.content]
+    return Array.isArray(block.content) ? block.content.flatMap((part) => (object(part) && typeof part.text === 'string' ? [part.text] : [])) : []
+  })
 }
 
 // --- transcripts --------------------------------------------------------------------------------------
@@ -299,6 +370,17 @@ export function summarizeCodexLines(lines: readonly string[], before?: TokenUsag
 /** Whole-text conveniences for fixtures and tests. */
 export const summarizeClaudeTranscript = (text: string): TranscriptSummary => summarizeClaudeLines(text.split('\n'))
 export const summarizeCodexTranscript = (text: string, before?: TokenUsage | null): TranscriptSummary => summarizeCodexLines(text.split('\n'), before)
+
+/**
+ * How each capture host's transcript is read. The formats differ (a Claude Code subagent transcript lists API calls,
+ * a Codex rollout reports cumulative token counts), which is why a host needs its own reader; the record is keyed by
+ * the hosts the profiles declare hooks for, so a new host cannot be captured with another host's reader by default.
+ * `prior` is what the agent's earlier stops already counted, read only by a host whose counts are cumulative.
+ */
+const TRANSCRIPT_SUMMARIZERS: Record<CaptureHost, (lines: readonly string[], prior: () => TokenUsage | null) => TranscriptSummary> = {
+  'claude-code': (lines) => summarizeClaudeLines(lines),
+  codex: (lines, prior) => summarizeCodexLines(lines, prior())
+}
 
 export interface TranscriptSlice {
   lines: string[]
@@ -449,10 +531,16 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
   const previous = segments[segments.length - 1]
   const transcriptPath = payload.agent_transcript_path ?? payload.transcript_path
   const slice = await readTranscriptSlice(transcriptPath, previous?.segment?.to ?? 0)
+  const report = parseDelegationLine(payload.last_assistant_message)
+  // An interim stop (#1241): the delegate ended a turn while background work it launched still runs (the host wakes it
+  // when that work reports, and its final stop comes then), or it said so with a `pending` line. It is recorded for its
+  // cost, with no outcome, and nothing is asked of it: a verdict written then would be about unfinished work.
+  const live = await liveOwnTasks(payload, transcriptPath, slice)
+  const interim = report?.verdict === 'pending' || live.length > 0
   // The delegate is asked for its line at most once, and only when it ended with a message that has none (an empty
   // one is an agent that did not get to answer). The host says it is already continuing because of a stop hook
   // (`stop_hook_active`); the earlier segment of the agent carrying the ref says it too, whatever the host does.
-  const lineMissing = typeof payload.last_assistant_message === 'string' && payload.last_assistant_message.trim() !== '' && parseDelegationLine(payload.last_assistant_message) === undefined
+  const lineMissing = !interim && typeof payload.last_assistant_message === 'string' && payload.last_assistant_message.trim() !== '' && report === undefined
   const hostContinuing = payload.stop_hook_active === true
   // The same stop seen again: the transcript has nothing the agent's last segment did not already count. When another
   // hook recorded it first (a copy of the first release's command, edited by hand and so not replaced) and nobody asked
@@ -464,9 +552,9 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
     return { status: 'replayed', id: previous.id, record: previous, root, dir, project, ...(decision ? { decision } : {}) }
   }
   const ask = lineMissing && !hostContinuing && !previous?.evidenceRefs.includes(ASKED_FOR_LINE_REF)
-  const summary = slice === undefined ? undefined : host === 'claude-code' ? summarizeClaudeLines(slice.lines) : summarizeCodexLines(slice.lines, sumTokens(segments))
-  const report = parseDelegationLine(payload.last_assistant_message)
-  const passed = report?.verdict === 'pass' && report.checks.some((check) => check !== 'self-review')
+  const summary = slice === undefined ? undefined : TRANSCRIPT_SUMMARIZERS[host](slice.lines, () => sumTokens(segments))
+  const verdict = interim ? undefined : (report as (DelegationReport & { verdict: 'pass' | 'fail' }) | undefined)
+  const passed = verdict?.verdict === 'pass' && verdict.checks.some((check) => check !== 'self-review')
 
   // The route record, not the delegate's word, says which kind, tier, ticket and trial this was.
   const routeId = report?.route ?? previous?.route ?? null
@@ -502,13 +590,17 @@ export async function captureHostEvent(host: CaptureHost, payload: unknown, opti
     durationMs: summary?.activeMs ?? null,
     tokens: summary?.tokens ?? null,
     calls: summary?.calls ?? null,
-    outcome: report ? (report.verdict === 'fail' ? 'fail' : passed ? 'pass' : null) : null,
-    checks: report?.checks ?? [],
+    outcome: verdict ? (verdict.verdict === 'fail' ? 'fail' : passed ? 'pass' : null) : null,
+    checks: verdict?.checks ?? [],
     evidenceRefs: [
       agentId ? `agent:${agentId}` : undefined,
-      report ? undefined : 'no-sf-delegation-line',
+      report || interim ? undefined : 'no-sf-delegation-line',
+      interim ? INTERIM_STOP_REF : undefined,
+      live.length ? BACKGROUND_WORK_REF : undefined,
+      // A verdict written while its own work still ran is kept as a fact, never as the outcome.
+      interim && report && report.verdict !== 'pending' ? `interim-verdict-${report.verdict}` : undefined,
       ask ? ASKED_FOR_LINE_REF : undefined,
-      report?.verdict === 'pass' && !passed ? 'pass-without-check' : undefined,
+      verdict?.verdict === 'pass' && !passed ? 'pass-without-check' : undefined,
       slice?.truncated ? 'transcript-truncated' : undefined,
       ...reasons,
       ...unreadable

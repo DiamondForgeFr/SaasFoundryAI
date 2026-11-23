@@ -92,21 +92,47 @@ modifie rien d'autre au niveau du compte : ni rôle de compte, ni état d'utilis
 Les routes de rôles (`POST /accounts/:id/roles`, `POST /accounts/platform/roles`, `PATCH` et `DELETE /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`) portent un identifiant de rôle :
 c'est donc le service qui décide, et il répond `403` :
 
-| Rôle                                                 | Qui peut le créer, le modifier, l'activer ou le supprimer                                                                                               |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rôle système ou modèle global                        | Seulement un détenteur de `ROLE_CUSTOM_MANAGEMENT` via un rôle **plateforme**. Un rôle plateforme qui ne fait que consulter la console ne compte pas.   |
-| Rôle personnalisé `ACCOUNT` du compte A              | `ROLE_CUSTOM_MANAGEMENT` sur A (un rôle de compte sur A, ou un rôle plateforme). Un rôle d'entité ne compte jamais.                                     |
-| Rôle personnalisé `ENTITY` du compte A               | `ROLE_CUSTOM_MANAGEMENT` dans **chaque entité où le rôle est attribué** : l'administrateur du compte, ou un administrateur d'entité de leur sous-arbre. |
-| Rôle personnalisé `ENTITY` de A, attribué nulle part | `ROLE_CUSTOM_MANAGEMENT` sur A ou sur l'une de ses entités.                                                                                             |
+| Rôle                                                    | Qui peut le créer, le modifier, l'activer ou le supprimer                                                                                             |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rôle système ou modèle global                           | Seulement un détenteur de `ROLE_CUSTOM_MANAGEMENT` via un rôle **plateforme**. Un rôle plateforme qui ne fait que consulter la console ne compte pas. |
+| Rôle personnalisé `ACCOUNT` du compte A                 | `ROLE_CUSTOM_MANAGEMENT` sur A (un rôle de compte sur A, ou un rôle plateforme). Un rôle d'entité ne compte jamais.                                   |
+| Rôle personnalisé `ENTITY` du compte A                  | `ROLE_CUSTOM_MANAGEMENT` dans **chaque entité où le rôle sert** : l'administrateur du compte, ou un administrateur d'entité de leur sous-arbre.       |
+| Rôle personnalisé `ENTITY` de A, qui ne sert nulle part | `ROLE_CUSTOM_MANAGEMENT` sur A ou sur l'une de ses entités.                                                                                           |
+
+Un rôle `ENTITY` sert dans une entité quand il y est attribué, ou quand une **invitation en attente** qui le porte vise cette entité. Accepter une invitation attribue ses rôles `ENTITY` dans chacune
+de ses entités : une modification faite avant atteint donc aussi l'invité. Un administrateur d'entité ne peut pas modifier un rôle qui n'est encore promis qu'à des personnes invitées dans une entité
+sœur. Seule une invitation qui peut encore être acceptée (`SENT`) compte ; une invitation expirée ou annulée ne promet plus rien, et une invitation acceptée est devenue des attributions.
 
 Deux règles s'ajoutent pour tous ceux qui ne sont pas la plateforme :
 
 - **Personne n'accorde ce qu'il ne détient pas.** Chaque permission ou section qu'une requête ajoute à un rôle doit être détenue par l'appelant là où le rôle s'applique ; renvoyer ce que le rôle a
   déjà, ou lui retirer quelque chose, ne demande rien de plus. Un utilisateur qui détient un rôle personnalisé ne peut pas l'étendre pour dépasser celui qui l'a rédigé.
+- **Un rôle `ENTITY` se façonne pour son type d'entité.** Les sections qui n'existent que sur une entité (la vision d'un projet, ses tickets) ne sont jamais détenues sur le compte : l'administrateur
+  du compte (détenteur de `ROLE_CUSTOM_MANAGEMENT` via un rôle `ACCOUNT` du compte du rôle) peut donc aussi accorder à un tel rôle ce que le type d'entité permet, c'est-à-dire ce qu'accordent les
+  rôles système `ENTITY` actifs (`entity-admin`, `entity-user`, et ceux qu'un projet ajoute pour ses propres types, comme un `project-owner`). Cela vaut que le rôle ne soit encore attribué nulle part,
+  qu'il soit attribué dans des entités du compte ou promis par une invitation en attente. Cet administrateur n'agit que dans son compte et peut déjà attribuer ces rôles système dans toute entité de
+  celui-ci : personne ne dépasse celui qui l'a rédigé. Rien au-delà n'est accordé, et un administrateur d'entité n'accorde toujours que ce qu'il détient, dans chaque entité où le rôle sert. Les rôles
+  du modèle ne portent pas de type d'entité, donc tous les rôles système `ENTITY` comptent ; un projet qui type ses rôles d'entité restreint `loadEntityTypeGrants` dans `account.service.ts` aux rôles
+  système du type du rôle.
 - **Aucun rôle de compte ou d'entité ne porte une section de plateforme.** Une section de `PLATFORM_ADMINISTRATION` est refusée sur un rôle `ACCOUNT` ou `ENTITY`, quel que soit le demandeur,
   plateforme comprise.
 
 Les rôles système ne sont ni renommables ni supprimables par personne ; un administrateur de la plateforme fait évoluer leurs droits.
+
+### Supprimer un rôle encore utilisé
+
+Un rôle personnalisé n'est supprimé que si personne ne le détient. Tant que le rôle est attribué à un utilisateur, ou porté par une invitation en attente (`SENT`) dont l'acceptation l'attribuerait,
+`DELETE /accounts/roles/:roleId` répond `409` et ne change rien : aucune attribution n'est retirée, aucune invitation ne perd le rôle. Le message commence par `ROLE_IN_USE:` et nomme les détenteurs,
+chaque utilisateur par son e-mail (avec l'entité, pour une attribution `ENTITY`) et chaque invitation par son invité (avec les entités où il est invité) ; une longue liste nomme les cinq premiers et
+compte les autres :
+
+```text
+ROLE_IN_USE: the role "support" is still assigned to alice@acme.test (Acme Lyon) and carried by the pending invitation to bob@acme.test (Acme Paris). To delete it, first unassign it and cancel the invitations.
+```
+
+Retirez le rôle aux utilisateurs (depuis la fenêtre de modification d'un utilisateur) et annulez ces invitations, puis supprimez-le à nouveau. Une invitation expirée, annulée ou acceptée ne détient
+rien, et les droits du rôle partent avec lui. Le contrôle d'autorité passe en premier : un appelant qui ne peut pas gérer le rôle reçoit le `403` ci-dessus, jamais la liste des détenteurs. Le panneau
+des rôles de l'application web garde la fiche du rôle ouverte et affiche le refus avec les détenteurs que l'API nomme.
 
 ::: warning Endpoints sans portée
 
@@ -145,6 +171,46 @@ rôle `ACCOUNT`, reçoit désormais `403` là où il recevait `401`.
 
 :::
 
+::: tip Mettre à jour un projet généré en 1.2.0
+
+En 1.2.0, la règle « personne n'accorde ce qu'il ne détient pas » contrôlait un rôle `ENTITY` attribué nulle part contre le compte. Un administrateur de compte ne pouvait plus créer, ni étendre, un
+rôle de type d'entité accordant des sections qui n'existent que sur l'entité : `403 You cannot grant what you do not hold where this role applies`. Un rôle `ENTITY` déjà attribué, ou porté par une
+invitation en attente, était contrôlé dans chaque entité où il sert, avec le même `403` pour l'administrateur du compte. La 1.3.0 laisse l'administrateur du compte accorder ce que le type d'entité
+permet sur tout rôle `ENTITY` de son compte, qu'il serve ou non (voir « Qui peut modifier un rôle » ci-dessus). Le correctif touche `account.service.ts`, fusionné par `sf update` comme celui de la
+1.1.1 ; aucune migration de module n'est nécessaire.
+
+Les parcours de rédaction de rôle qui changent de comportement :
+
+- **Créer un rôle `ENTITY`** (`POST /accounts/:id/roles`) en tant qu'administrateur du compte : les sections et permissions accordées par les rôles système `ENTITY` sont acceptées (`403` avant).
+- **Modifier un rôle `ENTITY`** (`PATCH /accounts/roles/:roleId`) en tant qu'administrateur du compte, qu'il soit attribué nulle part, **déjà attribué** dans une entité du compte ou porté par une
+  invitation en attente : les mêmes droits peuvent être ajoutés (`403` avant).
+
+Inchangés : les rôles `ACCOUNT`, les administrateurs d'entité et la plateforme. Un droit qu'aucun rôle système `ENTITY` ne porte, et que l'auteur ne détient pas, reste refusé. Si votre projet type ses
+rôles d'entité, restreignez `loadEntityTypeGrants` aux rôles système du type du rôle lors de la fusion.
+
+En 1.2.0, une invitation en attente portant un rôle `ENTITY` ne comptait pas comme un endroit où le rôle sert : un administrateur d'entité pouvait modifier, activer, désactiver ou supprimer un rôle
+encore seulement promis à des personnes invitées dans une entité sœur, et la modification les atteignait à l'acceptation. La 1.3.0 compte les entités de chaque invitation en attente (`SENT`) comme des
+attributions (voir « Qui peut modifier un rôle » ci-dessus), dans le même `account.service.ts` ; le mock de test `service-mocks.ts` reçoit `invitationEntityLink.findMany`. Les parcours qui changent de
+comportement :
+
+- **Modifier, activer, désactiver ou supprimer un rôle `ENTITY`** (`PATCH /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`, `DELETE /accounts/roles/:roleId`) en tant qu'administrateur
+  d'entité, quand une invitation en attente qui le porte vise une entité hors de votre sous-arbre : `403 This role is used in an entity you do not administer` (`200` avant).
+- **Ajouter des droits à un tel rôle** en tant qu'administrateur du compte : il sert, donc chaque droit est contrôlé dans les entités invitées ; la marge du type d'entité décrite plus haut vaut
+  toujours pour l'administrateur du compte.
+
+En 1.2.0, supprimer un rôle personnalisé encore attribué répondait `400 Failed to delete custom role` : la clé étrangère de l'attribution refusait la suppression, et la confirmation du panneau des
+rôles annonçait à tort que les attributions seraient retirées. Un rôle porté seulement par une invitation en attente était supprimé, et l'invitation le perdait sans bruit. La 1.3.0 refuse les deux
+avec `409 ROLE_IN_USE` (voir « Supprimer un rôle encore utilisé » ci-dessus). Le correctif touche `account.service.ts`, la page web `account-roles.tsx`, les nouveaux `role-delete-refusal.ts` et
+`role-delete-refusal-notice.tsx` à côté d'elle, et les traductions `account`, fusionnés par `sf update` comme les correctifs ci-dessus ; aucune migration de module n'est nécessaire. Un client qui
+lisait le `400` d'un rôle utilisé reçoit désormais `409`.
+
+En 1.2.0, inviter une adresse qui appartenait déjà à un utilisateur actif répondait `201 Invitation sent successfully` sans rien écrire : ni invitation, ni lien, ni rôle, ni e-mail. La 1.3.0 la refuse
+avec `409 USER_ALREADY_ACTIVE` (voir « Inviter une adresse qui a déjà un compte actif » plus bas). Le correctif touche `invitation.service.ts` et `invitation.controller.ts`, les deux dialogues
+d'invitation, le hook `useInviteUserCreate`, le nouveau `utils/invitation-refusal.ts` et les traductions `account`, fusionnés par `sf update` comme les correctifs ci-dessus ; aucune migration de
+module n'est nécessaire. Un client qui lisait le `201` d'une adresse active reçoit désormais `409`.
+
+:::
+
 ## Rôles inclus dans un projet généré
 
 | Rôle système     | Portée     | Usage prévu                                                   |
@@ -171,8 +237,21 @@ Les invitations transportent leurs cibles compte, entité et rôle. Avant l'envo
 - ne mélange pas un rôle plateforme avec des cibles compte ou entité ;
 - n'attribue pas le rôle technique `guest`.
 
-L'acceptation crée ensemble les liens utilisateur et les affectations de rôles contextualisées. Le scheduler généré traite les invitations expirées, et le flux d'e-mails anglais/français est déjà
-relié au module d'invitation.
+L'acceptation crée ensemble les liens utilisateur et les affectations de rôles contextualisées ; d'ici là, une invitation en attente compte comme un endroit où ses rôles `ENTITY` servent (voir « Qui
+peut modifier un rôle »). Le scheduler généré traite les invitations expirées, et le flux d'e-mails anglais/français est déjà relié au module d'invitation.
+
+### Inviter une adresse qui a déjà un compte actif
+
+Une invitation accueille un nouvel utilisateur : l'accepter fixe le mot de passe et active le compte. Une adresse qui appartient déjà à un utilisateur actif ne peut pas en accepter, donc
+`POST /invitations` répond `409` et ne change rien : aucune invitation, aucun jeton, aucun lien ni aucune attribution de rôle n'est écrit, et aucun e-mail ne part. Le message commence par
+`USER_ALREADY_ACTIVE:` et nomme l'adresse :
+
+```text
+USER_ALREADY_ACTIVE: alice@acme.test already has an active account. An invitation only onboards a new user, so none was sent and nothing was changed.
+```
+
+Les contrôles ci-dessus passent d'abord : un appelant qui ne peut pas inviter dans les cibles demandées reçoit son `401` ou son `403`, jamais l'information que l'adresse a un compte. Les dialogues
+d'invitation de l'application web restent ouverts et affichent le refus sous le champ e-mail. Une adresse dont l'utilisateur est encore inactif (invité, pas encore accepté) est réinvitée comme avant.
 
 ## Défense en profondeur
 

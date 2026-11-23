@@ -1,0 +1,18 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*", "!tests/**", "!playwright.config.ts", "!README.md", "!AGENTS.md"],
+      "env": ["VITE_*"]
+    },
+    "test:e2e": {
+      "dependsOn": ["^build", "build"],
+      "passThroughEnv": ["PLAYWRIGHT_*", "E2E_DEBUG"]
+    },
+    "test:full": {
+      "dependsOn": ["^build"],
+      "passThroughEnv": ["PLAYWRIGHT_*", "E2E_DEBUG", "VITE_*"]
+    }
+  }
+}

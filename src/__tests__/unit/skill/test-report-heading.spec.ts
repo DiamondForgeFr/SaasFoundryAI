@@ -17,15 +17,16 @@ function read(relative: string): string {
 
 const TEMPLATE_TEAM = 'scaffolds/skills-templates/workflow/statuses/4-ai-testing.md'
 const TEMPLATE_SOLO = 'scaffolds/skills-templates/workflow/statuses-solo/3-ai-testing.md'
-const DOGFOOD_TEAM = '.claude/skills/sf-workflow/statuses/4-ai-testing.md'
-const AGENTS_TEAM = '.agents/skills/sf-workflow/statuses/4-ai-testing.md'
+// This repository runs the Solo preset (#1242): its own copies hold the Solo documents.
+const DOGFOOD = '.claude/skills/sf-workflow/statuses/3-ai-testing.md'
+const AGENTS = '.agents/skills/sf-workflow/statuses/3-ai-testing.md'
 
 describe('AI Testing comment headings are pinned', () => {
   it.each([
     ['team template', TEMPLATE_TEAM],
     ['solo template', TEMPLATE_SOLO],
-    ['dogfood copy', DOGFOOD_TEAM],
-    ['agents projection', AGENTS_TEAM]
+    ['dogfood copy', DOGFOOD],
+    ['agents projection', AGENTS]
   ])('the AI Testing status (%s) names both headings', (_label, file) => {
     const text = read(file)
     expect(text).toContain(TEST_PLAN)
@@ -48,8 +49,8 @@ describe('AI Testing comment headings are pinned', () => {
     }
   })
 
-  it('the in-repo and .agents copies of the AI Testing status match the template byte-for-byte', () => {
-    expect(read(DOGFOOD_TEAM)).toBe(read(TEMPLATE_TEAM))
-    expect(read(AGENTS_TEAM)).toBe(read(DOGFOOD_TEAM))
+  it('the in-repo and .agents copies of the AI Testing status match the Solo template byte-for-byte', () => {
+    expect(read(DOGFOOD)).toBe(read(TEMPLATE_SOLO))
+    expect(read(AGENTS)).toBe(read(DOGFOOD))
   })
 })

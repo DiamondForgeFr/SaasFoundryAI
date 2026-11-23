@@ -15,15 +15,17 @@ import {
   updateGitHubProjectStatuses,
   WORKFLOW_PRESETS
 } from '../prompts/workflow.prompts'
-import { installWorkflowSkill } from '../installers/workflow-skill.installer'
-import { readManifest } from '../utils'
+import { pathExists } from 'fs-extra'
+import { hasWorkflowSection, installWorkflowSkill, RETIRED_STATUS_SUFFIX, WORKFLOW_SKILL_DIR, type WorkflowSkillInstallResult } from '../installers/workflow-skill.installer'
+import { hashFileContent, readManifest } from '../utils'
 import { mutateProjectManifestSafe } from '../manifest-file'
 import { assertGitBranchName } from '../run'
 import { assertBoardUrl, boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { getRemoteUrl } from '../utils/git-info'
 import { AGENT_LOCAL_CI_CONTEXT, localCiGateSummary, moltenPublishesToGithub, moltenStatusContexts, resolveLocalCiGate } from '../local-ci-gate'
 import { MOLTEN_PROJECT_FILE } from '../molten-pipeline'
-import type { SaaSFoundryManifest, WorkflowTemplate } from '../types'
+import { workflowStatusNames } from '../status/render'
+import type { SaaSFoundryManifest, WorkflowStatus, WorkflowTemplate } from '../types'
 
 const WORKFLOWS_DIR = path.join(os.homedir(), '.claude', 'workflows')
 const HISTORY_FILE = path.join(WORKFLOWS_DIR, '.history.json')
@@ -150,7 +152,7 @@ function showWorkflowConfig(manifest: SaaSFoundryManifest) {
   if (workflow.projectUrl) {
     console.log(chalk.bold('Project URL:'), workflow.projectUrl)
   }
-  console.log(chalk.bold('Branch de travail:'), chalk.cyan(workflow.workingBranch))
+  console.log(chalk.bold('Working branch:'), chalk.cyan(workflow.workingBranch))
   console.log(chalk.bold('PR target branch:'), workflow.prTargetBranch)
   console.log(chalk.bold('Require code review:'), workflow.requireCodeReview ? 'Yes' : 'No')
   // The statuses the local CI gate requires before review, and where that list comes from (#1104)
@@ -178,13 +180,13 @@ function showWorkflowConfig(manifest: SaaSFoundryManifest) {
     })
   }
 
+  // The statuses in the order of the manifest, by name: each entry is an object, which printed as [object Object] (#1249)
   console.log(chalk.blue('\n📊 Workflow Statuses\n'))
-  if (workflow.statuses) {
-    Object.entries(workflow.statuses).forEach(([key, value]) => {
-      if (value) {
-        console.log(`  ${chalk.gray(key)}: ${value}`)
-      }
-    })
+  const statuses = workflowStatusNames(workflow)
+  if (statuses.length) {
+    statuses.forEach((name, index) => console.log(`  ${chalk.gray(`${index + 1}.`)} ${name}`))
+  } else {
+    console.log(chalk.gray('  (none recorded)'))
   }
   console.log()
 }
@@ -266,25 +268,11 @@ async function useTemplate(manifest: SaaSFoundryManifest, args: string[]) {
   }
 
   const projectUrl = await resolveUseBoard(manifest, template, options)
-
-  // Apply template to project
-  const workflow: NonNullable<SaaSFoundryManifest['workflow']> = {
-    template: template.name ?? templateName,
-    tool: template.tool,
-    projectUrl,
-    workingBranch: template.workingBranch,
-    prTargetBranch: template.prTargetBranch,
-    requireCodeReview: template.requireCodeReview,
-    statuses: template.statuses,
-    issueTypes: template.issueTypes,
-    branchNaming: template.branchNaming,
-    commitFormat: template.commitFormat,
-    validated: false
-  }
+  const appliedTemplate = template
 
   const appliedManifest = await mutateProjectManifestSafe(process.cwd(), (current) => {
-    current.workflow = workflow
-    current.aiRules = template.aiRules
+    current.workflow = workflowAfterUse(current.workflow, appliedTemplate, templateName, projectUrl)
+    if (appliedTemplate.aiRules !== undefined) current.aiRules = appliedTemplate.aiRules
   })
   await updateWorkflowHistory(templateName)
 
@@ -292,8 +280,21 @@ async function useTemplate(manifest: SaaSFoundryManifest, args: string[]) {
   // the new status set — without this, an in-place preset upgrade leaves the
   // agent documentation describing the previous workflow.
   if (appliedManifest.workflow?.tool !== 'none') {
-    await installWorkflowSkill({ targetPath: process.cwd(), workflow: appliedManifest.workflow!, projectUrl: appliedManifest.workflow?.projectUrl })
+    const result = await switchWorkflowSkill(process.cwd(), manifest.workflow, appliedManifest)
     console.log(chalk.green('✅ Workflow skill regenerated (SKILL.md + statuses docs)'))
+    if (result.removed.length) console.log(chalk.gray(`   Removed ${result.removed.length} status document(s) of the previous preset, which this one does not ship.`))
+    for (const { path: docPath, keptAs } of result.kept) {
+      console.log(
+        chalk.yellow(
+          keptAs === docPath
+            ? `⚠️  ${docPath}: edited, and an earlier ${path.basename(docPath)}${RETIRED_STATUS_SUFFIX} exists; left in place. Reconcile both, then delete it: this preset does not ship it.`
+            : `⚠️  ${docPath}: edited, and this preset does not ship it; kept as ${keptAs}. Merge what you still need, then delete it.`
+        )
+      )
+    }
+    if (await pathExists(path.join(process.cwd(), '.agents/skills/sf-workflow'))) {
+      console.log(chalk.gray('   The shared copy under .agents/skills follows with `sf agents refresh --scope shared`.'))
+    }
   }
 
   // Align the GitHub Project board with the new status set (best-effort).
@@ -306,6 +307,77 @@ async function useTemplate(manifest: SaaSFoundryManifest, args: string[]) {
     console.log(chalk.yellow(`⚠️  No ${appliedManifest.workflow.tool} board attached: the workflow scripts refuse ticket commands until one is.`))
     console.log(chalk.gray(`   ${boardRemediation(appliedManifest.workflow)}\n`))
   }
+}
+
+type ManifestWorkflow = NonNullable<SaaSFoundryManifest['workflow']>
+
+/**
+ * Regenerate the workflow skill for the preset `sf workflow use` applied (#1248). On a project that already had
+ * a workflow, the switch changes the skill and nothing else outside the manifest's workflow block and the board:
+ * the "Workflow System" section of the instructions is refreshed only where it already exists, and the PR-review
+ * listener is left to the install that first chose GitHub Projects. The status documents of the previous preset
+ * are retired (removed, or set aside when edited), and a project that tracks its harness in `fileHashes` keeps
+ * baselines that match the disk: a retired document drops its own, a written file gets the hash of what was written.
+ */
+export async function switchWorkflowSkill(targetPath: string, previous: ManifestWorkflow | undefined, applied: SaaSFoundryManifest): Promise<WorkflowSkillInstallResult> {
+  const hadWorkflow = previous?.tool !== undefined && previous.tool !== 'none'
+  const result = await installWorkflowSkill({
+    targetPath,
+    workflow: applied.workflow!,
+    projectUrl: applied.workflow?.projectUrl,
+    baselines: applied.fileHashes,
+    injectSection: hadWorkflow ? await hasWorkflowSection(targetPath) : true,
+    depositListener: previous?.tool !== 'github-projects'
+  })
+  const prefix = `${WORKFLOW_SKILL_DIR}/`
+  if (Object.keys(applied.fileHashes ?? {}).some((file) => file.startsWith(prefix))) {
+    const written: Record<string, string> = {}
+    for (const file of result.written) written[file] = hashFileContent(await fs.readFile(path.join(targetPath, file)))
+    await mutateProjectManifestSafe(targetPath, (current) => {
+      const hashes = { ...current.fileHashes }
+      for (const file of Object.keys(hashes)) if (file.startsWith(`${prefix}statuses/`) && !(file in written)) delete hashes[file]
+      current.fileHashes = { ...hashes, ...written }
+    })
+  }
+  return result
+}
+
+/**
+ * The `workflow` block `sf workflow use` writes (#1233): the project's current block, with only what the template
+ * sets replaced. Every template sets its name, its status set and its issue types, and the switch resets
+ * `validated`; a saved template also sets the tool and the branch, review and commit conventions it recorded. Every
+ * other field the project declares (`releaseBranch`, `localCi`, and any field added later) survives by construction,
+ * which a list of copied fields could not promise.
+ */
+export function workflowAfterUse(current: ManifestWorkflow | undefined, template: WorkflowTemplate, templateName: string, projectUrl: string | undefined): ManifestWorkflow {
+  const conventions: Partial<ManifestWorkflow> = {}
+  for (const key of ['workingBranch', 'prTargetBranch', 'requireCodeReview', 'branchNaming', 'commitFormat'] as const) {
+    if (template[key] !== undefined) Object.assign(conventions, { [key]: template[key] })
+  }
+  return {
+    ...current,
+    ...conventions,
+    tool: template.tool,
+    projectUrl,
+    template: template.name ?? templateName,
+    statuses: template.statuses && keepStatusSpelling(template.statuses, current?.statuses),
+    issueTypes: template.issueTypes,
+    validated: false
+  }
+}
+
+/**
+ * A status the project already names, compared without case, keeps the project's spelling (`In progress` stays
+ * `In progress` when the preset says `In Progress`). The board keeps its own option too
+ * (`updateGitHubProjectStatuses` matches without case), and the workflow scripts lower-case every status they
+ * compare, so either spelling works; keeping the project's one leaves the manifest, the regenerated docs and the
+ * board naming a status the same way.
+ */
+function keepStatusSpelling(statuses: WorkflowStatus[], currentStatuses: WorkflowStatus[] | undefined): WorkflowStatus[] {
+  return statuses.map((status) => {
+    const existing = currentStatuses?.find((candidate) => candidate.name.toLowerCase() === status.name.toLowerCase())
+    return existing ? { ...status, name: existing.name } : status
+  })
 }
 
 /**

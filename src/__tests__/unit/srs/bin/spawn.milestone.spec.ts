@@ -208,6 +208,64 @@ describe('spawn — declaring the release scope (#569)', () => {
     expect(io.stdoutBuffer.join('')).toMatch(/release: « v1\.0\.0 »/)
   })
 
+  // #1119 — an Epic may span several releases: spawning one of its versions into X moved the
+  // whole Epic to X, although its earlier Stories stay in their own release
+  describe('an Epic that already exists keeps its milestone (#1119)', () => {
+    it('--ticket <Epic>: the new Stories join the release, the Epic does not', async () => {
+      const io = makeIO()
+      const code = await runSpawn(options({ ticket: '42', milestone: 'v2.0.0' }), io)
+
+      expect(code).toBe(0)
+      expect(io.createEpic).not.toHaveBeenCalled()
+      const assigned = io.assignMilestone.mock.calls.map((c) => c[0])
+      expect(assigned).toEqual(['100', '101'])
+      expect(assigned).not.toContain('42')
+      expect(io.stdoutBuffer.join('')).toMatch(/2 ticket\(s\) joined « v2\.0\.0 »/)
+      expect(io.stdoutBuffer.join('')).toMatch(/#42 keeps its milestone/)
+      // The version page still points at the release it ships in
+      expect(io.associateMilestone).toHaveBeenCalledWith('v2.0.0', VERSION_PAGE_URL)
+    })
+
+    it('an Epic adopted from an earlier run keeps its milestone too', async () => {
+      const epic = {
+        number: '50',
+        title: 'Réunion live - v1 — MVP',
+        state: 'OPEN' as const,
+        boardStatus: 'In progress',
+        parentNumber: null,
+        issueType: 'sf-epic',
+        url: 'https://github.test/issues/50',
+        srsLinks: [VERSION_PAGE_URL],
+        frIds: []
+      }
+      const io = makeIO({ inspectTickets: jest.fn(() => [epic]) })
+      const code = await runSpawn(options({ milestone: 'v2.0.0' }), io)
+
+      expect(code).toBe(0)
+      expect(io.createEpic).not.toHaveBeenCalled()
+      expect(io.assignMilestone.mock.calls.map((c) => c[0])).toEqual(['100', '101'])
+    })
+
+    it('the dry run says the existing Epic keeps its milestone', async () => {
+      const io = makeIO()
+      const code = await runSpawn(options({ ticket: '42', milestone: 'v2.0.0', dryRun: true }), io)
+
+      expect(code).toBe(0)
+      const out = io.stdoutBuffer.join('')
+      expect(out).toMatch(/release: « v2\.0\.0 » — created or reused; the Stories of this run join it/)
+      expect(out).toMatch(/#42 keeps its milestone/)
+      expect(out).not.toMatch(/everything above joins it/)
+    })
+
+    it('an Epic this run creates joins the release with its Stories', async () => {
+      const io = makeIO()
+      const code = await runSpawn(options({ milestone: 'v1.0.0', dryRun: true }), io)
+
+      expect(code).toBe(0)
+      expect(io.stdoutBuffer.join('')).toMatch(/the new Epic and the Stories of this run join it/)
+    })
+  })
+
   it('keeps the tickets when only the SRS link fails, and says which step is missing', async () => {
     const io = makeIO({
       associateMilestone: jest.fn(() => {

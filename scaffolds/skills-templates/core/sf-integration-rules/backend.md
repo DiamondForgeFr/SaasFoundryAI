@@ -232,8 +232,19 @@ Keep the cost flat when a request carries a list of ids. Bound the list in the z
 pending invitation's targets and roles) ends up in the record you create, authorize the merged set exactly as if the caller had submitted it.
 
 A route that writes a role's grants follows `AccountService.assertRoleAuthority`: a system role or a global template needs the permission through a PLATFORM role (`hasOnPlatform`); an account-owned
-role needs it wherever the role applies (its account, or every entity an ENTITY role is assigned in); each permission or section the request adds must be held there too (nobody grants what they do not
+role needs it wherever the role applies (its account, or every entity an ENTITY role is used in); each permission or section the request adds must be held there too (nobody grants what they do not
 hold); and a `PLATFORM_ADMINISTRATION` section never goes on an ACCOUNT or ENTITY role.
+
+An ENTITY role is **used** in an entity when it is assigned there, or when a pending (`SENT`) invitation that carries it targets that entity: acceptance assigns the invitation's ENTITY roles in each
+of its entities, so `loadRoleAuthority` reads both (`loadEntitiesUsingRole`). An ENTITY role used nowhere applies to the account; a used one applies in every entity it is used in. Either way it is
+shaped for its entity type: an administrator of the account itself (through an ACCOUNT role of the role's account) may also grant what the type's active ENTITY system roles grant
+(`loadEntityTypeGrants`), whether the role is unassigned, assigned or promised by a pending invitation, since it acts only within its account and may already allocate those system roles in any entity
+of it. An entity administrator grants only what it holds, in every entity the role is used in. A new place where a role takes effect later (a scheduled assignment, a template applied on creation)
+counts the same way: add it to `loadEntitiesUsingRole`.
+
+A role still held is never deleted, and its assignments are never removed on the way: `deleteCustomRole` reads who holds it (`loadRoleHolders`: its assignments, any scope, and the pending `SENT`
+invitations that carry it) after the authority check, and answers `409 ROLE_IN_USE: …` naming those users and invitees, changing nothing. The web role panel shows that message in the role sheet. A new
+place where a role takes effect later belongs in `loadRoleHolders` as well, so the delete keeps refusing while anyone would still receive the role.
 
 Entities form a tree (`Entity.parentEntityId`, `prisma/schema/organizations.prisma`): an entity administrator sees the subtree under their entity, never its siblings. Pass the ids these methods return
 into the Prisma `where` (`{ id: { in: visibleIds } }`) — see `AccountService` for the pattern.
@@ -335,6 +346,11 @@ app.use(cookieParser())
 const agent = request.agent(app.getHttpServer())
 await loginTestUser(agent, testUser.email, 'TestPassword123')
 ```
+
+Test users come from `setupTestUser` (`src/common/tests/e2e/utils/setup-test-user.ts`). Every spec of a run shares one e2e database, so the helper never changes what a role grants: `roles` are
+assigned as seeded, and `permissions` are extra grants for that user only, carried by a custom ACCOUNT role (`e2e-test-grants`) of its own test account and removed by `cleanupTestUser`. Ask for
+`permissions` only when the seeded role lacks one (for example `ROLE_CUSTOM_MANAGEMENT` on `account-admin`), and never write grants to a system role from a spec: a later `account-user` would hold
+them, and an authorization test would pass or fail with the spec order (#987). `src/common/tests/e2e/setup-test-user.e2e-spec.ts` proves it, in both orders.
 
 The test database is set up by `src/configs/test/e2e-environment.ts` (Jest `globalSetup`) which spins up `docker-compose.db-test.yml` (tmpfs-backed PostgreSQL) and runs the migrations + the seed
 loader. Cleanup is done by `e2e-teardown.ts`.

@@ -1,8 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { TASK_KINDS } from '../../../harness/routing-grid'
-import { renderTierAgents, WHOLE_TICKET_LINE } from '../../../harness/tier-agents'
+import { renderTierAgents, SUBTASK_ONLY_LINE, WHOLE_TICKET_LINE } from '../../../harness/tier-agents'
 
 const REPO_ROOT = path.resolve(__dirname, '../../../..')
 
@@ -15,6 +15,10 @@ const DELEGATING_DIRS = ['complexity', 'scripts', 'statuses', 'statuses-solo']
 
 const flat = (text: string): string => text.replace(/\s+/g, ' ')
 
+// A copy installed for the Solo preset (this repository since #1242) keeps its five status documents in
+// `statuses/`, where the template ships them under `statuses-solo/`: they are read as the Solo set.
+const isSoloLayout = (skillDir: string): boolean => existsSync(path.join(skillDir, 'statuses', '2-in-progress.md'))
+
 function files(skillDir: string): { file: string; content: string }[] {
   const found = [{ file: 'SKILL.md', content: readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8') }]
   for (const dir of DELEGATING_DIRS) {
@@ -24,7 +28,8 @@ function files(skillDir: string): { file: string; content: string }[] {
     } catch {
       continue // statuses-solo ships with the template only
     }
-    for (const name of names.filter((n) => /\.(md|yml|sh)$/.test(n))) found.push({ file: `${dir}/${name}`, content: readFileSync(path.join(skillDir, dir, name), 'utf8') })
+    const label = dir === 'statuses' && isSoloLayout(skillDir) ? 'statuses-solo' : dir
+    for (const name of names.filter((n) => /\.(md|yml|sh)$/.test(n))) found.push({ file: `${label}/${name}`, content: readFileSync(path.join(skillDir, dir, name), 'utf8') })
   }
   return found
 }
@@ -129,9 +134,12 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
       const content = all.find(({ file }) => file === name)?.content
       if (content === undefined) continue // statuses-solo ships with the template only
       const text = flat(content)
-      expect({ name, worktreeForm: text.includes('git fetch origin && git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>') }).toEqual({ name, worktreeForm: true })
+      // one command per call (#1251): the guard hook refuses a `&&` chain, so the two steps are said in order, not chained
+      expect({ name, worktreeForm: text.includes('`git fetch origin`, then `git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>`') }).toEqual({ name, worktreeForm: true })
       expect(text).toContain('the agent creates the branch, and the primary checkout stays on `<workingBranch>`')
-      expect(text).toContain('Built in the primary checkout: `git checkout <workingBranch> && git pull --rebase && git checkout -b feature/<N>-<description>`')
+      expect(text).toContain('Built in the primary checkout, one command per call: `git checkout <workingBranch>`, then `git pull --rebase`, then `git checkout -b feature/<N>-<description>`')
+      expect(text).not.toContain('git fetch origin &&')
+      expect(text).not.toContain('git pull --rebase && git checkout')
     }
   })
 
@@ -171,6 +179,23 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     expect(renderTierAgents(['claude-code']).every((file) => !file.content.includes('Do not change ticket, board or pull-request state: the coordinating agent'))).toBe(true)
   })
 
+  // FR-MAH-022: the skill and the Kimi Code tier agent prompt agree on what a host without worktrees delegates, and on the alias
+  it('agrees with the Kimi Code tier agent prompt: sub-tasks only without a worktree, the alias a route prints, no other host CLI (FR-MAH-022)', () => {
+    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
+    expect(skill).toContain(
+      'The one exception is a route that prints `alias <name>` (Kimi Code binds no model in an agent file): pass that alias, copied from the route and never composed, as the `model` of the delegation call'
+    )
+    expect(skill).toContain('never name a model (the alias a route prints excepted)')
+    expect(skill).toContain("A refused or failed route is never worked around by starting another coding agent's CLI (`claude`, `codex`, or any other) or a background session of another host")
+    expect(skill).toContain(
+      'A host with no worktree support (`worktrees: none` in `sf agents catalog --json`, Kimi Code today) delegates sub-tasks only, in the current worktree, through its own native sub-agent tool'
+    )
+    expect(skill).toContain("it cannot open a worktree for a delegate, so it delegates sub-tasks only, in the current worktree, and never starts another host's CLI to get a worktree")
+    // the prompt a Kimi tier agent runs on says the same: a sub-task in the current worktree, never a whole ticket
+    expect(SUBTASK_ONLY_LINE).toContain('you work on the sub-task the brief hands you, in the current worktree, and never on a whole ticket')
+    for (const file of renderTierAgents(['kimi'])) expect(file.content).toContain(SUBTASK_ONLY_LINE)
+  })
+
   // The routing learns from the delegations it routes (#1035): the brief asks for the line, and the session marks what it reworked.
   it('has the brief ask for the SF-DELEGATION line and the session mark what it had to rework (#1035)', () => {
     const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
@@ -190,10 +215,16 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     expect(skill).toContain('`trial: true`')
     expect(skill).toContain('never moves the routing')
     expect(skill).toContain('A developer override in `modules.harness.routing` is never changed by the routing')
-    const status = (name: string) => flat(all.find(({ file }) => file === `statuses/${name}`)!.content)
-    expect(status('4-ai-testing.md')).toContain('`sf agents outcome mark <ticket> rework` records it for the routing')
-    expect(status('5-human-testing.md')).toContain('run `sf agents outcome mark <ticket> human-defect` so the routing counts it as a failure')
-    expect(status('6-in-review.md')).toContain('`sf agents outcome mark <ticket> rework` records it for the routing')
+    // The Team status documents (a copy installed for the Solo preset has none, see isSoloLayout)
+    const status = (name: string) => {
+      const content = all.find(({ file }) => file === `statuses/${name}`)?.content
+      return content === undefined ? undefined : flat(content)
+    }
+    if (status('4-ai-testing.md') !== undefined) {
+      expect(status('4-ai-testing.md')).toContain('`sf agents outcome mark <ticket> rework` records it for the routing')
+      expect(status('5-human-testing.md')).toContain('run `sf agents outcome mark <ticket> human-defect` so the routing counts it as a failure')
+      expect(status('6-in-review.md')).toContain('`sf agents outcome mark <ticket> rework` records it for the routing')
+    }
   })
 
   it('has the status documents tell who builds the ticket and who takes feedback back (#1026)', () => {
@@ -206,10 +237,17 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
       if (content === undefined) continue // statuses-solo ships with the template only
       expect({ name, delegated: /Delegated ticket delivery/.test(content) }).toEqual({ name, delegated: true })
     }
-    expect(doc('statuses/3-in-progress.md')).toContain('sf agents delegation status')
-    expect(doc('statuses/4-ai-testing.md')).toMatch(/never merges/)
-    expect(doc('statuses/5-human-testing.md')).toMatch(/hands the defect to the ticket's own agent/)
-    expect(doc('statuses/5-human-testing.md')).toMatch(/AI work the validation leaves/)
+    // The Team documents, then their Solo counterparts: each copy holds one of the two sets
+    if (doc('statuses/3-in-progress.md') !== undefined) {
+      expect(doc('statuses/3-in-progress.md')).toContain('sf agents delegation status')
+      expect(doc('statuses/4-ai-testing.md')).toMatch(/never merges/)
+      expect(doc('statuses/5-human-testing.md')).toMatch(/hands the defect to the ticket's own agent/)
+      expect(doc('statuses/5-human-testing.md')).toMatch(/AI work the validation leaves/)
+    }
+    if (doc('statuses-solo/2-in-progress.md') !== undefined) {
+      expect(doc('statuses-solo/2-in-progress.md')).toContain('sf agents delegation status')
+      expect(doc('statuses-solo/3-ai-testing.md')).toMatch(/never merges/)
+    }
   })
 
   // The test strategy (#1157) lives in the status documents, so the brief does not repeat it: the affected tests
@@ -228,8 +266,10 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
       expect({ name, rebase: lower.includes('rerun the affected tests') }).toEqual({ name, rebase: true })
       expect({ name, ci: lower.includes("the ready pull request's ci stays the final check") }).toEqual({ name, ci: true })
     }
-    expect(doc('statuses/3-in-progress.md')).toContain('while you work, run the tests the change affects')
-    expect(doc('statuses/4-ai-testing.md')).toContain('not after every iteration')
+    if (doc('statuses/3-in-progress.md') !== undefined) {
+      expect(doc('statuses/3-in-progress.md')).toContain('while you work, run the tests the change affects')
+      expect(doc('statuses/4-ai-testing.md')).toContain('not after every iteration')
+    }
     const solo = doc('statuses-solo/2-in-progress.md')
     if (solo !== undefined) expect(solo).toContain('the full suites run once, at AI Testing')
     const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)

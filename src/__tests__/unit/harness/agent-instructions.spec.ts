@@ -20,6 +20,8 @@ import {
   planAgentInstructions,
   resolveInstructionFile,
   STATUS_OUTPUT_INSTRUCTIONS,
+  TICKET_FIRST_INSTRUCTIONS,
+  UI_WORK_INSTRUCTIONS,
   withGeneratedInstructions
 } from '../../../harness/agent-instructions'
 import { REGION_HEADINGS } from '../../../harness/claude-md-migration'
@@ -225,6 +227,30 @@ describe('shared agent instructions', () => {
     }
   })
 
+  // #1251 — the instructions say what the guard hook enforces, so that an agent writes plain commands before it is refused
+  it('says each shell call is one plain command, names what is not, and says the guard hook refuses it', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      const hygiene = instructions
+        .slice(instructions.indexOf('## File edits and shell calls'), instructions.indexOf('## ', instructions.indexOf('## File edits and shell calls') + 3))
+        .replace(/\s+/g, ' ')
+      expect(hygiene).toContain('one plain command')
+      expect(hygiene).toContain(
+        'no `&&`, `;` or `||` chain, no `$(...)` substitution, no loop, no inline script (`node -e`, `python3 -c`, `bash -c`), no file written through a heredoc, no trailing `&`'
+      )
+      expect(hygiene).toContain('instead of `cd <dir> &&`')
+      expect(hygiene).toContain('`git commit -F <file>`, `--body-file <file>`')
+      expect(hygiene).toContain('A pipe and a redirection are fine')
+      expect(hygiene).toContain('guard hook')
+      expect(hygiene).toContain('names the split to make')
+    }
+  })
+
+  it('says, in the region every agent reads, that only Claude Code and Codex have the hook and that another agent follows the rule itself', () => {
+    expect(GENERATED_INSTRUCTIONS.replace(/\s+/g, ' ')).toContain(
+      'The guard hook of Claude Code and Codex refuses such a line and names the split to make; for any other agent nothing stops it, so follow the rule yourself'
+    )
+  })
+
   // The adversarial review of #1026 found six places where the first wording was too loose. Each
   // finding is pinned where the text lives, so a rewording cannot quietly drop it.
   it('has the receiving agent build the ticket itself (Examine 3), in the always-loaded instructions', () => {
@@ -316,6 +342,50 @@ describe('shared agent instructions', () => {
       expect(instructions).toMatch(/`sf-<tier>` agent it names/)
       expect(instructions).toMatch(/never name a\s+model or an effort yourself/)
     }
+  })
+
+  // FR-MAH-022: the alias a Kimi route prints is the one thing a delegation names besides the tier, and a refused route is never worked around
+  it('names the model alias a route prints as the one exception to naming no model (FR-MAH-022)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(/never name a\s+model or an effort yourself\. The one exception is a route that prints `alias <name>`/)
+      expect(instructions).toMatch(/pass that alias, copied from the route and never composed, as\s+the `model` of the delegation call/)
+    }
+  })
+
+  it('never lets a refused or failed route start another coding agent, and keeps a host without worktrees to sub-tasks (FR-MAH-022)', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
+      expect(instructions).toMatch(
+        /run the\s+step in the session: a refused or failed route is never worked around by starting another coding\s+agent's CLI \(`claude`, `codex`, or any other\) or a background session of another host/
+      )
+      expect(instructions).toMatch(/a host\s+with no worktree support delegates sub-tasks only, through its own native sub-agent tool/)
+    }
+    expect(GENERATED_INSTRUCTIONS).toMatch(
+      /`sf agents catalog --json`\s+says `worktrees: none`, as for Kimi Code\): it cannot open a worktree for a delegate, so it\s+delivers the tickets in the session, one after the other, and delegates sub-tasks only, in the\s+current worktree/
+    )
+  })
+
+  it('states both rules statically, whatever coding agents the project declares', async () => {
+    for (const agents of [['claude-code'], ['kimi'], ['codex', 'kimi']] as const) {
+      const project = await mkdtemp(join(tmpdir(), 'sf-static-rules-'))
+      try {
+        await writeFile(join(project, 'AGENTS.md'), `# Project\n\n${GENERATED_REGION_START}\n${GENERATED_REGION_END}\n`)
+        await installAgentInstructions({ targetPath: project, agents: [...agents] })
+        const text = await readFile(join(project, 'AGENTS.md'), 'utf8')
+        expect(text).toContain('The one exception is a route that prints `alias <name>`')
+        expect(text).toContain("a refused or failed route is never worked around by starting another coding\nagent's CLI")
+        expect(text).toContain('`worktrees: none`, as for Kimi Code')
+      } finally {
+        await rm(project, { recursive: true, force: true })
+      }
+    }
+  })
+
+  it('keeps the rules short in a projected skill, which opens far more often than the instructions', async () => {
+    await install()
+    const shared = await get('.agents/skills/sf-git-commit/SKILL.md')
+    expect(shared).toContain('The one exception is a route that prints `alias <name>`')
+    expect(shared).toContain('a refused or failed route is never worked around')
+    expect(shared).not.toContain('`worktrees: none`, as for Kimi Code')
   })
 
   it('teaches every shared instruction surface to preview additive full-profile transitions', () => {
@@ -780,6 +850,55 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
     // The bridges and the common instructions are recognised by released bytes: the section is not added to them.
     expect(COMMON_INSTRUCTIONS).not.toContain('## Reading the project status')
     expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## Reading the project status')
+  })
+
+  // #1232 — an agent with an expired token committed `fix(#TBD)` work on unnumbered branches and pushed nothing.
+  it('puts the ticket before the code and an unreachable tool in the hands of the developer, in the generated region only', () => {
+    expect(GENERATED_INSTRUCTIONS).toContain(TICKET_FIRST_INSTRUCTIONS.trimEnd())
+    const flat = TICKET_FIRST_INSTRUCTIONS.replace(/\s+/g, ' ')
+    for (const rule of [
+      'The ticket exists before the first line of code',
+      'A placeholder such as `#TBD` or `#XXX`, or a branch without the ticket number, is no ticket',
+      'When the ticket tool or the remote is unreachable',
+      'Report the blocker to the developer first',
+      'propose temporary alternatives',
+      'Never pick a workaround alone'
+    ]) {
+      expect(flat).toContain(rule)
+    }
+    expect(COMMON_INSTRUCTIONS).not.toContain('## Ticket first, and an unreachable tool')
+    expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## Ticket first, and an unreachable tool')
+  })
+
+  // #1306 — the way of working on a ui ticket is in the workflow skill; what only the project knows stays in its own AGENTS.md.
+  it('says where a project states its mockup display and design tokens, in the generated region only', () => {
+    expect(GENERATED_INSTRUCTIONS).toContain(UI_WORK_INSTRUCTIONS.trimEnd())
+    const flat = UI_WORK_INSTRUCTIONS.replace(/\s+/g, ' ')
+    for (const rule of [
+      '## UI work: mockup display and design tokens',
+      'A ticket labelled `ui` follows "Working a `ui` ticket" in the workflow skill',
+      'How this project shows a mockup to the developer',
+      'which design tokens it uses are stated by the project itself, in this file, outside this generated region',
+      'Read them before you draw anything',
+      'give the developer the path of the mockup file to open in a browser'
+    ]) {
+      expect(flat).toContain(rule)
+    }
+    // One text for every coding agent: no host, no tool of one host
+    expect(flat).not.toMatch(/Claude|Codex|Kimi|MoltenTerm|Figma|artifact|\.claude\/|mcp__/i)
+    expect(GENERATED_INSTRUCTIONS).not.toMatch(/MoltenTerm/)
+    expect(COMMON_INSTRUCTIONS).not.toContain('## UI work: mockup display and design tokens')
+    expect(CODEX_SOURCE_CLAUDE_BRIDGE).not.toContain('## UI work: mockup display and design tokens')
+    expect(ADOPTION_COMMON_INSTRUCTIONS).not.toContain('## UI work: mockup display and design tokens')
+  })
+
+  it('refreshes the UI work section into an AGENTS.md whose generated region predates it, and keeps what the project wrote around it', () => {
+    const older = `# Mine\n\n## Design tokens\nTokens live in src/tokens.css.\n\n${GENERATED_REGION_START}\n## File edits and shell calls\nold text\n${GENERATED_REGION_END}\n`
+    const refreshed = withGeneratedInstructions(older)
+    expect(refreshed).toContain('## UI work: mockup display and design tokens')
+    expect(refreshed).toContain('## Design tokens\nTokens live in src/tokens.css.')
+    // The project's statement sits before the region, which only points to it
+    expect(refreshed?.indexOf('Tokens live in src/tokens.css.')).toBeLessThan(refreshed?.indexOf('## UI work: mockup display and design tokens') ?? -1)
   })
 
   // #1155 — a .molten/project.json with no job is no pipeline: AI Testing falls back to the npm suite.

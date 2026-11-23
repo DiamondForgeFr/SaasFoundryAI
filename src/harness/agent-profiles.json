@@ -16,7 +16,14 @@
       "limitations": [
         "Claude Code reads AGENTS.md natively from version 2.1.277, but only when no CLAUDE.md exists in the project or a parent directory.",
         "Installed instructions do not verify runtime access, hook execution or permissions."
-      ]
+      ],
+      "capabilities": {
+        "routing": { "vendor": "anthropic", "efforts": ["low", "medium", "high", "xhigh", "max"] },
+        "tierAgents": { "dir": ".claude/agents", "format": "claude-md", "modelBinding": "file" },
+        "hooks": { "scope": "project", "file": ".claude/settings.json", "guardEvent": "PreToolUse", "captureEvent": "SubagentStop", "needsTrust": false },
+        "worktrees": "native",
+        "limitations": {}
+      }
     },
     "codex": {
       "displayName": "Codex",
@@ -30,24 +37,47 @@
       },
       "runtime": "not-checked",
       "sources": ["https://developers.openai.com/codex/guides/agents-md", "https://learn.chatgpt.com/docs/build-skills"],
-      "limitations": ["Claude-specific hooks and permissions are not transferred.", "Run project preconditions explicitly and verify discovery in the actual host."]
+      "limitations": ["Claude-specific hooks and permissions are not transferred.", "Run project preconditions explicitly and verify discovery in the actual host."],
+      "capabilities": {
+        "routing": { "vendor": "openai", "efforts": ["low", "medium", "high", "xhigh", "max", "ultra"] },
+        "tierAgents": { "dir": ".codex/agents", "format": "codex-toml", "modelBinding": "file" },
+        "hooks": { "scope": "project", "file": ".codex/hooks.json", "guardEvent": "PreToolUse", "captureEvent": "SubagentStop", "needsTrust": true },
+        "worktrees": "manual",
+        "limitations": {
+          "worktrees": "The harness declares no host-native worktree isolation for Codex: the session opens the worktree with git and hands the delegate its path."
+        }
+      }
     },
     "kimi": {
       "displayName": "Kimi Code",
       "instructionFile": "AGENTS.md",
       "sharedInstructions": true,
-      "instructions": "manual",
+      "instructions": "documented",
       "skills": "documented",
       "skillDiscovery": {
         "directories": [".kimi-code/skills", ".agents/skills"],
         "source": "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html"
       },
       "runtime": "not-checked",
-      "sources": ["https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html"],
+      "sources": [
+        "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/agents.html",
+        "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html",
+        "https://www.kimi.com/code/docs/en/kimi-code-cli/customization/hooks.html"
+      ],
       "limitations": [
-        "Read AGENTS.md explicitly until host instruction discovery is verified; the documented .agents/skills discovery does not prove runtime activation.",
-        "This profile configures portable files; it does not install Kimi or select a model."
-      ]
+        "Kimi Code reads AGENTS.md from the project tree; the documented .agents/skills discovery and the instruction file do not prove runtime activation.",
+        "This profile writes portable files and the sf-<tier> tier agents; it does not install Kimi, write ~/.kimi-code or select a model: a tier agent runs on the model alias its route names, which you declare in your own [secondary_model.models] pool (sf agents route prints the entries to paste)."
+      ],
+      "capabilities": {
+        "routing": { "vendor": "moonshot", "efforts": ["low", "high", "max"] },
+        "tierAgents": { "dir": ".kimi-code/agents", "format": "kimi-md", "modelBinding": "call-alias" },
+        "hooks": null,
+        "worktrees": "none",
+        "limitations": {
+          "hooks": "Kimi Code reads its hooks from the user's own configuration only, never from the project, so the harness installs no guard or capture hook for it; the CLI's own guards still refuse an escape hatch.",
+          "worktrees": "The harness uses no Kimi Code worktree tool: delegation is limited to sub-tasks in the current worktree until a whole-ticket worktree run is verified."
+        }
+      }
     },
     "gemini-cli": {
       "displayName": "Gemini CLI",
@@ -65,7 +95,19 @@
         "GEMINI.md directs the agent to the common AGENTS.md instructions.",
         "The documented .agents/skills discovery alias does not prove runtime activation or consent.",
         "No Gemini settings, hooks, provider credentials or model selection are changed."
-      ]
+      ],
+      "capabilities": {
+        "routing": null,
+        "tierAgents": null,
+        "hooks": null,
+        "worktrees": "manual",
+        "limitations": {
+          "routing": "The harness ships no routing candidates for Gemini CLI, so sf agents route cannot name a tier for it.",
+          "tierAgents": "The harness writes no Gemini CLI tier agent.",
+          "hooks": "No Gemini CLI guard or capture hook is installed by the harness.",
+          "worktrees": "The harness declares no host-native worktree isolation for Gemini CLI: the session opens the worktree with git and hands the delegate its path."
+        }
+      }
     },
     "qwen-code": {
       "displayName": "Qwen Code",
@@ -82,7 +124,19 @@
       "limitations": [
         "Qwen Code discovers project skills in .qwen/skills, which this harness does not write; read applicable .agents/skills procedures explicitly.",
         "No .qwen settings, hooks, credentials or model choices are installed."
-      ]
+      ],
+      "capabilities": {
+        "routing": null,
+        "tierAgents": null,
+        "hooks": null,
+        "worktrees": "manual",
+        "limitations": {
+          "routing": "The harness ships no routing candidates for Qwen Code, so sf agents route cannot name a tier for it.",
+          "tierAgents": "The harness writes no Qwen Code tier agent.",
+          "hooks": "No Qwen Code guard or capture hook is installed by the harness.",
+          "worktrees": "The harness declares no host-native worktree isolation for Qwen Code: the session opens the worktree with git and hands the delegate its path."
+        }
+      }
     },
     "generic": {
       "displayName": "Generic coding agent",
@@ -97,7 +151,19 @@
         "Explicitly provide AGENTS.md and applicable .agents/skills procedures to the host.",
         "Automatic instruction discovery, skill activation, hooks and delegation are not assumed.",
         "This portable fallback does not identify a model, provider or executable."
-      ]
+      ],
+      "capabilities": {
+        "routing": null,
+        "tierAgents": null,
+        "hooks": null,
+        "worktrees": "manual",
+        "limitations": {
+          "routing": "The generic profile names no provider, so it has no routing candidates and sf agents route cannot name a tier for it.",
+          "tierAgents": "The generic profile names no host, so no tier agent is written for it.",
+          "hooks": "No guard or capture hook is installed for the generic profile.",
+          "worktrees": "The harness declares no host-native worktree isolation for a generic coding agent: the session opens the worktree with git and hands the delegate its path."
+        }
+      }
     }
   }
 }

@@ -168,7 +168,7 @@ describe('renderHarnessSettings (#935)', () => {
     it('supersedes the v1.1.0 commands of both hosts, and only those', () => {
       for (const command of V1_1_0_CAPTURE_COMMANDS) expect(HARNESS_SUPERSEDED_HOOKS.supersedes(command)).toBe(true)
       expect(HARNESS_SUPERSEDED_HOOKS.supersedes(CLAUDE_CAPTURE_COMMAND)).toBe(false)
-      expect(HARNESS_SUPERSEDED_COMMANDS).toHaveLength(2)
+      expect(HARNESS_SUPERSEDED_COMMANDS).toHaveLength(3)
     })
 
     it('leaves a hand-edited copy of the old command alone: it is the project own, and the new hook comes beside it', () => {
@@ -227,7 +227,8 @@ describe('renderHarnessSettings (#935)', () => {
     })
 
     it('shares one superseded list with the capture hook, so a later release appends to it', () => {
-      expect(HARNESS_SUPERSEDED_COMMANDS).toHaveLength(2)
+      // capture, session start, and the guard since #1228
+      expect(HARNESS_SUPERSEDED_COMMANDS).toHaveLength(3)
       expect(HARNESS_SUPERSEDED_HOOKS.supersedes('sf status --claude-friendly --no-network')).toBe(true)
       expect(HARNESS_SUPERSEDED_HOOKS.supersedes('sf agents outcome capture --host codex')).toBe(true)
       expect(HARNESS_SUPERSEDED_HOOKS.supersedes(SESSION_START_COMMAND)).toBe(false)

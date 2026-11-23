@@ -334,13 +334,37 @@ function describeIgnored(ignored: ExistingSrsTicket[]): string {
 }
 
 /**
- * The open version Epic a previous spawn created for this holder: issue type sf-epic, the
- * `<feature> - <version>` title. Two of them is an ambiguity spawn will not resolve.
+ * The open version Epic a previous spawn created for this holder (issue type sf-epic). Spawn
+ * writes the holder page link into its body (`Main spec: …`), and that link is the signal read
+ * first: it survives a version page renamed between two runs, where the `<feature> - <version>`
+ * title no longer matches (#986). The title is the fallback, for an Epic whose body lost the
+ * link. Two candidates on either signal is an ambiguity spawn will not resolve.
  */
-function findVersionEpic(tickets: ExistingSrsTicket[], holderTitle: string): string | undefined {
-  const epics = tickets.filter((ticket) => ticket.issueType?.toLowerCase() === 'sf-epic' && ticket.state === 'OPEN' && ticket.title.trim() === holderTitle.trim())
-  if (epics.length > 1) throw new ReconciliationError(`« ${holderTitle} » has several open Epics (${epics.map((epic) => `#${epic.number}`).join(', ')}); pass --ticket <n> to choose one`)
-  return epics[0]?.number
+function findVersionEpic(tickets: ExistingSrsTicket[], holderTitle: string, holderPageUrl: string | undefined): string | undefined {
+  const openEpics = tickets.filter((ticket) => ticket.issueType?.toLowerCase() === 'sf-epic' && ticket.state === 'OPEN')
+  const choose = (epics: ExistingSrsTicket[]): string | undefined => {
+    if (epics.length > 1) throw new ReconciliationError(`« ${holderTitle} » has several open Epics (${epics.map((epic) => `#${epic.number}`).join(', ')}); pass --ticket <n> to choose one`)
+    return epics[0]?.number
+  }
+  const titled = (epic: ExistingSrsTicket): boolean => epic.title.trim() === holderTitle.trim()
+  if (holderPageUrl) {
+    const page = canonicalSrsIdentity(holderPageUrl)
+    const linked = openEpics.filter((epic) => epic.srsLinks.some((link) => canonicalSrsIdentity(link) === page))
+    // An aggregate Epic that lists several version pages links this one too: the title settles it
+    const adopted = choose(linked.length > 1 && linked.some(titled) ? linked.filter(titled) : linked)
+    if (adopted) return adopted
+  }
+  return choose(openEpics.filter(titled))
+}
+
+/**
+ * One FR of a run without a plan: `exists #11, skipped` for a Story already on the board, `new`
+ * for one this run creates. A Story that exists with no parent is linked, never created again.
+ */
+function describeMatch(ticket: ExistingSrsTicket | undefined, blocked: string | undefined, ignored: ExistingSrsTicket[]): string {
+  if (blocked) return `blocked — ${blocked}${describeIgnored(ignored)}`
+  if (!ticket) return `new${describeIgnored(ignored)}`
+  return `exists${describeTicket(ticket)}, skipped${ticket.parentNumber ? '' : ' (linked under the delivery parent)'}${describeIgnored(ignored)}`
 }
 
 export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO()): Promise<number> {
@@ -492,7 +516,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     // A re-run finds the one it created before — its body lists these FR pages — and adopts
     // it instead of a second one. The plan used to require --ticket outright (#855).
     const tickets = io.inspectTickets(options.ticket ?? null, requirements)
-    adoptedEpic = options.ticket ? undefined : findVersionEpic(tickets, holderTitle)
+    adoptedEpic = options.ticket ? undefined : findVersionEpic(tickets, holderTitle, holderPageUrl)
     const parentTicket = options.ticket ?? adoptedEpic ?? null
     if (plan) {
       decisionsHeading = 'reconciliation'
@@ -509,7 +533,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
         action: match.ticket ? 'reuse' : 'create',
         ticket: match.ticket,
         blocked: match.blocked,
-        summary: `${match.blocked ? `blocked — ${match.blocked}` : match.ticket ? `reuse${describeTicket(match.ticket)}` : 'create'}${describeIgnored(match.ignored)}`
+        summary: describeMatch(match.ticket, match.blocked, match.ignored)
       }))
     }
   } catch (error) {
@@ -521,8 +545,14 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
 
   const parentLabel = options.ticket ? `#${options.ticket}` : adoptedEpic ? `the existing Epic #${adoptedEpic} « ${holderTitle} »` : `a new Epic « ${holderTitle} »`
-  io.stdout(`spawn: Epic « ${holderTitle} » — ${planned.length} FR page(s), planning Story tickets under ${parentLabel}\n`)
-  for (const p of planned) {
+  // The header counts what is new against what already has a ticket, and the list names only
+  // the Stories this run would create: a re-run after one FR was added plans one Story, not all
+  // of them again (#986).
+  const isNew = (frId: string): boolean => decisions.some((decision) => decision.frId === frId && decision.action === 'create' && !decision.blocked)
+  const fresh = planned.filter((p) => isNew(p.frId))
+  const present = decisions.filter((decision) => decision.ticket && !decision.blocked).length
+  io.stdout(`spawn: Epic « ${holderTitle} » — ${planned.length} FR page(s): ${fresh.length} new, ${present} already ticketed; planning Story tickets under ${parentLabel}\n`)
+  for (const p of fresh) {
     io.stdout(`  • ${p.frId} → ${p.title} (${p.frPageUrl}) — ${p.complexity ? `complexity ${p.complexity}` : 'no complexity'}\n`)
   }
 
@@ -539,8 +569,13 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
     return 10
   }
 
+  // An Epic may span several releases, and only its delivery children carry one: an Epic that
+  // already exists keeps the milestone it has, and --milestone scopes this run's Stories (#1119)
+  const existingEpic = options.ticket ?? adoptedEpic
   if (options.milestone) {
-    io.stdout(`  release: « ${options.milestone} » — created or reused, and everything above joins it\n`)
+    const joining = existingEpic ? 'the Stories of this run join it' : 'the new Epic and the Stories of this run join it'
+    io.stdout(`  release: « ${options.milestone} » — created or reused; ${joining}\n`)
+    if (existingEpic) io.stdout(`  Epic #${existingEpic} keeps its milestone: an Epic may span several releases\n`)
   } else {
     // Said out loud rather than left to be discovered later. A version spawned
     // into no release is the state #542 exists to prevent, and the moment to
@@ -714,10 +749,11 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
   }
 
   if (options.milestone) {
-    // The Epic joins too: a milestone read after the release should show the
-    // grouping that composed it, not a flat list of Stories. It closes on its
-    // own when its children do, so it never holds the percentage back.
-    const toAssign = [...new Set([parentTicket, ...reused, ...created])]
+    // An Epic this run creates joins too: a milestone read after the release should show the
+    // grouping that composed it, not a flat list of Stories. It closes on its own when its
+    // children do, so it never holds the percentage back. An Epic that already existed keeps
+    // its milestone: its earlier Stories stay in their own release (#1119).
+    const toAssign = [...new Set([...(existingEpic ? [] : [parentTicket]), ...reused, ...created])]
     const assigned: string[] = []
     for (const ticket of toAssign) {
       try {
@@ -732,6 +768,7 @@ export async function runSpawn(options: SpawnOptions, io: SpawnIO = defaultIO())
       }
     }
     io.stdout(`spawn: ${assigned.length} ticket(s) joined « ${options.milestone} ».\n`)
+    if (existingEpic) io.stdout(`spawn: Epic #${existingEpic} keeps its milestone.\n`)
 
     // Last because it is the only step that is idempotent on its own, so it is
     // the safe one to be retried by a re-run.

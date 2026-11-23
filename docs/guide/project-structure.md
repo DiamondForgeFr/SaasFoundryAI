@@ -74,6 +74,27 @@ src/modules/auth/
         └── auth.controller.spec.ts
 ```
 
+### End-to-end test users
+
+API e2e specs create their users with `setupTestUser` (`src/common/tests/e2e/utils/setup-test-user.ts`): each user gets its own test account and the roles you list, as they are seeded. Every spec of a
+run shares one database, so the helper never changes what a role grants. Since 1.3.0, the optional `permissions` are extra grants for that user only: a custom role of its own account
+(`e2e-test-grants`) carries them, and `cleanupTestUser` removes it with the user. A later `account-user` holds exactly the seeded grants, whatever spec ran before it.
+
+```typescript
+const admin = await setupTestUser(prismaService, {
+  email: 'roles-admin@example.test',
+  password: 'TestPassword123',
+  firstname: 'Roles',
+  lastname: 'Admin',
+  roles: ['account-user', 'account-admin'],
+  // Not seeded on account-admin: granted to this user, in its own account, only.
+  permissions: ['ROLE_CUSTOM_MANAGEMENT']
+})
+```
+
+Ask for `permissions` only when the seeded roles lack one, and never write grants to a system role from a spec. A permission the seed does not define fails the setup instead of being added to the
+catalog.
+
 ### Path Aliases
 
 ```typescript
@@ -259,7 +280,7 @@ export const envSchema = z.object({
 
 ```json
 {
-  "version": "1.2.0",
+  "version": "1.3.0",
   "structure": "monorepo",
   "projectName": "my-saas",
   "modules": {
@@ -273,6 +294,11 @@ export const envSchema = z.object({
   }
 }
 ```
+
+`projectName` follows the stack. `sf new` asks for lowercase letters, digits and hyphens, because the technical stack names its packages, its multirepo directories (`apps/<name>-api`), its Docker
+resources and its default bucket after it. A harness-only project keeps the name it was adopted with: `sf update` accepts letters of any case, digits, dots, underscores and hyphens there
+(`SaaSFoundryAI`, `Notulia`), and never renames the project. Adding a technical stack to such a project with `sf update --target-profile full` is refused with the reason `project-name-not-a-slug`, and
+no file is changed. Since 1.3.0.
 
 ## Scripts
 

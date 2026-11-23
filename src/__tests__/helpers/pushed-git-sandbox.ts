@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process'
+import childProcess, { execFileSync } from 'child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'fs'
 import path from 'path'
 
@@ -8,7 +8,7 @@ import path from 'path'
  * sandbox's `git status` read the wrong index. Everything `GIT_*` is dropped, the identity and the
  * configuration are the sandbox's own.
  */
-export function sandboxGitEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+export function sandboxGitEnv(base: NodeJS.ProcessEnv = process.env, { identity = true }: { identity?: boolean } = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
   for (const [key, value] of Object.entries(base)) {
     if (!key.startsWith('GIT_')) env[key] = value
@@ -17,10 +17,50 @@ export function sandboxGitEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.Pro
     ...env,
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_CONFIG_NOSYSTEM: '1',
-    GIT_AUTHOR_NAME: 'Test',
-    GIT_AUTHOR_EMAIL: 'test@example.com',
-    GIT_COMMITTER_NAME: 'Test',
-    GIT_COMMITTER_EMAIL: 'test@example.com'
+    ...(identity
+      ? { GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
+      : // No identity, and no guessing one from the account and the host either, which some machines can
+        { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.useConfigOnly', GIT_CONFIG_VALUE_0: 'true' })
+  }
+}
+
+export interface SpawnedGitSandbox {
+  /** Puts the real `spawnSync` back: call it in `afterAll`. */
+  restore: () => void
+  /** Runs `run`, and awaits it when it is async, with the sandbox's Git identity withdrawn: for the commit that has to fail for want of one. */
+  withoutIdentity: <T>(run: () => T) => T
+}
+
+/**
+ * Runs the `git` that the code under test starts through `spawnSync` (`sf new` does, whatever its caller's
+ * environment is) in `sandboxGitEnv()`: an identity and a configuration of its own, no `GIT_*` inherited.
+ *
+ * Setting the variables on `process.env` cannot do it. Jest hands every test file a copy of `process.env`, and
+ * a child process started without an `env` option inherits the real one: the commit then found the identity of
+ * whoever ran the suite, and failed on a CI runner that has none (#969).
+ */
+export function sandboxSpawnedGit(): SpawnedGitSandbox {
+  const real = childProcess.spawnSync
+  let identity = true
+  const spy = jest
+    .spyOn(childProcess, 'spawnSync')
+    .mockImplementation(((command: string, args?: readonly string[], options?: childProcess.SpawnSyncOptions) =>
+      real(command, args, { ...options, env: sandboxGitEnv(options?.env ?? process.env, { identity }) })) as never)
+  return {
+    restore: () => spy.mockRestore(),
+    withoutIdentity: <T>(run: () => T): T => {
+      identity = false
+      let result: T
+      try {
+        result = run()
+      } catch (error) {
+        identity = true
+        throw error
+      }
+      if (result && typeof (result as { then?: unknown }).then === 'function') return (result as unknown as Promise<unknown>).finally(() => (identity = true)) as unknown as T
+      identity = true
+      return result
+    }
   }
 }
 

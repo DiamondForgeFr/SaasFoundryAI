@@ -1,6 +1,24 @@
 export default {
   extends: ['@commitlint/config-conventional'],
+  plugins: [
+    {
+      rules: {
+        // #1232: the scope is the number of a ticket that exists. A placeholder (#TBD, #XXX) is no
+        // ticket: work committed under it reaches no board and no pull request.
+        'ticket-reference': ({ header }) => {
+          const scope = /^\w+\(([^)]*)\)/.exec(header ?? '')?.[1]
+          if (scope === undefined || /^#\d+$/.test(scope)) return [true]
+          return [
+            false,
+            `the scope must be the number of an existing ticket, as (#123): (${scope}) is not one. ` +
+              'Create the ticket before the first commit; when the ticket tool is unreachable, stop and report it to the developer'
+          ]
+        }
+      }
+    }
+  ],
   rules: {
+    'ticket-reference': [2, 'always'], // #1232: (#<number>), never a placeholder
     'type-enum': [
       2,
       'always',

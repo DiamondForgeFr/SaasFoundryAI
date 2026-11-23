@@ -15,9 +15,32 @@
  */
 import { posix } from 'path'
 
-export type GuardHost = 'claude-code' | 'codex'
+import { getSkillDirectory, type HookProvider } from './agent-registry'
+import { analyzeShellShape, SHELLS, squash, WRAPPERS, type ShapeAnalysis, type ShapeFinding, type ShapeKind } from './shell-shape'
 
-export type GuardRule = 'bypass-variable' | 'skip-local-ci' | 'nature-label' | 'delegation-consent' | 'ready-pr' | 'merge' | 'nature-at-creation'
+/** The hosts whose hooks the harness installs: the agents whose profile declares `capabilities.hooks`. */
+export type GuardHost = HookProvider
+
+export type GuardRule =
+  | 'bypass-variable'
+  | 'skip-local-ci'
+  | 'nature-label'
+  | 'delegation-consent'
+  | 'ready-pr'
+  | 'merge'
+  | 'nature-at-creation'
+  | 'shell-substitution'
+  | 'shell-compound'
+  | 'shell-chain'
+  | 'shell-background'
+  | 'shell-inline-script'
+  | 'shell-heredoc-write'
+
+/**
+ * What the guard does with a line that is not one plain command (#1251): `refuse` denies it with the split to make
+ * instead, `warn` lets the host's own permission flow go on and tells the agent the same, `off` does not look.
+ */
+export type ShellShapeMode = 'refuse' | 'warn' | 'off'
 
 export interface ToolCall {
   host: GuardHost
@@ -27,10 +50,13 @@ export interface ToolCall {
   cwd?: string
   /** Present on every tool event a host fires inside a subagent: the call is delegated. */
   agentId?: string
+  /** What to do with a line that chains, substitutes, loops or runs an inline script. Absent means `refuse`. */
+  shellShape?: ShellShapeMode
 }
 
 export interface GuardDecision {
-  decision: 'deny'
+  /** `deny`: the host refuses the call. `warn`: the call goes on through the host's own permission flow, with the reason as context. */
+  decision: 'deny' | 'warn'
   rule: GuardRule
   reason: string
 }
@@ -205,9 +231,6 @@ export function parseShell(input: string): SimpleCommand[] {
 // ───────────────────────────────────────────────────────────────────────────
 
 const RESERVED_LEADING = new Set(['!', '{', '}', 'if', 'then', 'else', 'elif', 'while', 'until', 'do', 'done', 'fi'])
-/** Programs that run another program given as their arguments. */
-const WRAPPERS = new Set(['env', 'sudo', 'doas', 'command', 'exec', 'nohup', 'nice', 'ionice', 'stdbuf', 'setsid', 'timeout', 'xargs', 'builtin', 'caffeinate', 'unbuffer', 'time'])
-const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
 /** Programs whose arguments assign variables. */
 const ASSIGNING = new Set(['export', 'declare', 'typeset', 'local', 'readonly'])
 const SCRIPTS = new Set(['workflow-cli.sh', 'github-projects-cli.sh'])
@@ -355,8 +378,11 @@ function writesNatureThroughApi(gh: GhCall, command: SimpleCommand): boolean {
 // Rules
 // ───────────────────────────────────────────────────────────────────────────
 
+/** The rules of the escape hatches (R1 to R7); the shell shape rules have their own reasons. */
+type HatchRule = Exclude<GuardRule, `shell-${string}`>
+
 interface Finding {
-  rule: GuardRule
+  rule: HatchRule
   /** What the reason quotes: the variable that is set. */
   detail?: string
 }
@@ -437,7 +463,7 @@ function targetDirectories(command: SimpleCommand): string[] {
 const HEAD = 'Refused by the SaaSFoundry guard hook:'
 
 function catalogue(host: GuardHost): string {
-  return host === 'codex' ? '.agents/skills/sf-workflow/escape-hatches.md' : '.claude/skills/sf-workflow/escape-hatches.md'
+  return `${getSkillDirectory(host)}/sf-workflow/escape-hatches.md`
 }
 
 /** How the developer runs a command the guard refused an agent. The agent never does. */
@@ -468,6 +494,116 @@ function reasonFor(finding: Finding, host: GuardHost): string {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// Shell shape (#1251)
+// ───────────────────────────────────────────────────────────────────────────
+
+const SHAPE_RULES: Record<ShapeKind, GuardRule> = {
+  substitution: 'shell-substitution',
+  compound: 'shell-compound',
+  chain: 'shell-chain',
+  background: 'shell-background',
+  'inline-script': 'shell-inline-script',
+  'heredoc-write': 'shell-heredoc-write'
+}
+
+const SHAPE_NAMES: Record<ShapeKind, string> = {
+  substitution: 'a command substitution',
+  compound: 'a loop, a condition or a group',
+  chain: 'a chain of commands',
+  background: 'a background job',
+  'inline-script': 'an inline script',
+  'heredoc-write': 'a file written through a heredoc'
+}
+
+/** Why the shape matters, in every message: the agent can fix what it understands. */
+const WHY = 'A host cannot analyse such a line before it runs, so every call of this shape stops for a permission prompt, even when each command in it is allowed.'
+const MAX_QUOTED_COMMANDS = 6
+
+/** The tools an agent has, named for its host. */
+function shapeTools(host: GuardHost): { write: string; edit: string; background: string } {
+  return host === 'codex'
+    ? { write: 'your file-editing tool', edit: 'your file-editing tool', background: "the shell tool's background option" }
+    : { write: 'the Write tool', edit: 'the Edit tool', background: 'the `run_in_background` option of the Bash tool' }
+}
+
+function compoundName(construct: string): string {
+  if (construct === 'for' || construct === 'while' || construct === 'until' || construct === 'select') return `a \`${construct}\` loop`
+  if (construct === 'if' || construct === 'case') return `an \`${construct}\` conditional`
+  if (construct === '{') return 'a `{ … }` group'
+  if (construct === '(') return 'a `( … )` subshell'
+  return 'a function definition'
+}
+
+/** The corrective text for the construct that comes first in the line: what it is, why it is refused, and the split to make. */
+function shapeMessage(finding: ShapeFinding, analysis: ShapeAnalysis, host: GuardHost): string {
+  const tools = shapeTools(host)
+  switch (finding.kind) {
+    case 'substitution': {
+      if (finding.heredoc) {
+        return `this command writes text inline with a command substitution around a heredoc (${finding.construct}). ${WHY} Write the text to a scratch file with ${tools.write}, then pass the file: \`git commit -F <file>\`, \`gh pr create --body-file <file>\`.`
+      }
+      const process = finding.construct.startsWith('<') || finding.construct.startsWith('>')
+      const inner = squash(finding.inner ?? '', 100)
+      return process
+        ? `this command uses a process substitution (${finding.construct}): the shell runs \`${inner}\` inside the call. ${WHY} Run \`${inner}\` as a call of its own with its output redirected to a scratch file, then run \`${analysis.outline}\` with that file in place of the substitution.`
+        : `this command uses a command substitution (${finding.construct}): the shell runs \`${inner}\` inside the call. ${WHY} Run \`${inner}\` as a call of its own, read its output, then run \`${analysis.outline}\` with that output typed in place of \`<output>\`.`
+    }
+    case 'chain': {
+      const operators = [...new Set(analysis.findings.filter((entry) => entry.kind === 'chain').map((entry) => entry.construct))]
+      const segments = analysis.segments
+      const quoted =
+        segments.length > 1
+          ? ` Run them one per call, in this order: ${segments
+              .slice(0, MAX_QUOTED_COMMANDS)
+              .map((segment, index) => `${index + 1}. \`${squash(segment, 100)}\``)
+              .join(' ')}${segments.length > MAX_QUOTED_COMMANDS ? ` … (${segments.length - MAX_QUOTED_COMMANDS} more)` : ''}.`
+          : ' Run them one per call.'
+      const directory = /^cd\s+\S+$/.test(segments[0] ?? '')
+        ? ' Drop `cd <dir> &&`: stay in the project root and give the directory to the command itself (`git -C <dir>`, `npm --prefix <dir>`, a path).'
+        : ''
+      const either = operators.includes('||') ? ' For `a || b`, run `a`, then run `b` in the next call only if `a` failed.' : ''
+      return `this command chains commands with ${operators.join(', ')}. ${WHY}${quoted}${directory}${either}`
+    }
+    case 'background':
+      return `this command ends a command with \`&\`, which starts a background job. ${WHY} Start the long-running command with ${tools.background}, and run the other commands as calls of their own.`
+    case 'compound':
+      return `this command uses ${compoundName(finding.construct)}. ${WHY} Write one command per call: for a loop, make one call per item, or one command that takes every item (for example \`grep -n pattern a b c\`); for a condition, run the test, then decide in the next call.`
+    case 'inline-script':
+      return finding.construct === 'eval'
+        ? `this command passes text to \`eval\`. ${WHY} Run the command itself, one command per call, without \`eval\`.`
+        : `this command runs an inline script (\`${finding.construct}\`). ${WHY} Write the script to a scratch file with ${tools.write}, then run the file (\`node <file>\`, \`python3 <file>\`, \`bash <file>\`), or run its commands one per call.`
+    case 'heredoc-write':
+      return `this command writes a file with a heredoc (\`${finding.construct}\`). ${WHY} Create the file with ${tools.write}, or change an existing one with ${tools.edit}, then run the command that uses it.`
+  }
+}
+
+/**
+ * What a `PreToolUse` hook prints for a decision, for Claude Code and Codex alike: a refusal denies the call, a
+ * warning adds the same text as context for the agent (`additionalContext`, which both hosts honour on this event)
+ * and leaves the host's own permission flow in place. The guard never prints an `allow`.
+ */
+export function guardHookOutput(decision: GuardDecision): { hookSpecificOutput: Record<string, string> } {
+  return {
+    hookSpecificOutput:
+      decision.decision === 'warn'
+        ? { hookEventName: 'PreToolUse', additionalContext: decision.reason }
+        : { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: decision.reason }
+  }
+}
+
+/** The decision for a line that is not one plain command, or `undefined` when it is one. */
+function shellShapeDecision(call: ToolCall, mode: 'refuse' | 'warn'): GuardDecision | undefined {
+  const analysis = analyzeShellShape(call.command, { allowQuotedHeredocArgument: call.host === 'claude-code' })
+  const [first] = analysis.findings
+  if (!first) return undefined
+  const others = [...new Set(analysis.findings.map((finding) => finding.kind))].filter((kind) => kind !== first.kind)
+  const also = others.length ? ` It also contains ${others.map((kind) => SHAPE_NAMES[kind]).join(', ')}.` : ''
+  const message = shapeMessage(first, analysis, call.host)
+  const reason = mode === 'warn' ? `SaaSFoundry guard hook warning (the call is not refused): ${message}${also} Make it as plain commands next time.` : `${HEAD} ${message}${also}`
+  return { decision: mode === 'warn' ? 'warn' : 'deny', rule: SHAPE_RULES[first.kind], reason }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // Entry point
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -479,6 +615,10 @@ function reasonFor(finding: Finding, host: GuardHost): string {
  * consent, `ready-pr`, a merge, a nature at creation) hold only for a delegated agent: a call that carries an
  * `agentId`, or that runs in a worktree of `.claude/worktrees/` or `.codex/worktrees/`, by its working directory or
  * by a `cd`/`git -C` in the command. From the primary checkout, the session and the developer run them.
+ *
+ * The shape rule comes last (#1251): when none of the rules above fires, a line that chains commands, substitutes
+ * one into another, loops or runs an inline script is refused (or, in `warn` mode, flagged) with the split to make
+ * instead. It reads the Bash-like tools only: a PowerShell line has other quoting, and the bash lexer would misread it.
  */
 export function evaluateToolCall(call: ToolCall): GuardDecision | undefined {
   if (!GUARDED_TOOLS[call.host].includes(call.toolName) || !call.command.trim()) return undefined
@@ -495,5 +635,6 @@ export function evaluateToolCall(call: ToolCall): GuardDecision | undefined {
       }
     }
   }
-  return undefined
+  const mode = call.shellShape ?? 'refuse'
+  return mode === 'off' || call.toolName === 'PowerShell' ? undefined : shellShapeDecision(call, mode)
 }

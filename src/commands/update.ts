@@ -38,7 +38,7 @@ import { Answers, SaaSFoundryManifest, SrsToolConfig, isScaffoldManifest } from 
 import { upsertEnvKey } from '../utils/env-file'
 import { reconcileSrsIntentHook } from '../utils/claude-settings'
 import { ensureGitignorePatterns } from '../utils/gitignore'
-import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix, hashFileContent, validateProjectName } from '../utils'
+import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix, hashFileContent, validateManifestProjectName } from '../utils'
 import { version as cliVersion } from '../../package.json'
 import {
   buildUpdatePrefillFromOptions,
@@ -52,10 +52,25 @@ import {
   validateUpdateOutputOptions
 } from './update.options'
 import { handleProfileTransition } from './update.profile-transition'
+import {
+  groupByLockfileRoot,
+  isPackageManifestPath,
+  logPendingSidecarPins,
+  offerLockfileResolution,
+  pinChanges,
+  planApiClientCodegen,
+  readPackageManifests,
+  regenerateApiClients,
+  type ApiClientTarget,
+  type LockfileRoot,
+  type PinChange
+} from './update.lockfile'
 import { runRequired } from '../run'
-import { getSharedAgentEntrypoints } from '../harness/agent-registry'
+import { declaredAgents, getSharedAgentEntrypoints, hasCapability } from '../harness/agent-registry'
 import { previewCodexInstructionLimits } from '../harness/codex-instruction-limit-preview'
 import { logHarnessSettings, syncHarnessSettingsForProject } from '../harness/harness-settings'
+import { hookCliNotice } from '../harness/hook-cli-notice'
+import { DEFAULT_SHELL_SHAPE, recordedShellShape, shellShapeNotice } from '../harness/shell-guard-mode'
 import { TIER_AGENT_PATH } from '../harness/tier-agents'
 import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
 import { installSelectedAgentInstructions } from '../installers/agent-topology'
@@ -1226,7 +1241,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
   let manifestSnapshot = await readManifestFileSafe(manifestPath)
   const manifestBytes = manifestSnapshot.bytes
   let manifest: SaaSFoundryManifest = JSON.parse(manifestBytes.toString('utf8'))
-  validateProjectName(manifest.projectName)
+  validateManifestProjectName(manifest.projectName, { technicalStack: isScaffoldManifest(manifest) })
   // Capability decisions and technical adoption must see the current schema
   // even when the on-disk manifest predates the migration registry. Keep the
   // original bytes for the transaction compare-and-swap, while building the
@@ -1387,6 +1402,11 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
         // Conflicts left for the user to merge (sidecar or kept edit). They no longer hold the
         // project on its old version: their baseline becomes the offered template (#856).
         let unresolvedConflicts = false
+        // Lockfiles that still hold the pins this refresh replaced, and sidecars that propose new pins (#1229).
+        let lockfileRoots: LockfileRoot[] = []
+        let pendingSidecarRoots: LockfileRoot[] = []
+        // Roots whose committed API client a rewritten codegen file leaves behind, no pin moved (#1264).
+        let apiClientTargets: ApiClientTarget[] = []
 
         try {
           // Regenerate project in temp dir with current CLI
@@ -1448,9 +1468,35 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               // In dry-run we report but never mutate.
             } else {
               spinner.start('Applying updates...')
+              const packageManifestsBefore = await readPackageManifests(
+                '.',
+                updates.map((update) => update.path)
+              )
               const { applied, conflicts, added, removed } = await applyFileUpdates(updates, tempProjectDir, spinner, conflictStrategy, assertStackModuleWritePathSafe)
               templateRefreshComplete = true
               unresolvedConflicts = conflictStrategy !== 'replace' && conflicts.length > 0
+              // Pins the refresh changed on disk, and pins a package.json sidecar proposes (#1229).
+              const pinsAfter = await readPackageManifests('.', [...packageManifestsBefore.keys()])
+              // The committed API client follows orval, prettier and the codegen files (#1264).
+              const written = [...applied, ...added, ...(conflictStrategy === 'replace' ? conflicts : [])].map((entry) => entry.path)
+              const apiClientPlan = await planApiClientCodegen(
+                '.',
+                await groupByLockfileRoot(
+                  '.',
+                  [...packageManifestsBefore].flatMap(([path, before]) => pinChanges(path, before, pinsAfter.get(path)))
+                ),
+                written
+              )
+              lockfileRoots = apiClientPlan.roots
+              apiClientTargets = apiClientPlan.standalone
+              if (conflictStrategy === 'save-new') {
+                const sidecarPins: PinChange[] = []
+                for (const conflict of conflicts.filter((entry) => isPackageManifestPath(entry.path))) {
+                  const proposed = await readFile(`${conflict.path}.saasfoundry.new`, 'utf8').catch(() => undefined)
+                  if (proposed !== undefined) sidecarPins.push(...pinChanges(conflict.path, pinsAfter.get(conflict.path), proposed))
+                }
+                pendingSidecarRoots = (await planApiClientCodegen('.', await groupByLockfileRoot('.', sidecarPins))).roots
+              }
 
               spinner.succeed(chalk.green('Template update complete.'))
 
@@ -1508,6 +1554,24 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           }
         }
 
+        // After the manifest records the refresh: a failed install must not cost the new baselines.
+        if (!dryRun && templateRefreshComplete) {
+          const resolutions = await offerLockfileResolution(
+            lockfileRoots,
+            { interactive: !nonInteractive },
+            {
+              refresh: refreshDependencyLockAndInstall,
+              confirm: async (message) => (await promptWithPrefill<{ confirm: boolean }>([{ type: 'confirm', name: 'confirm', message, default: true }])).confirm
+            }
+          )
+          const apiClients = regenerateApiClients(apiClientTargets, { interactive: !nonInteractive })
+          const failedResolve = resolutions.some((resolution) => resolution.outcome === 'failed')
+          const failedPrismaGenerate = resolutions.some((resolution) => resolution.prismaClients?.some((client) => client.outcome === 'failed'))
+          const failedCodegen = [...resolutions.map((resolution) => resolution.apiClient), ...apiClients].some((client) => client?.outcome === 'failed')
+          if (failedResolve || failedPrismaGenerate || failedCodegen) process.exitCode = 1
+          logPendingSidecarPins(pendingSidecarRoots)
+        }
+
         console.log()
       }
     } else if (!isScaffoldManifest(manifest)) {
@@ -1549,6 +1613,14 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       const settingsResults = await syncHarnessSettingsForProject('.', manifest, { dryRun })
       if (dryRunReport && settingsResults.some((result) => result.status !== 'unchanged')) dryRunReport.harnessSettings = settingsResults.filter((result) => result.status !== 'unchanged')
       logHarnessSettings(settingsResults, { dryRun })
+    }
+    // The guard and capture hooks run the CLI the project resolves, not this one: say which, and when it cannot run them (#1228).
+    if (!dryRun && manifest.modules?.harness) {
+      const agents = declaredAgents(manifest.modules.harness.agents)
+      const lines = await hookCliNotice('.', agents, { requiredVersion: cliVersion })
+      for (const line of lines) console.log((line.needsAttention ? chalk.yellow : chalk.gray)(`  ${line.text}`))
+      // The shell shape check is on by absence (#1251): nothing is written, so an update says what the guard now does and how to change it.
+      if (agents.some((agent) => hasCapability(agent, 'hooks'))) console.log(chalk.gray(`  ${shellShapeNotice(recordedShellShape(manifest) ?? DEFAULT_SHELL_SHAPE)}`))
     }
 
     // The agent-instruction refresh above raises Codex's `project_doc_max_bytes` when the AGENTS.md chain a

@@ -93,6 +93,20 @@ n'est pas une stack technique : le projet se lit `harness` (stack `absent`), pas
 du CLI lui-même (le package nommé `saasfoundryai-cli` avec son `bin/sf.js` et son `src/`), la raison du profil le dit, et `sf status` ne propose aucun aperçu `sf update --target-profile full`.
 `sf update` y continue de déposer les skills de stack.
 
+### Workflow
+
+La ligne `workflow:` (`Workflow:` dans la sortie lisible) nomme l'outil de workflow, puis le preset et ses statuts dans l'ordre et l'orthographe de `workflow.statuses` : une session qui lit le rapport
+de début de session sait quels statuts existent sur le projet, Human testing compris :
+
+```text
+- workflow: github-projects (SaaSFoundry Solo: Backlog → In progress → AI testing → In review → Done)
+- workflow: github-projects (SaaSFoundry AI Workflow: Backlog → Ready → In Progress → AI Testing → Human Testing → In Review → Done)
+```
+
+Avant la 1.3.0, la ligne ne nommait que l'outil (`workflow: github-projects`). Un manifest sans `workflow.template` affiche les statuts seuls (`github-projects (Todo → Done)`), et un projet sans outil
+de workflow se lit `workflow: none`. Dans `--json`, `manifest.workflow` reste l'outil, et `manifest.workflowPreset` porte le reste : `{ "name": "SaaSFoundry Solo", "statuses": ["Backlog", …] }`,
+`name` valant `null` quand le manifest n'enregistre aucun preset, et le champ entier `null` sans outil de workflow.
+
 ### Accord de délégation
 
 Sur un projet doté d'un bloc harness, la sortie destinée aux agents porte une ligne `delegation:` et `--json` un objet `delegation` : l'accord du développeur pour déléguer la livraison des tickets à
@@ -112,28 +126,47 @@ que personne n'a encore promus, pour qu'une session sache que la route qu'elle o
 `routing: grid v1, 0 overrides; 1 local automatic adjustment not promoted (multi-file-feature → fix for claude-code, escalate on 2026-10-20; sf agents routing report, promote or reset)`. Elle nomme un
 type que l'ajustement a examiné et ne peut pas déplacer (`terminal-ci (claude-code) held: top-of-ladder since 2026-10-20`) et compte ceux qui attendent seulement des preuves. Elle dit aussi, pour
 chaque agent de code déclaré, si les hooks qui enregistrent chaque délégation sont en place **et peuvent s'exécuter** : `claude-code capture enforced` seulement quand le hook est déclaré et que le CLI
-du projet répond à `agents outcome capture` ; `capture hook declared but no CLI can run it` sinon (installez `saasfoundryai-cli` dans le projet, ou mettez `saasfoundryai` dans le PATH : d'ici là les
-délégations ne sont pas enregistrées) ; `codex capture declared` quand le hook est là mais que Codex doit d'abord l'approuver ; `capture hook outdated` pour le hook `sf` nu du premier build ou celui
-que la v1.1.0 a livré ; `capture hook missing` (`run sf agents refresh --scope shared`) ; ou `not enforced` pour un hôte sans hooks, dont les délégations s'enregistrent à la main. Une couche locale
-endommagée s'affiche `unreadable (…)` et ne fait jamais échouer le statut.
+du projet répond à `agents outcome capture` ; `capture hook declared but the CLI it reaches (<cli> <version>) cannot run sf agents outcome capture` sinon (installez `saasfoundryai-cli` dans le projet,
+ou mettez à jour le `saasfoundryai` du PATH : d'ici là les délégations ne sont pas enregistrées) ; `capture hook declared but the CLI it reaches (<cli> <version>) is older than the project's harness`
+quand ce CLI est antérieur à la version qui a mis le projet à jour en dernier ; `codex capture declared` quand le hook est là mais que Codex doit d'abord l'approuver ; `capture hook outdated` pour le
+hook `sf` nu du premier build ou celui que la v1.1.0 ou la v1.2.0 a livré ; `capture hook missing` (`run sf agents refresh --scope shared`) ; ou
+`capture unavailable (<raison> ; record its delegations with sf agents outcome record)` pour un hôte dont le profil ne déclare aucun hook, comme Kimi Code, dont les délégations s'enregistrent à la
+main : la raison est celle que donne son profil pour n'en avoir aucun (voir [le bloc de capacités](./sf-agents.md#le-bloc-de-capacites-d-un-profil)). Les hôtes qui ont des hooks, et si l'un d'eux doit
+d'abord être approuvé, viennent des profils. Une couche locale endommagée s'affiche `unreadable (…)` et ne fait jamais échouer le statut.
+
+**Le CLI qu'atteint un hook n'est pas toujours celui qui écrit le rapport.** Un hook lance `node_modules/.bin/saasfoundryai`, puis le `bin/sf.js` de ce dépôt, puis `saasfoundryai` dans le PATH. Un
+projet généré ne dépend pas de `saasfoundryai-cli` : ses hooks atteignent donc l'installation globale, qui peut être plus ancienne que le `npx saasfoundryai-cli@<version> status` que vous lancez. La
+sonde résout le CLI comme le hook : elle écarte les entrées du PATH qu'un lanceur de paquets ajoute pour son propre processus (le cache de `npx`, tout `node_modules/.bin`), lit la version dans le
+`package.json` de ce CLI et lui demande `--help` sur la commande du hook. `--json` porte le résultat sur chaque entrée de `routing.capture` et `routing.guard`, sous `cli` et `cliVersion` (additif).
 
 ### Le hook de garde
 
 Le hook `PreToolUse` qui refuse l'échappatoire, le label de nature et (pour un agent délégué) la fusion qu'un agent s'applique de lui-même (voir [le hook de garde](./sf-agents.md#le-hook-de-garde))
 laisse passer en cas d'échec, par conception : sans CLI qui ait `agents guard`, un appel passe sans contrôle. Son état n'est donc jamais silencieux. La ligne `routing:` le dit pour chaque agent de
-code déclaré, après l'état de la capture, et `--json` le porte sous `routing.guard` (`[{ agent, state }]`, additif) :
+code déclaré, après l'état de la capture, et `--json` le porte sous `routing.guard` (`[{ agent, state, cli?, cliVersion? }]`, additif) :
 
-| État                    | Ligne                                                                                                                              |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `enforced`              | `claude-code guard enforced` : le hook est déclaré et le CLI propre au projet répond à `agents guard`                              |
-| `declared`              | `codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)` : Codex n'est jamais `enforced`             |
-| `declared-not-runnable` | `guard hook declared but no CLI can run it` : installez `saasfoundryai-cli` dans le projet, ou mettez `saasfoundryai` dans le PATH |
-| `missing`               | `guard hook missing (run sf agents refresh --scope shared)`                                                                        |
-| `not-enforced`          | `guard not enforced` : un hôte sans hook de garde ; son agent a pour consigne de demander au développeur, rien ne l'arrête         |
+| État                    | Ligne                                                                                                                                                                                                                                                                                                            |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enforced`              | `claude-code guard enforced` : le hook est déclaré et le CLI qu'il atteint répond à `agents guard`                                                                                                                                                                                                               |
+| `declared`              | `codex guard declared (Codex runs it once the .codex/ layer and the hook are trusted)` : Codex n'est jamais `enforced`                                                                                                                                                                                           |
+| `declared-not-runnable` | `guard hook declared but the CLI it reaches (<cli> <version>) cannot run sf agents guard` : installez `saasfoundryai-cli` dans le projet, ou mettez à jour le CLI global                                                                                                                                         |
+| `declared-outdated-cli` | `guard hook declared but the CLI it reaches (<cli> <version>) is older than the project's harness: upgrade it`                                                                                                                                                                                                   |
+| `outdated`              | `guard hook outdated (run sf agents refresh --scope shared)` : le hook livré par la v1.2.0, qui sortait en silence sur un CLI incapable de l'exécuter                                                                                                                                                            |
+| `missing`               | `guard hook missing (run sf agents refresh --scope shared)`                                                                                                                                                                                                                                                      |
+| `not-enforced`          | `guard unavailable (<raison>)` pour un hôte dont le profil ne déclare aucun hook (Kimi Code lit ses hooks dans la configuration de l'utilisateur seulement ; les gardes du CLI refusent toujours). `guard not enforced` pour tout autre : son agent a pour consigne de demander au développeur, rien ne l'arrête |
 
-La précondition `guardHook`, « Guard hook stops an agent from bypassing a guard », est un `warn` quand le hook d'un agent est `missing` ou `declared-not-runnable`, avec pour remède de lancer
-`sf agents refresh --scope shared` et de rendre un CLI qui a `agents guard` résolvable. Elle est `ok` sinon, et ignorée sans harness ou quand le routage est illisible. La sonde demande au CLI que le
-hook exécuterait `agents guard --help` et ne lance rien d'autre.
+Le texte du garde se termine par ce que fait le hook d'une ligne de shell qui n'est pas une commande simple (voir
+[une ligne de shell qui n'est pas une commande simple](./sf-agents.md#une-ligne-de-shell-qui-n-est-pas-une-commande-simple)) : `; shell shape: refuse` par défaut (l'absence dans `.saasfoundry.json`
+vaut `refuse`), ou `; shell shape: warn (…)` et `; shell shape: off (…)` quand `modules.harness.guard.shellShape` le dit, avec la commande qui rétablit le refus (`sf agents shell-guard refuse`).
+`--json` le porte dans `routing.shellShape` (`"refuse" | "warn" | "off"`, additif, après `routing.guard`), et une valeur que le CLI ne connaît pas se lit `refuse`. La précondition `guardHook` nomme un
+mode autre que le défaut dans ses détails (`claude-code enforced; shell shape warn`).
+
+La précondition `guardHook`, « Guard hook stops an agent from bypassing a guard », est un **`fail`** quand le hook d'un agent atteint un CLI qui ne sait pas exécuter `agents guard`
+(`declared-not-runnable`) : le garde paraît déclaré et chaque appel passe sans contrôle. Elle est un `warn` quand ce CLI exécute le garde mais est antérieur à la version qui a mis le projet à jour en
+dernier (`declared-outdated-cli`) : il applique un jeu de règles plus ancien. Ce `warn` est voulu, pour qu'une version corrective ne fasse pas passer en `fail` tous les projets qui utilisent un CLI
+global plus ancien. Dans les deux cas, les détails nomment le CLI et sa version, et la remédiation donne la commande pour le mettre à jour (`npm install -D saasfoundryai-cli@<version>` dans le projet,
+ou `npm install -g saasfoundryai-cli@latest`). Elle est aussi un `warn` quand le hook est `missing` ou `outdated` (`sf agents refresh --scope shared`), `ok` sinon, et ignorée sans harness ou quand le
+routage est illisible. La sonde demande au CLI que le hook exécuterait `agents guard --help` et ne lance rien d'autre.
 
 ### Erreurs de capture
 
@@ -146,17 +179,23 @@ n'avertit pas pour toujours :
   `{ count, since, last? }`, où `last` est `{ at, host, event, stage, message }` (additif : un rapport construit sans le journal omet le champ) ;
 - la précondition `captureErrors`, « Delegation capture records every run », est un `warn` avec le nombre, la dernière erreur et l'emplacement du journal, `ok` quand la fenêtre n'en contient aucune,
   et ignorée sans harness, quand le routage est illisible, ou pour un rapport qui n'a pas lu le journal. La remédiation renvoie au journal et à [`sf agents routing report`](./sf-agents.md#le-rapport),
-  qui affiche le même nombre.
+  qui affiche le même nombre. Elle est aussi un `warn` quand le hook de capture atteint un CLI qui ne sait pas exécuter `agents outcome capture` ou qui est antérieur au projet, en nommant ce CLI et la
+  commande pour le mettre à jour.
+
+Les hooks écrivent eux-mêmes dans ce journal quand le CLI qu'ils atteignent échoue sur leur commande (une version ancienne sans `agents guard` ni `agents outcome capture` ; une version courante sort
+toujours avec 0) : une entrée d'étape `cli`, comme `saasfoundryai cannot run agents guard (exit 1): upgrade saasfoundryai-cli in the project or on the PATH`, et la même ligne sur stderr, au lieu de
+sortir en silence.
 
 Il ne fait que lire le journal : rien n'est écrit, et un journal absent ou illisible compte pour vide, si bien que le statut n'échoue jamais à cause de lui. Hors d'un dépôt Git il n'y a pas de
 journal.
 
 ### Agents de palier
 
-Les agents de délégation que [`sf agents refresh`](./sf-agents.md#agents-de-palier) écrit sous `.claude/agents/` et `.codex/agents/` portent chacun un modèle et un effort. Modifiez-en un, supprimez-en
-un, ou passez à un CLI dont la grille est plus récente : une délégation s'exécute alors sur une route que le routage ne dit plus, sans que rien ne le signale dans l'hôte. `tierAgents` compare chaque
-agent de palier des agents de développement déclarés que la grille route à ce qu'un refresh écrirait maintenant, d'après la grille que ce CLI livre et `modules.harness.routing`. Il se contente de lire
-les fichiers : il n'exécute aucun code du projet et n'écrit rien. `--json` les liste sous `routing.tierAgents` sous la forme `{ path, state }`.
+Les agents de délégation que [`sf agents refresh`](./sf-agents.md#agents-de-palier) écrit sous `.claude/agents/`, `.codex/agents/` et `.kimi-code/agents/` portent chacun un modèle et un effort (un
+fichier Kimi Code n'en porte aucun : la route nomme l'alias de modèle que passe un appel, et `sf status` ne lit pas votre configuration Kimi Code). Modifiez-en un, supprimez-en un, ou passez à un CLI
+dont la grille est plus récente : une délégation s'exécute alors sur une route que le routage ne dit plus, sans que rien ne le signale dans l'hôte. `tierAgents` compare chaque agent de palier des
+agents de développement déclarés que la grille route à ce qu'un refresh écrirait maintenant, d'après la grille que ce CLI livre et `modules.harness.routing`. Il se contente de lire les fichiers : il
+n'exécute aucun code du projet et n'écrit rien. `--json` les liste sous `routing.tierAgents` sous la forme `{ path, state }`.
 
 | État       | Signification                                                                                                                                                                                                                                                                                                          | Remédiation                                                                                                                                                                                                                                                       |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

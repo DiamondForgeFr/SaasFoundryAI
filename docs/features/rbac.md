@@ -92,20 +92,44 @@ setting.
 The role routes (`POST /accounts/:id/roles`, `POST /accounts/platform/roles`, `PATCH` and `DELETE /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`) carry a role id, so the service
 decides, and answers `403`:
 
-| Role                                        | Who may create, edit, toggle or delete it                                                                                                     |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| System role or global template              | Only a holder of `ROLE_CUSTOM_MANAGEMENT` through a **platform** role. A platform role that merely reads the console does not count.          |
-| Custom `ACCOUNT` role of account A          | `ROLE_CUSTOM_MANAGEMENT` on A (an account role on A, or a platform role). An entity role never counts.                                        |
-| Custom `ENTITY` role of account A           | `ROLE_CUSTOM_MANAGEMENT` in **every entity the role is assigned in**: the account administrator, or an entity administrator of their subtree. |
-| Custom `ENTITY` role of A, assigned nowhere | `ROLE_CUSTOM_MANAGEMENT` on A or on one of its entities.                                                                                      |
+| Role                                    | Who may create, edit, toggle or delete it                                                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| System role or global template          | Only a holder of `ROLE_CUSTOM_MANAGEMENT` through a **platform** role. A platform role that merely reads the console does not count.      |
+| Custom `ACCOUNT` role of account A      | `ROLE_CUSTOM_MANAGEMENT` on A (an account role on A, or a platform role). An entity role never counts.                                    |
+| Custom `ENTITY` role of account A       | `ROLE_CUSTOM_MANAGEMENT` in **every entity the role is used in**: the account administrator, or an entity administrator of their subtree. |
+| Custom `ENTITY` role of A, used nowhere | `ROLE_CUSTOM_MANAGEMENT` on A or on one of its entities.                                                                                  |
+
+An `ENTITY` role is used in an entity when it is assigned there, or when a **pending invitation** that carries it targets that entity. Accepting an invitation assigns its `ENTITY` roles in each of its
+entities, so a change made before then reaches the invitee as well: an entity administrator cannot edit a role that is so far only promised to people invited into a sibling entity. Only an invitation
+that can still be accepted (`SENT`) counts; an expired or canceled one promises nothing, and an accepted one has become assignments.
 
 Two more rules hold for everyone below the platform:
 
 - **Nobody grants what they do not hold.** Each permission or section a request adds to a role must be held by the caller where the role applies; sending back what the role already has, or removing
   from it, needs nothing more. A user who holds a custom role cannot extend it to climb above its editor.
+- **An `ENTITY` role is shaped for its entity type.** Sections that exist only on an entity (a project's vision, its tickets) are never held on the account, so the account administrator (holder of
+  `ROLE_CUSTOM_MANAGEMENT` through an `ACCOUNT` role of the role's account) may also grant such a role what the entity type allows: what the active `ENTITY` system roles grant (`entity-admin`,
+  `entity-user`, and the ones a project adds for its own types, such as a `project-owner`). This holds whether the role is assigned nowhere yet, assigned in entities of the account, or promised by a
+  pending invitation. That administrator acts only within its account and may already allocate those system roles in any entity of it, so nobody climbs above their editor. Nothing beyond them is
+  granted, and an entity administrator still grants only what it holds, in every entity the role is used in. The template's roles carry no entity type, so every `ENTITY` system role counts; a project
+  that types its entity roles narrows `loadEntityTypeGrants` in `account.service.ts` to the system roles of the role's type.
 - **No account or entity role carries a platform section.** A `PLATFORM_ADMINISTRATION` section is refused on an `ACCOUNT` or `ENTITY` role, whoever asks, the platform included.
 
 System roles stay renamable by nobody and deletable by nobody; a platform administrator maintains their grants.
+
+### Deleting a role still in use
+
+A custom role is deleted only when nobody holds it. While the role is assigned to a user, or carried by a pending (`SENT`) invitation (accepting it would assign the role),
+`DELETE /accounts/roles/:roleId` answers `409` and changes nothing: no assignment is removed, no invitation loses the role. The message starts with `ROLE_IN_USE:` and names the holders, each user by
+email (with the entity, for an `ENTITY` assignment) and each invitation by its invitee (with the entities it invites into); a long list names the first five and counts the rest:
+
+```text
+ROLE_IN_USE: the role "support" is still assigned to alice@acme.test (Acme Lyon) and carried by the pending invitation to bob@acme.test (Acme Paris). To delete it, first unassign it and cancel the invitations.
+```
+
+Unassign the role (from the user edit dialog) and cancel those invitations, then delete it again. An expired, canceled or accepted invitation holds nothing, and the role's grants go with it. The
+authority check comes first: a caller who may not manage the role gets the `403` above, never the list of holders. The role panel of the web app keeps the role sheet open and shows the refusal with
+the holders the API names.
 
 ::: warning Scope-less endpoints
 
@@ -142,6 +166,43 @@ caller that touches a system role, or an entity administrator that creates an `A
 
 :::
 
+::: tip Updating a project generated with 1.2.0
+
+In 1.2.0 the rule "nobody grants what they do not hold" checked an `ENTITY` role assigned nowhere against the account. An account administrator could no longer create, or extend, an entity-type role
+granting sections that exist only on the entity: `403 You cannot grant what you do not hold where this role applies`. An `ENTITY` role already assigned, or carried by a pending invitation, was checked
+in each entity it is used in, with the same `403` for the account administrator. 1.3.0 lets the account administrator grant what the entity type allows on any `ENTITY` role of its account, used or not
+(see "Who may change a role" above). The fix lives in `account.service.ts`, merged by `sf update` like the 1.1.1 fix; no module migration is needed.
+
+Role-authoring flows that change behaviour:
+
+- **Creating an `ENTITY` role** (`POST /accounts/:id/roles`) as the account administrator: the sections and permissions granted by the `ENTITY` system roles are accepted (`403` before).
+- **Editing an `ENTITY` role** (`PATCH /accounts/roles/:roleId`) as the account administrator, whether it is assigned nowhere, **already assigned** in an entity of the account, or carried by a pending
+  invitation: the same grants may be added (`403` before).
+
+Unchanged: `ACCOUNT` roles, entity administrators, and the platform. A grant that no `ENTITY` system role carries, and that the author does not hold, is still refused. If your project types its entity
+roles, narrow `loadEntityTypeGrants` to the system roles of the role's type when you merge.
+
+In 1.2.0 a pending invitation carrying an `ENTITY` role did not count as a place where the role is used: an entity administrator could edit, toggle or delete a role so far only promised to people
+invited into a sibling entity, and the change reached them on acceptance. 1.3.0 counts the entities of each pending (`SENT`) invitation like assignments (see "Who may change a role" above), in the
+same `account.service.ts`; the test mock `service-mocks.ts` gains `invitationEntityLink.findMany`. Flows that change behaviour:
+
+- **Editing, toggling or deleting an `ENTITY` role** (`PATCH /accounts/roles/:roleId`, `PATCH /accounts/roles/:roleId/status`, `DELETE /accounts/roles/:roleId`) as an entity administrator, when a
+  pending invitation carrying it targets an entity outside your subtree: `403 This role is used in an entity you do not administer` (`200` before).
+- **Adding grants to such a role** as the account administrator: it is used, so each grant is checked in the invited entities; the entity-type allowance above still applies to the account
+  administrator.
+
+In 1.2.0 deleting a custom role that was still assigned answered `400 Failed to delete custom role`: the assignment's foreign key refused the delete, and the confirmation of the web role panel wrongly
+announced that the assignments would be removed. A role carried only by a pending invitation was deleted, and the invitation silently lost it. 1.3.0 refuses both with `409 ROLE_IN_USE` (see "Deleting
+a role still in use" above). The fix lives in `account.service.ts`, the web page `account-roles.tsx`, the new `role-delete-refusal.ts` and `role-delete-refusal-notice.tsx` next to it, and the
+`account` locales, merged by `sf update` like the fixes above; no module migration is needed. A client that read the `400` of a used role now gets `409`.
+
+In 1.2.0 inviting an address that already belonged to an active user answered `201 Invitation sent successfully` and wrote nothing: no invitation, no link, no role, no email. 1.3.0 refuses it with
+`409 USER_ALREADY_ACTIVE` (see "Inviting an address that already has an active account" below). The fix lives in `invitation.service.ts` and `invitation.controller.ts`, the two invite dialogs, the
+`useInviteUserCreate` hook, the new `utils/invitation-refusal.ts` and the `account` locales, merged by `sf update` like the fixes above; no module migration is needed. A client that read the `201` of
+an active address now gets `409`.
+
+:::
+
 ## Roles included in a generated project
 
 | System role      | Scope    | Intended use                                                      |
@@ -168,8 +229,20 @@ Invitations carry their account, entity and role targets. Before issuing one, th
 - cannot mix a platform role with account or entity targets;
 - cannot assign the technical `guest` role.
 
-Acceptance creates the user links and scoped role assignments together. Expired invitations are handled by the generated scheduler, and the English/French email flow is already wired to the invitation
-module.
+Acceptance creates the user links and scoped role assignments together; until then, a pending invitation counts as a place where its `ENTITY` roles are used (see "Who may change a role"). Expired
+invitations are handled by the generated scheduler, and the English/French email flow is already wired to the invitation module.
+
+### Inviting an address that already has an active account
+
+An invitation onboards a new user: accepting it sets the password and activates the account. An address that already belongs to an active user cannot accept one, so `POST /invitations` answers `409`
+and changes nothing: no invitation, token, link or role assignment is written, and no email goes out. The message starts with `USER_ALREADY_ACTIVE:` and names the address:
+
+```text
+USER_ALREADY_ACTIVE: alice@acme.test already has an active account. An invitation only onboards a new user, so none was sent and nothing was changed.
+```
+
+The checks above come first: a caller who may not invite into the requested targets gets their `401` or `403`, never whether the address has an account. The invite dialogs of the web app keep the form
+open and show the refusal on the email field. An address whose user is still inactive (invited, not yet accepted) is re-invited as before.
 
 ## Defense in depth
 

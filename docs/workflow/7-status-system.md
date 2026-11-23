@@ -68,6 +68,8 @@ Human testing answers: **does the feature behave correctly for its users?**
 The developer uses the draft PR, test instructions and a real runtime to exercise the behavior. This is not code review. If a bug appears, the ticket returns to AI testing after the fix, push and full
 retest.
 
+A ticket marked `ui` enters Human testing only with the record of its validated mockup (or of the visuals the developer supplied): see [the UI mockup gate](/guide/workflow-system#the-ui-mockup-gate).
+
 After approval, required non-regression tests are committed and pushed. The developer then marks the same pull request ready for review: on this route, leaving draft is the developer's call, never the
 agent's. Without Human testing (`nature:internal`, or the Solo preset), the agent marks the PR ready itself at the end of AI testing; for a delegated ticket, that is the session.
 

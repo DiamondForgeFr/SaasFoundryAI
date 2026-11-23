@@ -37,8 +37,10 @@ import {
 } from './delegation'
 import { CODEX_HOOKS_PATH } from './delegation-hooks'
 import { requireLedgerDir } from './delegation-ledger'
+import { DEFAULT_SHELL_SHAPE, recordedShellShape, validateGuardConfig } from './shell-guard-mode'
+import type { ShellShapeMode } from './tool-call-guard'
 import { summarizeHarnessSettings, syncHarnessSettings } from './harness-settings'
-import { isRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
+import { parseRoutingProvider, parseTaskKind, ROUTING_PROVIDERS, routingOverrideIssues, TASK_KINDS, type RoutingProvider, type TaskKind } from './routing-grid'
 import { updateLocalRouting, withLogEntry } from './routing-local'
 import { renderTierAgents, TIER_AGENT_PATH } from './tier-agents'
 import { harnessInstallerMeta } from '../installers/harness.installer'
@@ -128,6 +130,7 @@ function validateManifest(value: unknown): asserts value is SaaSFoundryManifest 
       if (harness.managed !== undefined && typeof harness.managed !== 'boolean') throw new Error('Invalid manifest managed harness capability.')
       if (harness.agents !== undefined) validateAgents(harness.agents)
       if (harness.delegation !== undefined) validateDelegation(harness.delegation)
+      if (harness.guard !== undefined) validateGuardConfig(harness.guard)
     }
   }
   if (value.fileHashes !== undefined && (!isObject(value.fileHashes) || Object.values(value.fileHashes).some((hash) => typeof hash !== 'string'))) {
@@ -207,9 +210,9 @@ export interface DelegationRecord extends DelegationState {
   changed: boolean
 }
 
-function requireHarness(manifest: SaaSFoundryManifest): NonNullable<NonNullable<SaaSFoundryManifest['modules']>['harness']> {
+function requireHarness(manifest: SaaSFoundryManifest, what = 'a delegation answer'): NonNullable<NonNullable<SaaSFoundryManifest['modules']>['harness']> {
   const harness = manifest.modules?.harness
-  if (!harness) throw new Error(`Cannot record a delegation answer: ${NO_HARNESS_REASON}.`)
+  if (!harness) throw new Error(`Cannot record ${what}: ${NO_HARNESS_REASON}.`)
   return harness
 }
 
@@ -244,6 +247,39 @@ export async function recordDelegation(params: { targetPath: string; ticketDeliv
   return { ...resolveDelegation(recorded, local), scope, changed: true }
 }
 
+/** What the guard hook does with a shell line that is not one plain command, and where that comes from. */
+export interface ShellGuardState {
+  shellShape: ShellShapeMode
+  /** `manifest`: recorded in `.saasfoundry.json`. `default`: nothing is recorded, and absence means `refuse`. */
+  source: 'manifest' | 'default'
+}
+
+export interface ShellGuardRecord extends ShellGuardState {
+  /** False when the same mode was already recorded: nothing was written. */
+  changed: boolean
+}
+
+/** The shell shape mode a project records (#1251), read-only: `refuse` by default. */
+export async function readShellGuard(targetPath: string): Promise<ShellGuardState> {
+  const { manifest } = await snapshot(resolve(targetPath))
+  const recorded = recordedShellShape(manifest)
+  return { shellShape: recorded ?? DEFAULT_SHELL_SHAPE, source: recorded === undefined ? 'default' : 'manifest' }
+}
+
+/**
+ * Record the shell shape mode in `modules.harness.guard.shellShape` (#1251) through the same atomic, edit-detecting
+ * manifest replacement as `sf agents delegation`: it is the team's default and travels with the repository. Every
+ * other key of the harness block, and of the guard block, is kept. Recording the mode already recorded writes nothing.
+ */
+export async function recordShellGuard(params: { targetPath: string; shellShape: ShellShapeMode }): Promise<ShellGuardRecord> {
+  const root = resolve(params.targetPath)
+  const before = await snapshot(root)
+  const harness = requireHarness(before.manifest, 'the shell shape mode')
+  if (harness.guard?.shellShape === params.shellShape) return { shellShape: params.shellShape, source: 'manifest', changed: false }
+  await persist(root, before, { ...before.manifest, modules: { ...before.manifest.modules, harness: { ...harness, guard: { ...harness.guard, shellShape: params.shellShape } } } })
+  return { shellShape: params.shellShape, source: 'manifest', changed: true }
+}
+
 export interface RoutingPromotion {
   kind: TaskKind
   tier: string
@@ -270,8 +306,7 @@ export async function promoteLocalRouting(params: { targetPath: string; kind?: s
   const root = resolve(params.targetPath)
   const dir = await requireLedgerDir(root)
   const kindFilter = params.kind === undefined ? undefined : parseTaskKind(params.kind)
-  if (params.provider !== undefined && !isRoutingProvider(params.provider)) throw new Error(`No routing for '${params.provider}'. Routed coding agents: ${ROUTING_PROVIDERS.join(', ')}.`)
-  const providerFilter = params.provider as RoutingProvider | undefined
+  const providerFilter = params.provider === undefined ? undefined : parseRoutingProvider(params.provider)
   const at = (params.now?.() ?? new Date()).toISOString()
   return updateLocalRouting<PromoteRoutingResult>(dir, async (local) => {
     const before = await snapshot(root)
@@ -462,6 +497,15 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
       // A merged file (AGENTS.md's generated region) is project-owned: no baseline.
       if (!report.conflicts.includes(file.path) && !file.merge) report.fileHashes[file.path] = hash(file.content)
     }
+    // A dry run names the shared copies the refresh would retire (#1248); an edited one is reported when applied.
+    for (const path of plan.retired ?? []) {
+      const current = await checkLocalPath(root, path).catch(() => undefined)
+      if (!current) (report.releasedHashes ??= []).push(path)
+      else if (hash(current) === before.manifest.fileHashes?.[path]) {
+        ;(report.removed ??= []).push(path)
+        ;(report.releasedHashes ??= []).push(path)
+      } else report.warnings.push(`${path}: no longer generated, and edited; kept. Merge what you still need, then delete it.`)
+    }
     return {
       scope,
       configuredAgents: union(previous, local.agents),
@@ -517,6 +561,11 @@ async function apply(params: SupportParams, requested?: HarnessAgent[]): Promise
       }
     }
     if (Object.keys(report.fileHashes).length) next.fileHashes = { ...before.manifest.fileHashes, ...report.fileHashes }
+    // A shared copy the render no longer writes leaves the manifest with its file (#1248).
+    if (report.releasedHashes?.length) {
+      const released = new Set(report.releasedHashes)
+      next.fileHashes = Object.fromEntries(Object.entries(next.fileHashes ?? before.manifest.fileHashes ?? {}).filter(([path]) => !released.has(path)))
+    }
     const manifestChanged = await persist(root, before, next)
     if (params.refreshSettings && !report.conflicts.length && !params.adoption && configuredAgents.includes('claude-code')) await mergeCaptureSettings(root, report)
     let localStateChanged = false

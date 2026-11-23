@@ -266,7 +266,15 @@ find . -name "*.saasfoundry.new"
 # 6. Fusionner chacun manuellement, puis le supprimer
 rm **/*.saasfoundry.new
 
-# 7. Relancer les tests et committer
+# 7. Si la mise à jour a changé des versions épinglées sans résoudre le lockfile
+rm -rf node_modules package-lock.json && npm install
+npm ls @nestjs/common @nestjs/core react react-dom @types/react @types/react-dom @prisma/client prisma --all
+# ...et qu'elle a déplacé la version de Prisma : régénérer le client que l'API versionne (multirepo : depuis l'app API)
+cd apps/api && npx prisma generate && cd -
+# ...et qu'elle a changé le codegen du client API (monorepo) : régénérer le client que codegen:check compare
+npm run codegen
+
+# 8. Relancer les tests et committer
 npm test
 git add -A && git commit -m "chore: sf update $(sf --version)"
 ```
@@ -277,11 +285,20 @@ version du modèle qui lui a été proposée : fusionner (ou écarter) le sideca
 
 ## Ce que `sf update` ne fait pas
 
-- Il ne lance pas systématiquement `npm install` ou `prisma generate`. Les ajouts de modules peuvent installer leurs dépendances ; une simple mise à jour de modèles ne le fait pas.
+- Il ne lance pas `npm install` ou `prisma generate` à votre place, à une exception près. Les ajouts de modules peuvent installer leurs dépendances. Une mise à jour de modèles qui change des versions
+  épinglées dans un `package.json` résolu par un `package-lock.json` propose, en exécution interactive, de résoudre ce lockfile de nouveau, puis signale les frameworks installés deux fois ; avec
+  `--non-interactive`, elle affiche la commande à la place. Un simple `npm install` garderait les anciennes versions à côté des nouvelles (voir
+  [Versions épinglées et lockfile](/fr/cli/sf-update#versions-epinglees-et-lockfile)). Quand cette mise à jour déplace la version de Prisma de l'API, la résolution que vous acceptez est suivie de
+  `npx prisma generate` dans l'API, et le client versionné porte la nouvelle version ; sans résolution (`--non-interactive`, réponse non, échec), la commande est affichée parmi les étapes (voir
+  [Le client Prisma suit la version de Prisma](/fr/cli/sf-update#le-client-prisma-suit-la-version-de-prisma)). Pour tout autre changement du schéma Prisma, lancez `prisma generate` vous-même après
+  avoir relu le diff. Le client API qu'un monorepo versionne suit la même règle : quand la mise à jour déplace la version d'orval ou de prettier, ou réécrit `orval.config.ts` ou le mutator,
+  `npm run codegen` est lancé après la résolution (aussitôt si aucune version n'a bougé), ou affiché parmi les étapes, pour que le `codegen:check` du projet accepte le premier commit (voir
+  [Le client API suit son codegen](/fr/cli/sf-update#le-client-api-suit-son-codegen)).
 - Il ne migre pas la base. Les évolutions Prisma sont seulement propagées comme fichiers ; exécutez séparément `npx prisma db push` ou `npm run db:setup:dev`, ce dernier reconstruisant et repeuplant
   la base de manière destructive.
 - Il ne touche pas à l’historique Git et ne crée aucun commit. L’arbre reste modifié pour votre revue.
-- Il ne met pas automatiquement les packages npm installés à niveau. `package.json` suit la même fusion ; `package-lock.json` est généralement exclu.
+- Il ne met pas de lui-même les packages npm installés à niveau. `package.json` suit la même fusion ; `package-lock.json` n'est pas un modèle et n'est résolu de nouveau que si vous l'acceptez
+  (ci-dessus).
 
 ## Dépannage
 
