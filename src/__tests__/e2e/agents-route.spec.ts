@@ -13,8 +13,13 @@ describe('compiled sf agents route (#930)', () => {
     project = await mkdtemp(join(tmpdir(), 'sf-agents-route-'))
   })
   afterEach(async () => rm(project, { recursive: true, force: true }))
+  // A route for Kimi Code reads the developer's configuration: never the real one in a test, so KIMI_CODE_HOME names a folder that holds none.
   function run(...args: string[]) {
-    return spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', 'route', ...args], { cwd: project, encoding: 'utf8' })
+    return spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', 'route', ...args], {
+      cwd: project,
+      encoding: 'utf8',
+      env: { ...process.env, KIMI_CODE_HOME: join(project, '.no-kimi-home') }
+    })
   }
 
   it('resolves from the shipped grid outside a managed project, for every routed agent', () => {
@@ -93,10 +98,21 @@ describe('compiled sf agents route (#930)', () => {
       ['terminal-ci', 'terminal', 'k3.1-pro', 'max'],
       ['prose', 'light', 'k3', 'low']
     ]
-    const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')))
+    // The developer's Kimi Code configuration is never the real one in a test: KIMI_CODE_HOME names a temporary home, which a test fills or leaves empty.
+    let kimiHome: string
+    const withKimiHome = (): NodeJS.ProcessEnv => ({ ...process.env, KIMI_CODE_HOME: kimiHome })
+    const cleanEnv = () => ({ ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))), KIMI_CODE_HOME: kimiHome })
+    const kimi = (...args: string[]) => spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', 'route', ...args], { cwd: project, encoding: 'utf8', env: withKimiHome() })
+    beforeEach(async () => {
+      kimiHome = await mkdtemp(join(tmpdir(), 'sf-kimi-home-'))
+    })
+    afterEach(async () => rm(kimiHome, { recursive: true, force: true }))
+
+    // sf-<model with . → ->-<effort>: the alias a Kimi Agent call passes for each seeded candidate
+    const ALIAS = (model: string, effort: string) => `sf-${model.replaceAll('.', '-')}-${effort}`
 
     it.each(SEEDS)('routes %s to the %s tier on %s at %s effort, provisional, in JSON and in text', (kind, tier, model, effort) => {
-      const json = run('--task', kind, '--provider', 'kimi', '--json')
+      const json = kimi('--task', kind, '--provider', 'kimi', '--json')
       expect(json.status).toBe(0)
       const { routes } = JSON.parse(json.stdout)
       expect(routes).toHaveLength(1)
@@ -106,12 +122,106 @@ describe('compiled sf agents route (#930)', () => {
         tier,
         source: 'shipped',
         candidate: { id: `moonshot/kimi/${model}/${effort}`, model, effort },
+        alias: ALIAS(model, effort),
+        aliasPool: 'missing',
         evidence: { status: 'provisional', score: null, costPerTaskUsd: null }
       })
       expect(routes[0].evidence.note).toContain('No Kimi measurement exists yet')
-      const text = run('--task', kind, '--provider', 'kimi', '--no-trial')
+      const text = kimi('--task', kind, '--provider', 'kimi', '--no-trial')
       expect(text.status).toBe(0)
-      expect(text.stdout).toContain(`${kind} → ${tier} (shipped) kimi: ${model}, effort ${effort} — provisional: No Kimi measurement exists yet`)
+      expect(text.stdout).toContain(`${kind} → ${tier} (shipped) kimi: ${model}, effort ${effort}, alias ${ALIAS(model, effort)} — provisional: No Kimi measurement exists yet`)
+    })
+
+    // FR-MAH-022, AC-3: the route names the alias; a missing one comes with the TOML to paste on stderr, and the config is never written
+    describe('the model alias a route names (FR-MAH-022)', () => {
+      const POOL = `[models.sf-k3-1-pro-high]\nprovider = "managed:kimi-code"\nmodel = "k3.1-pro"\nmax_context_size = 1048576\napi_key = "sk-do-not-print"\n\n[secondary_model]\ndefault_model = "sf-k3-1-pro-high"\n\n[secondary_model.models]\nsf-k3-1-pro-high = "SaaSFoundry build tier"\n`
+
+      it('prints the snippet on stderr when the alias is missing from the pool, and keeps the route line the last line of stdout', async () => {
+        const result = kimi('--task', 'bug-fix', '--provider', 'kimi', '--no-trial')
+        expect(result.status).toBe(0)
+        expect(result.stdout).toMatch(/^bug-fix → fix \(shipped\) kimi: k3\.1-pro, effort high, alias sf-k3-1-pro-high — provisional: .*\n$/)
+        expect(result.stderr).toContain(`the model alias sf-k3-1-pro-high is not declared in ${join(kimiHome, 'config.toml')}`)
+        expect(result.stderr).toContain('sf never writes your Kimi Code configuration')
+        expect(result.stderr).toContain('[models.sf-k3-1-pro-high]')
+        expect(result.stderr).toContain('model = "k3.1-pro"')
+        expect(result.stderr).toContain('[models.sf-k3-1-pro-high.overrides]\ndefault_effort = "high"')
+        expect(result.stderr).toContain('[secondary_model.models]\nsf-k3-1-pro-high = "SaaSFoundry fix tier: k3.1-pro at high effort."')
+        // the snippet is for stderr: the route line stays machine-readable on stdout
+        expect(result.stdout).not.toContain('[models.')
+        await expect(readFile(join(kimiHome, 'config.toml'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      })
+
+      it('prints nothing about the alias, and records it as present, when the pool declares it, and leaves the config byte-identical', async () => {
+        await writeFile(join(kimiHome, 'config.toml'), POOL)
+        const before = await readFile(join(kimiHome, 'config.toml'), 'utf8')
+        const text = kimi('--task', 'bug-fix', '--provider', 'kimi', '--no-trial')
+        expect(text.stderr).toBe('')
+        expect(text.stdout).toContain('alias sf-k3-1-pro-high')
+        const json = kimi('--task', 'bug-fix', '--provider', 'kimi', '--json')
+        expect(JSON.parse(json.stdout).routes[0]).toMatchObject({ alias: 'sf-k3-1-pro-high', aliasPool: 'present' })
+        expect(json.stderr).toBe('')
+        expect(await readFile(join(kimiHome, 'config.toml'), 'utf8')).toBe(before)
+      })
+
+      it('asks only for the alias of the route, adds its lines under the existing pool, and copies the provider and context size of the same model', async () => {
+        await writeFile(join(kimiHome, 'config.toml'), POOL)
+        const result = kimi('--task', 'terminal-ci', '--provider', 'kimi', '--no-trial')
+        expect(result.stdout).toContain('alias sf-k3-1-pro-max')
+        expect(result.stderr).toContain('the model alias sf-k3-1-pro-max is not declared')
+        expect(result.stderr).toContain('[models.sf-k3-1-pro-max]\nprovider = "managed:kimi-code"\nmodel = "k3.1-pro"\nmax_context_size = 1048576')
+        expect(result.stderr).toContain('Add these lines under your existing [secondary_model.models] table; do not repeat its header.')
+        expect(result.stderr).not.toMatch(/^\[secondary_model/m)
+        // a secret of the config is never read into anything sf prints
+        expect(result.stderr).not.toContain('sk-do-not-print')
+        expect(result.stdout).not.toContain('sk-do-not-print')
+      })
+
+      it('says it cannot tell when the config cannot be read, and still prints the snippet', async () => {
+        await mkdir(join(kimiHome, 'config.toml'))
+        const result = kimi('--task', 'prose', '--provider', 'kimi', '--no-trial')
+        expect(result.status).toBe(0)
+        expect(result.stderr).toContain('could not be read (it is not a regular file)')
+        expect(result.stderr).toContain('sf cannot tell whether the model alias sf-k3-low is declared')
+        expect(result.stderr).toContain('[models.sf-k3-low]')
+        expect(JSON.parse(kimi('--task', 'prose', '--provider', 'kimi', '--json').stdout).routes[0].aliasPool).toBe('unknown')
+      })
+
+      it('warns that [secondary_model].default_effort outranks the effort of the alias', async () => {
+        await writeFile(join(kimiHome, 'config.toml'), POOL.replace('default_model', 'default_effort = "low"\ndefault_model'))
+        const result = kimi('--task', 'bug-fix', '--provider', 'kimi', '--no-trial')
+        expect(result.stderr).toContain('[secondary_model].default_effort is set, and it outranks the effort of every alias')
+      })
+
+      it('follows a project override of the candidate of a tier: the alias is named after the candidate', async () => {
+        await manifest({ version: 4, agents: ['kimi'], routing: { tiers: { fix: { kimi: { model: 'k3.2', effort: 'max' } } } } })
+        const route = JSON.parse(kimi('--task', 'bug-fix', '--json').stdout).routes[0]
+        expect(route).toMatchObject({ provider: 'kimi', tier: 'fix', source: 'project', candidate: { model: 'k3.2', effort: 'max' }, alias: 'sf-k3-2-max' })
+      })
+
+      it('names no alias on a Claude Code or a Codex route, whose tier-agent file carries the model', () => {
+        const json = kimi('--task', 'bug-fix', '--json')
+        const [claude, codex, moonshot] = JSON.parse(json.stdout).routes
+        expect([claude.provider, codex.provider, moonshot.provider]).toEqual(['claude-code', 'codex', 'kimi'])
+        expect(claude).not.toHaveProperty('alias')
+        expect(claude).not.toHaveProperty('aliasPool')
+        expect(codex).not.toHaveProperty('alias')
+        expect(codex).not.toHaveProperty('aliasPool')
+        expect(moonshot).toHaveProperty('alias', 'sf-k3-1-pro-high')
+        const text = kimi('--task', 'bug-fix', '--provider', 'claude-code', '--no-trial')
+        expect(text.stdout).not.toContain('alias')
+        expect(text.stderr).toBe('')
+      })
+
+      it('keeps the route version at 2: the alias fields are optional and additive', () => {
+        expect(JSON.parse(kimi('--task', 'bug-fix', '--provider', 'kimi', '--json').stdout).routeVersion).toBe(2)
+      })
+
+      it('does not read the Kimi Code configuration for a route that names no alias', async () => {
+        await mkdir(join(kimiHome, 'config.toml'))
+        const result = kimi('--task', 'bug-fix', '--provider', 'claude-code', '--no-trial')
+        expect(result.status).toBe(0)
+        expect(result.stderr).toBe('')
+      })
     })
 
     it('routes a project that declares kimi alone, with no flag, and keeps the other agents out of it', async () => {
@@ -129,13 +239,13 @@ describe('compiled sf agents route (#930)', () => {
     })
 
     describe('a recorded delegation', () => {
-      const git = (...args: string[]) => execFileSync('git', args, { cwd: project, env: cleanEnv, stdio: 'pipe' })
+      const git = (...args: string[]) => execFileSync('git', args, { cwd: project, env: cleanEnv(), stdio: 'pipe' })
       const ledger = async () =>
         (await readFile(join(project, '.git', 'saasfoundry', 'delegations.jsonl'), 'utf8'))
           .trim()
           .split('\n')
           .map((line) => JSON.parse(line))
-      const sf = (...args: string[]) => spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', ...args], { cwd: project, encoding: 'utf8', env: cleanEnv })
+      const sf = (...args: string[]) => spawnSync(process.execPath, [join(ROOT, 'bin/sf.js'), 'agents', ...args], { cwd: project, encoding: 'utf8', env: cleanEnv() })
 
       beforeEach(async () => {
         git('init', '-q', '-b', 'main')
@@ -147,7 +257,7 @@ describe('compiled sf agents route (#930)', () => {
       it('prints a route id for a kimi route and writes a ledger line that carries provider kimi', async () => {
         const result = sf('route', '--task', 'multi-file-feature', '--provider', 'kimi', '--no-trial', '--record', '--ticket', '1286', '--complexity', 'medium', '--nature', 'internal')
         expect(result.status).toBe(0)
-        expect(result.stdout).toMatch(/multi-file-feature → build \(shipped\) kimi: k3\.1-pro, effort high — provisional: .* route=[0-9a-f]{20}\n$/)
+        expect(result.stdout).toMatch(/multi-file-feature → build \(shipped\) kimi: k3\.1-pro, effort high, alias sf-k3-1-pro-high — provisional: .* route=[0-9a-f]{20}\n$/)
         expect(await ledger()).toEqual([
           expect.objectContaining({ type: 'route', provider: 'kimi', tier: 'build', taskKind: 'multi-file-feature', ticket: 1286, complexity: 'medium', nature: 'internal' })
         ])
