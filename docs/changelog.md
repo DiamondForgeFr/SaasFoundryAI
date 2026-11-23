@@ -6,6 +6,83 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-23
+
+Kimi Code now works as a coding agent next to Claude Code and Codex, with its own routing and tier agents. The guard refuses shell lines it cannot check (substitutions, loops, chains, interpreter
+heredocs) and says how to split them, and a UI ticket cannot reach the developer's review until its mockup is validated.
+
+### Added
+
+#### Coding agents
+
+- Each coding-agent profile declares its capabilities (routing, tier agents, hooks, worktrees) and the reason for each one it lacks. The routing providers, their efforts, the tier-agent formats and
+  the `sf status` wording are derived from it, and Claude Code and Codex output is unchanged ([#1285](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1285)).
+- Kimi Code (`kimi`) is routed on every task kind, provisionally until it is measured, and its delegations are recorded in the ledger. `sf status` says which of its capabilities are unavailable and
+  why ([#1286](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1286)).
+- `sf agents refresh` writes Kimi Code tier agents under `.kimi-code/agents/`, and each Kimi route names the model alias to pass. sf prints the alias configuration to paste and never writes
+  `~/.kimi-code` ([#1287](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1287)).
+
+#### Workflow
+
+- A ticket can be marked as a UI change (`--ui`, `set-ui`, `clear-ui`). `record-ui-validation` records the validated mockup, or that the developer supplied the visuals, and `update-status` refuses a
+  UI ticket without it on its way to the developer's review. `SF_WORKFLOW_BYPASS_UI_MOCKUP_GUARD` is the developer's escape hatch
+  ([#1305](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1305)).
+- Every coding agent gets the same guidance on a UI ticket: load the host's design skills, follow the shipped UI checklist, show a self-contained HTML mockup before the visual work, and hold the
+  visual part of a delegated ticket until the developer's OK ([#1306](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1306)).
+- The guard refuses a shell line that is not one plain command and names the split to make. `sf agents shell-guard <refuse|warn|off|status>` records the mode, `sf status` shows it and `sf update`
+  points it out ([#1251](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1251), [#1253](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1253),
+  [#1254](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1254), [#1255](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1255),
+  [#1256](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1256)).
+- The git hooks refuse placeholder tickets (`#TBD`) and branches with no ticket number, so an agent cannot deliver work outside the workflow
+  ([#1232](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1232)).
+
+### Changed
+
+- `sf status` names the workflow preset and the CLI the guard and capture hooks reach, and flags one too old to run them. `sf workflow show` lists the statuses by name
+  ([#1228](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1228), [#1249](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1249)).
+- `sf new` makes one first commit that holds the harness and the manifest ([#969](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/969)).
+- When `sf update` moves the Prisma pin or the API client codegen, it regenerates the committed clients; when it changes pinned versions on an existing lockfile, it offers to resolve the lockfile
+  again ([#1246](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1246), [#1264](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1264),
+  [#1229](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1229)).
+- `sf workflow use` retires the previous preset's workflow files and baselines and keeps every declared workflow field ([#1248](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1248),
+  [#1233](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1233)).
+- In generated applications, inviting an already active user and deleting a role still assigned are refused with a 409 that says why
+  ([#988](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/988), [#1221](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1221)).
+
+### Security
+
+- The generated API forces `effect` 3.22.1 under `@prisma/config`, which clears the production audit (GHSA-7589-6fvf-x4pw) ([#1299](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1299)).
+
+### Fixed
+
+#### CLI and workflow
+
+- `sf update` runs on a harness whose `projectName` has uppercase letters ([#966](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/966)).
+- `sf feedback bug --auto-repro` attaches a bounded, redacted manifest excerpt instead of exceeding GitHub's issue body limit on full projects
+  ([#972](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/972)).
+- `sf srs spawn` re-runs plan only the new Stories, and an existing Epic keeps its milestone ([#986](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/986),
+  [#1119](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1119)).
+- The PR-comments skill lists review threads with real `gh` commands, then replies and resolves them ([#1005](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1005)).
+- The tool-saasfoundry skill's `sf new` flag table matches the real command ([#968](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/968)).
+- A delegate that ends its turn while its own background work runs is recorded as interim, not as a failure, and the ledger keeps every concurrent line
+  ([#1241](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1241), [#1240](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1240)).
+
+#### Generated projects
+
+- Generated git hooks work under `sh` (dash) and on a detached HEAD ([#1238](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1238),
+  [#1227](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1227)).
+- Generated CI builds the web app before its end-to-end tests and passes from the first commit ([#979](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/979)).
+- The web build hashes every file it reads, so a cached build is never stale ([#1262](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1262)).
+- The web dev server imports the named exports of shared-config ([#981](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/981)).
+- Account admins can create entity-type roles and extend an assigned one up to what its entity type allows; pending invitations count as places where a role is used
+  ([#1230](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1230), [#1245](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1245),
+  [#1222](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1222)).
+- The e2e test user no longer grants permissions to the shared system roles ([#987](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/987)).
+
+#### Documentation
+
+- The docs appearance switch knob is square like its track ([#1226](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1226)).
+
 ## [1.2.0] - 2026-11-12
 
 A reliability and security release. Generated applications enforce access more strictly: a deactivated user loses API access at once, and a role only grants rights where it is scoped. The workflow now

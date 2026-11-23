@@ -280,7 +280,7 @@ export const envSchema = z.object({
 
 ```json
 {
-  "version": "1.2.0",
+  "version": "1.3.0",
   "structure": "monorepo",
   "projectName": "my-saas",
   "modules": {
