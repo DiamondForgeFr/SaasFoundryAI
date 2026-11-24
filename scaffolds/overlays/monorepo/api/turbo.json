@@ -1,0 +1,9 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "inputs": ["src/**", "!src/**/*spec.ts", "prisma/schema/**", "prisma.config.ts", "nest-cli.json", "tsconfig.json", "tsconfig.build.json", "package.json"]
+    }
+  }
+}

@@ -82,7 +82,9 @@ lane builds it first: in a monorepo, `apps/web/turbo.json` makes the web `test:e
 would drop (a runner's `PLAYWRIGHT_BROWSERS_PATH`, for one); a standalone web app's lane runs `npm run build && npm run test:e2e` (#979). So that a cached build never stands in for changed sources,
 the web `build` task hashes `$TURBO_DEFAULT$` (every file of `apps/web` Git does not ignore: `index.html`, `vite.config.ts`, `pwa.config.ts`, `public/`, `src/`, the `tsconfig` files) plus the
 gitignored `.env*` files Vite loads, leaves out what the build never reads (`tests/`, `playwright.config.ts`, `README.md`, `AGENTS.md`), and declares `VITE_*` as its environment, which strict mode
-would otherwise strip; the web app's own `test:full` builds before its E2E run (#1262). The generated `.prettierignore` keeps the files SaaSFoundryAI writes and refreshes on `sf update`
+would otherwise strip; the web app's own `test:full` builds before its E2E run (#1262). The API `build` task, `nest build`, hashes the same way what it reads: `apps/api/turbo.json` lists `src/**`
+without the specs that `tsconfig.build.json` excludes, the Prisma schema (`prisma/schema/**`), `prisma.config.ts`, `nest-cli.json`, the `tsconfig` files and `package.json`, so a change to the Nest or
+Prisma configuration no longer reuses a cached `dist/`, and editing a spec does not rebuild (#1294). The generated `.prettierignore` keeps the files SaaSFoundryAI writes and refreshes on `sf update`
 (`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, agent instructions, the validation workflow) and generated artefacts out of `npm run format:check`; formatting them would turn the next update
 into conflicts. It also skips what the test and build tools write (`test-results/`, `playwright-report/`, `blob-report/`, `coverage/`, `coverage-e2e/`, `.nyc_output/`, `dev-dist/`), which the
 generated ESLint configs ignore as well: a Playwright report holds megabytes of minified scripts.

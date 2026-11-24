@@ -85,10 +85,12 @@ son propre `build` et lui transmet les variables `PLAYWRIGHT_*`, que le mode d'e
 application web autonome lance `npm run build && npm run test:e2e` (#979). Pour qu'un build en cache ne remplace jamais des sources modifiées, la tâche `build` du web hache `$TURBO_DEFAULT$` (tout
 fichier de `apps/web` que Git n'ignore pas : `index.html`, `vite.config.ts`, `pwa.config.ts`, `public/`, `src/`, les fichiers `tsconfig`) plus les fichiers `.env*` ignorés par Git que Vite charge,
 écarte ce que le build ne lit jamais (`tests/`, `playwright.config.ts`, `README.md`, `AGENTS.md`) et déclare `VITE_*` comme environnement, que le mode strict retirerait sinon ; le `test:full` de
-l'application web construit avant de lancer sa suite E2E (#1262). Le `.prettierignore` généré exclut de `npm run format:check` les fichiers que SaaSFoundryAI écrit et rafraîchit à chaque `sf update`
-(`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, instructions des agents, workflow de validation) ainsi que les artefacts générés : les formater transformerait la mise à jour suivante en
-conflits. Il exclut aussi ce qu'écrivent les outils de test et de build (`test-results/`, `playwright-report/`, `blob-report/`, `coverage/`, `coverage-e2e/`, `.nyc_output/`, `dev-dist/`), que les
-configurations ESLint générées ignorent également : un rapport Playwright contient des mégaoctets de scripts minifiés.
+l'application web construit avant de lancer sa suite E2E (#1262). La tâche `build` de l'API, `nest build`, hache de la même façon ce qu'elle lit : `apps/api/turbo.json` liste `src/**` sans les specs
+qu'exclut `tsconfig.build.json`, le schéma Prisma (`prisma/schema/**`), `prisma.config.ts`, `nest-cli.json`, les fichiers `tsconfig` et `package.json`, si bien qu'un changement de la configuration
+Nest ou Prisma ne réutilise plus un `dist/` en cache et qu'éditer une spec ne reconstruit rien (#1294). Le `.prettierignore` généré exclut de `npm run format:check` les fichiers que SaaSFoundryAI
+écrit et rafraîchit à chaque `sf update` (`.saasfoundry*`, `scripts/saasfoundry/`, `.claude/`, instructions des agents, workflow de validation) ainsi que les artefacts générés : les formater
+transformerait la mise à jour suivante en conflits. Il exclut aussi ce qu'écrivent les outils de test et de build (`test-results/`, `playwright-report/`, `blob-report/`, `coverage/`, `coverage-e2e/`,
+`.nyc_output/`, `dev-dist/`), que les configurations ESLint générées ignorent également : un rapport Playwright contient des mégaoctets de scripts minifiés.
 
 Inspectez une plage sans exécuter les commandes :
 
