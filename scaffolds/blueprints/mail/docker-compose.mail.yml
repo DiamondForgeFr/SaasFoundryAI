@@ -1,0 +1,23 @@
+services:
+  mail-dev:
+    # Development mail catcher. While MAIL_CATCHER_URL is set in the API's dev .env, the API sends
+    # its emails here instead of to MailerSend, and the inbox opens on the host port published below.
+    # The API sends over Mailpit's HTTP API, so only the web port is published: the SMTP port
+    # (1025) stays inside the container and two projects never fight over it.
+    image: axllent/mailpit:v1.34.0
+    container_name: saasfoundry-mail-dev
+    restart: unless-stopped
+    ports:
+      - '8025:8025'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - saasfoundry-network
+
+networks:
+  saasfoundry-network:
+    external: true

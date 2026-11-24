@@ -50,7 +50,11 @@ jest.mock('../../../renderers/technical-stack.renderer', () => ({ renderTechnica
 jest.mock('../../../builders/api.builder', () => ({ createApiApp: jest.fn() }))
 jest.mock('../../../builders/web.builder', () => ({ createWebApp: jest.fn() }))
 jest.mock('../../../builders/monorepo.builder', () => ({ createMonorepoRoot: jest.fn() }))
-jest.mock('../../../builders/dev-services.builder', () => ({ createDevServicesCompose: jest.fn() }))
+jest.mock('../../../builders/dev-services.builder', () => ({
+  ...jest.requireActual('../../../builders/dev-services.builder'),
+  createDevServicesCompose: jest.fn(),
+  ensureMailCatcherService: jest.fn()
+}))
 
 jest.mock('ora', () => () => ({
   start: () => ({ text: '', succeed: jest.fn(), fail: jest.fn(), stop: jest.fn() })
@@ -64,7 +68,7 @@ import { installStorageModule } from '../../../installers/storage.installer'
 import { installAnalyticsModule } from '../../../installers/analytics.installer'
 import { installPwaModule } from '../../../installers/pwa.installer'
 import { installSkills } from '../../../installers/skills.installer'
-import { createDevServicesCompose } from '../../../builders/dev-services.builder'
+import { createDevServicesCompose, ensureMailCatcherService } from '../../../builders/dev-services.builder'
 
 const mockedGetModuleSelections = getModuleSelections as jest.MockedFunction<typeof getModuleSelections>
 const mockedGetEmailCreds = getEmailModuleCredentials as jest.MockedFunction<typeof getEmailModuleCredentials>
@@ -76,6 +80,7 @@ const mockedInstallAnalytics = installAnalyticsModule as jest.MockedFunction<typ
 const mockedInstallPwa = installPwaModule as jest.MockedFunction<typeof installPwaModule>
 const mockedInstallSkills = installSkills as jest.MockedFunction<typeof installSkills>
 const mockedCreateDevServices = createDevServicesCompose as jest.MockedFunction<typeof createDevServicesCompose>
+const mockedEnsureMailCatcher = ensureMailCatcherService as jest.MockedFunction<typeof ensureMailCatcherService>
 
 describe('updateCommand (integration)', () => {
   let tempDir: string
@@ -327,9 +332,65 @@ describe('updateCommand (integration)', () => {
       )
 
       const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
-      expect(saved.modules.email).toEqual({ provider: 'mailersend', version: 1 })
+      // Born at the module's current version: it carries the dev mail catcher already (#976)
+      expect(saved.modules.email).toEqual({ provider: 'mailersend', version: 2 })
       expect(await readFile('apps/api/.env', 'utf8')).toContain('MAILERSEND_API_KEY=test-api-key')
       expect(await readFile('apps/api/.env.test', 'utf8')).toContain('MAILERSEND_API_KEY=ms_test_fake_key_12345abcdef67890ghijklmnopqrstuvwxyz')
+    })
+
+    // #976 — the module brings its inbox: its port is chosen once, and the compose, the dev `.env`
+    // and the manifest name the same one. The test .env never carries it.
+    it('gives the email module its mail catcher: a port, a compose service, the dev switch and the manifest entry', async () => {
+      const manifest = buildBaseManifest({ ports: { db: 5435, api: 3500, web: 5173, mail: 8077 } })
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+
+      mockedGetModuleSelections.mockResolvedValue(['email'])
+      mockedGetEmailCreds.mockResolvedValue({ mailersendApiKey: 'test-api-key', mailersendSenderEmail: 'noreply@test.com', mailersendSenderName: 'TestApp' })
+
+      await updateCommand()
+
+      expect(mockedInstallEmail).toHaveBeenCalledWith(expect.objectContaining({ mailCatcherPort: 8077 }))
+      expect(mockedEnsureMailCatcher).toHaveBeenCalledWith({ apiPath: 'apps/api', projectName: 'integration-project', port: 8077 })
+      expect(await readFile('apps/api/.env', 'utf8')).toContain('MAIL_CATCHER_URL=http://localhost:8077')
+      expect(await readFile('apps/api/.env.test', 'utf8')).not.toContain('MAIL_CATCHER_URL')
+      expect(JSON.parse(await readFile('.saasfoundry.json', 'utf8')).ports).toEqual({ db: 5435, api: 3500, web: 5173, mail: 8077 })
+    })
+
+    it('keeps a MAIL_CATCHER_URL the developer already set when the email module is added', async () => {
+      await writeFile('.saasfoundry.json', JSON.stringify(buildBaseManifest({ ports: { db: 5435, api: 3500, web: 5173, mail: 8077 } })))
+      await mkdir('apps/api', { recursive: true })
+      await writeFile('apps/api/.env', 'MAIL_CATCHER_URL=http://mailhog:8025\n')
+      mockedGetModuleSelections.mockResolvedValue(['email'])
+      mockedGetEmailCreds.mockResolvedValue({ mailersendApiKey: 'test-api-key', mailersendSenderEmail: 'noreply@test.com', mailersendSenderName: 'TestApp' })
+
+      await updateCommand()
+
+      const env = await readFile('apps/api/.env', 'utf8')
+      expect(env).toContain('MAIL_CATCHER_URL=http://mailhog:8025')
+      expect(env).not.toContain('localhost:8077')
+    })
+
+    it('keeps the inbox in the compose when the storage module regenerates it', async () => {
+      const manifest = buildBaseManifest({ ports: { db: 5435, api: 3500, web: 5173, mail: 8077 } })
+      manifest.modules!.email = { provider: 'mailersend', version: 2 }
+      await writeFile('.saasfoundry.json', JSON.stringify(manifest))
+      mockedGetModuleSelections.mockResolvedValue(['storage'])
+      mockedGetStorageConfig.mockResolvedValue({ s3Setup: 'docker' })
+
+      await updateCommand()
+
+      expect(mockedCreateDevServices).toHaveBeenCalledWith(expect.objectContaining({ s3Setup: 'docker', mailCatcher: { port: 8077 } }))
+    })
+
+    it('adds no inbox to the compose of a project without the email module', async () => {
+      await writeFile('.saasfoundry.json', JSON.stringify(buildBaseManifest()))
+      mockedGetModuleSelections.mockResolvedValue(['storage'])
+      mockedGetStorageConfig.mockResolvedValue({ s3Setup: 'docker' })
+
+      await updateCommand()
+
+      expect(mockedCreateDevServices.mock.calls[0][0].mailCatcher).toBeUndefined()
+      expect(mockedEnsureMailCatcher).not.toHaveBeenCalled()
     })
 
     it('skips email module when user cancels credentials', async () => {

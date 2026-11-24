@@ -277,6 +277,57 @@ export function assertMultirepoEmailInlined(apiPath: string): AssertionResult[] 
 }
 
 /**
+ * Verify a project with the email module has its development inbox (#976): the Mailpit service in
+ * the dev-services compose, on the port the `.env` points at, the explicit `MAIL_CATCHER_URL`
+ * switch in the dev `.env` only, and the service and schema that read it. The deployment workflow
+ * and the test environment never carry the variable: production and the test suites cannot fall
+ * into the catcher without somebody setting it.
+ *
+ * `workflows` are the project's deployment workflows (the API's own in a multirepo, the root
+ * `deployment-api.yml` in a monorepo).
+ */
+export function assertDevMailCatcher(apiPath: string, workflows: string[], port = 8025): AssertionResult[] {
+  const compose = join(apiPath, 'docker-compose.dev-services.yml')
+  const service = join(apiPath, 'src', 'modules', 'email', 'services', 'mailersend.service.ts')
+  const schema = join(apiPath, 'src', 'configs', 'env', 'services', 'env.service.ts')
+  const env = join(apiPath, '.env')
+  // `sf new` writes the value quoted, `sf update` through the dotenv helper unquoted: both name the port
+  const envLine = new RegExp(`^MAIL_CATCHER_URL="?http://localhost:${port}"?$`, 'm')
+  return [
+    assertFileContains(compose, '  mail-dev:'),
+    assertFileContains(compose, 'image: axllent/mailpit:'),
+    assertFileContains(compose, `- '${port}:8025'`),
+    existsSync(env) && envLine.test(readFileSync(env, 'utf8'))
+      ? { passed: true, message: `OK: ${env} points MAIL_CATCHER_URL at the inbox on ${port}` }
+      : { passed: false, message: `FAIL: ${env} does not point MAIL_CATCHER_URL at http://localhost:${port}` },
+    assertFileContains(schema, "MAIL_CATCHER_URL: z.string().url().or(z.literal('')).optional(),"),
+    assertFileNotContains(schema, '// TODO mailer-service-active:'),
+    assertFileContains(service, '/api/v1/send'),
+    assertFileNotContains(join(apiPath, '.env.test'), 'MAIL_CATCHER_URL'),
+    ...workflows.map((workflow) => assertFileNotContains(workflow, 'MAIL_CATCHER_URL'))
+  ]
+}
+
+/**
+ * Verify a project without the email module (`--email-service none`) carries no inbox: no send, no
+ * Mailpit, no switch. The logged confirmation token stays its development path (#976).
+ */
+export function assertNoDevMailCatcher(apiPath: string): AssertionResult[] {
+  const compose = join(apiPath, 'docker-compose.dev-services.yml')
+  const env = join(apiPath, '.env')
+  const envText = existsSync(env) ? readFileSync(env, 'utf8') : ''
+  return [
+    assertFileNotContains(compose, 'mail-dev'),
+    assertFileNotContains(compose, 'mailpit'),
+    assertFileNotContains(join(apiPath, 'src', 'configs', 'env', 'services', 'env.service.ts'), 'MAIL_CATCHER_URL: z'),
+    // Only the commented placeholder the blueprint ships: no active switch
+    envText.split('\n').some((line) => /^MAIL_CATCHER_URL=/.test(line))
+      ? { passed: false, message: `FAIL: ${env} sets MAIL_CATCHER_URL without the email module` }
+      : { passed: true, message: `OK: ${env} sets no MAIL_CATCHER_URL` }
+  ]
+}
+
+/**
  * Verify the multirepo web app keeps the vendored shadcn primitives in place
  * (no monorepo-only side effects leak into the multirepo topology).
  */

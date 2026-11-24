@@ -270,6 +270,8 @@ JWT_SECRET_REFRESH="..."
 # Optional: MailerSend Email
 MAILERSEND_API_KEY="..."
 MAILERSEND_SENDER_EMAIL="..."
+# Optional, development only: send emails to the local Mailpit inbox (docker-compose.dev-services.yml) instead of MailerSend
+MAIL_CATCHER_URL="http://localhost:8025"
 
 # Optional: AWS S3 Storage
 S3_ACCESS_KEY="..."

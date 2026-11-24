@@ -1,6 +1,6 @@
 import { moduleInstallers } from '../../installers/registry'
 import type { SaaSFoundryManifest } from '../../types'
-import type { ModuleInstaller, ModuleMigration, ModuleMigrationPreview } from './types'
+import type { ModuleInstaller, ModuleMigration, ModuleMigrationManifestPatch, ModuleMigrationPreview } from './types'
 
 export interface AppliedModuleMigrations {
   module: string
@@ -30,6 +30,9 @@ export interface ModuleMigrationResult {
  *
  * Idempotent at the chain level: running it twice on a fully-up-to-date
  * project returns `applied: []` and the manifest unchanged.
+ *
+ * A migration may return a manifest patch (`ModuleMigrationManifestPatch`); it is merged into the
+ * manifest that comes back, still without mutating the input.
  */
 export async function runModuleMigrations(manifest: SaaSFoundryManifest, projectDir: string): Promise<ModuleMigrationResult> {
   if (!manifest.modules) return { applied: [], manifest }
@@ -39,6 +42,7 @@ export async function runModuleMigrations(manifest: SaaSFoundryManifest, project
   // re-assigned below only if at least one migration ran.
   const nextModules: Record<string, unknown> = { ...(manifest.modules as Record<string, unknown>) }
   let manifestChanged = false
+  let patch: ModuleMigrationManifestPatch = {}
 
   for (const [moduleName, moduleEntry] of Object.entries(nextModules)) {
     if (!isVersionedModuleEntry(moduleEntry)) continue
@@ -54,7 +58,8 @@ export async function runModuleMigrations(manifest: SaaSFoundryManifest, project
     const ranNames: string[] = []
 
     for (const migration of migrationsToRun) {
-      await migration.up(projectDir, manifest)
+      const outcome = await migration.up(projectDir, manifest)
+      if (outcome) patch = { ...patch, ...outcome, ...(outcome.fileHashes ? { fileHashes: { ...patch.fileHashes, ...outcome.fileHashes } } : {}) }
       runningVersion = migration.to
       ranNames.push(migration.name)
     }
@@ -64,7 +69,15 @@ export async function runModuleMigrations(manifest: SaaSFoundryManifest, project
     applied.push({ module: moduleName, fromVersion, toVersion: runningVersion, migrations: ranNames })
   }
 
-  const nextManifest = manifestChanged ? { ...manifest, modules: nextModules as SaaSFoundryManifest['modules'] } : manifest
+  const { fileHashes: rewrittenHashes, ...patchedFields } = patch
+  const nextManifest = manifestChanged
+    ? {
+        ...manifest,
+        ...patchedFields,
+        ...(rewrittenHashes ? { fileHashes: { ...manifest.fileHashes, ...rewrittenHashes } } : {}),
+        modules: nextModules as SaaSFoundryManifest['modules']
+      }
+    : manifest
 
   return { applied, manifest: nextManifest }
 }

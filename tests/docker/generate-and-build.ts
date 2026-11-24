@@ -16,8 +16,10 @@ import { join, resolve } from 'path'
 import {
   assertApiBuildOutput,
   assertDirExists,
+  assertDevMailCatcher,
   assertFileContains,
   assertFileExists,
+  assertNoDevMailCatcher,
   assertPwaBuildOutput,
   assertAgentsMdConfigured,
   assertMonorepoBuildOutput,
@@ -206,15 +208,17 @@ async function generateProject(scenario: GenerationScenario | (UpdateScenario['b
         scenario.s3Setup === 'credentials' ? { endpoint: 'http://localhost:9000', accessKey: 'minioadmin', secretKey: 'minioadmin', bucket: 'test-uploads', region: 'us-east-1' } : undefined
     })
 
-    // Dev services (if docker)
-    const hasDevServices = scenario.dbSetup === 'docker' || scenario.s3Setup === 'docker'
+    // Dev services (if docker, or if the email module brings its inbox: #976)
+    const hostsMailCatcher = scenario.emailService === 'mailersend'
+    const hasDevServices = scenario.dbSetup === 'docker' || scenario.s3Setup === 'docker' || hostsMailCatcher
     if (hasDevServices) {
       const apiPath = scenario.isMonorepo ? 'apps/api' : `apps/${scenario.projectName}-api`
       await createDevServicesCompose({
         apiPath,
         projectName: scenario.projectName,
         dbSetup: scenario.dbSetup,
-        s3Setup: scenario.s3Setup
+        s3Setup: scenario.s3Setup,
+        mailCatcher: hostsMailCatcher ? { port: 8025 } : undefined
       })
     }
 
@@ -439,6 +443,12 @@ async function runGenerationScenario(scenario: GenerationScenario): Promise<bool
     results.push(...assertMonorepoUiPrimitives(projectDir, scenario.projectName))
     if (storageInstalled) results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.projectName))
     if (emailInstalled) results.push(...assertMonorepoEmailSharedTypes(projectDir, scenario.projectName))
+    // #976: the email module brings its dev inbox, and a project without it carries none
+    results.push(
+      ...(emailInstalled
+        ? assertDevMailCatcher(join(projectDir, 'apps', 'api'), [join(projectDir, '.github', 'workflows', 'deployment-api.yml')])
+        : assertNoDevMailCatcher(join(projectDir, 'apps', 'api')))
+    )
   } else {
     const apiPath = join(projectDir, 'apps', `${scenario.projectName}-api`)
     results.push(...assertApiBuildOutput(apiPath))
@@ -446,6 +456,7 @@ async function runGenerationScenario(scenario: GenerationScenario): Promise<bool
     results.push(...assertMultirepoUiPrimitivesUntouched(join(projectDir, 'apps', `${scenario.projectName}-web`)))
     if (storageInstalled) results.push(...assertMultirepoStorageInlined(apiPath))
     if (emailInstalled) results.push(...assertMultirepoEmailInlined(apiPath))
+    results.push(...(emailInstalled ? assertDevMailCatcher(apiPath, [join(apiPath, '.github', 'workflows', 'deployment.yml')]) : assertNoDevMailCatcher(apiPath)))
   }
 
   // The PWA module ships build artefacts, not just source config — assert what actually
@@ -493,6 +504,9 @@ async function runUpdateScenario(scenario: UpdateScenario): Promise<boolean> {
         mailersendSenderEmail: 'noreply@test.com',
         mailersendSenderName: 'Test'
       })
+      // What `sf update` does after the installer: the module's inbox joins the dev-services compose (#976)
+      const { ensureMailCatcherService } = await import(join(CLI_PATH, 'dist', 'builders', 'dev-services.builder'))
+      await ensureMailCatcherService({ apiPath, projectName: scenario.base.projectName, port: 8025 })
     }
 
     if (scenario.addModules.storage) {
@@ -543,14 +557,20 @@ async function runUpdateScenario(scenario: UpdateScenario): Promise<boolean> {
     results.push(...assertMonorepoSharedPackages(projectDir, scenario.base.projectName))
     results.push(...assertMonorepoUiPrimitives(projectDir, scenario.base.projectName))
     if (scenario.addModules.storage) results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.base.projectName))
-    if (scenario.addModules.email) results.push(...assertMonorepoEmailSharedTypes(projectDir, scenario.base.projectName))
+    if (scenario.addModules.email) {
+      results.push(...assertMonorepoEmailSharedTypes(projectDir, scenario.base.projectName))
+      results.push(...assertDevMailCatcher(join(projectDir, 'apps', 'api'), [join(projectDir, '.github', 'workflows', 'deployment-api.yml')]))
+    }
   } else {
     const apiPath = join(projectDir, 'apps', `${scenario.base.projectName}-api`)
     results.push(...assertApiBuildOutput(apiPath))
     results.push(...assertWebBuildOutput(join(projectDir, 'apps', `${scenario.base.projectName}-web`)))
     results.push(...assertMultirepoUiPrimitivesUntouched(join(projectDir, 'apps', `${scenario.base.projectName}-web`)))
     if (scenario.addModules.storage) results.push(...assertMultirepoStorageInlined(apiPath))
-    if (scenario.addModules.email) results.push(...assertMultirepoEmailInlined(apiPath))
+    if (scenario.addModules.email) {
+      results.push(...assertMultirepoEmailInlined(apiPath))
+      results.push(...assertDevMailCatcher(apiPath, [join(apiPath, '.github', 'workflows', 'deployment.yml')]))
+    }
   }
 
   results.push(scanForUnreplacedPlaceholders(projectDir))
@@ -1018,6 +1038,16 @@ function formatErrorDetails(error: unknown): string {
  * A freshly generated project passes its own `npm run format:check` (#867). It failed on
  * every file the CLI itself writes, and on the web templates' unsorted Tailwind classes.
  */
+/**
+ * The dev inbox of a project the real CLI made or updated (#976): on the port its manifest recorded,
+ * which `sf` chose (8025 when free) and which the compose, the dev `.env` and the manifest must agree on.
+ */
+function lifecycleDevMailCatcher(projectDir: string, apiDir: string, workflow: string): AssertionResult[] {
+  const port = (JSON.parse(readFileSync(join(projectDir, '.saasfoundry.json'), 'utf8')) as { ports?: { mail?: number } }).ports?.mail
+  if (typeof port !== 'number') return [{ passed: false, message: 'FAIL: the manifest records no ports.mail although the project has the email module' }]
+  return [{ passed: true, message: `OK: the manifest records the mail catcher on ${port}` }, ...assertDevMailCatcher(apiDir, [workflow], port)]
+}
+
 function assertOwnFormatCheck(roots: string[]): AssertionResult[] {
   return roots.map((root) => {
     const check = spawnSync('npm', ['run', 'format:check'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
@@ -1172,11 +1202,13 @@ async function runBootScenario(scenario: BootScenario): Promise<boolean> {
       results.push(...assertMonorepoEmailSharedTypes(projectDir, scenario.projectName))
       results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.projectName))
       results.push(...assertMonorepoUiPrimitives(projectDir, scenario.projectName))
+      results.push(...lifecycleDevMailCatcher(projectDir, join(projectDir, 'apps', 'api'), join(projectDir, '.github', 'workflows', 'deployment-api.yml')))
     } else {
       const web = join(projectDir, 'apps', `${scenario.projectName}-web`)
       results.push(...assertApiBuildOutput(apiDir))
       results.push(...assertWebBuildOutput(web))
       results.push(...assertMultirepoEmailInlined(apiDir))
+      results.push(...lifecycleDevMailCatcher(projectDir, apiDir, join(apiDir, '.github', 'workflows', 'deployment.yml')))
       results.push(...assertMultirepoStorageInlined(apiDir))
       results.push(...assertMultirepoUiPrimitivesUntouched(web))
       results.push(...validateSourceMultirepoLockfiles())
@@ -1575,6 +1607,7 @@ async function runCurrentUpdateScenario(scenario: CurrentUpdateScenario): Promis
     results.push(...assertMonorepoBuildOutput(projectDir))
     results.push(...assertMonorepoSharedPackages(projectDir, scenario.projectName))
     results.push(...assertMonorepoEmailSharedTypes(projectDir, scenario.projectName))
+    results.push(...lifecycleDevMailCatcher(projectDir, join(projectDir, 'apps', 'api'), join(projectDir, '.github', 'workflows', 'deployment-api.yml')))
     results.push(...assertMonorepoStorageSharedConfig(projectDir, scenario.projectName))
     results.push(...assertMonorepoUiPrimitives(projectDir, scenario.projectName))
     results.push(...assertPwaBuildOutput(join(projectDir, 'apps', 'web')))

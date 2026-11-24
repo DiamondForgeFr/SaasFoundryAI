@@ -6,6 +6,7 @@ import { provisionApiApp, renderApiApp } from '../builders/api.builder'
 import { createDevServicesCompose } from '../builders/dev-services.builder'
 import { provisionMonorepoRoot, renderMonorepoRoot } from '../builders/monorepo.builder'
 import { provisionWebApp, renderWebApp } from '../builders/web.builder'
+import { mailCatcherPort } from '../ports'
 import type { Answers, ProjectPorts } from '../types'
 
 export interface TechnicalStackRenderOptions {
@@ -66,7 +67,10 @@ export async function renderTechnicalStack({ targetDir, config, ports, externalE
     ports
   })
 
-  if (config.dbSetup === 'docker' || config.s3Setup === 'docker') {
+  // The mail catcher comes with the email module, even when neither the database nor the storage
+  // runs in Docker: a project that signs users up needs an inbox to read the confirmation in (#976).
+  const hostsMailCatcher = config.emailService === 'mailersend'
+  if (config.dbSetup === 'docker' || config.s3Setup === 'docker' || hostsMailCatcher) {
     await createDevServicesCompose({
       apiPath,
       projectName: config.projectName,
@@ -74,7 +78,8 @@ export async function renderTechnicalStack({ targetDir, config, ports, externalE
       dbCredentials: config.dbCredentials,
       s3Setup: config.s3Setup,
       s3Credentials: config.s3Credentials,
-      s3Ports: { api: ports.s3, console: ports.s3Console }
+      s3Ports: { api: ports.s3, console: ports.s3Console },
+      mailCatcher: hostsMailCatcher ? { port: mailCatcherPort(ports) } : undefined
     })
   }
 

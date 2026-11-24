@@ -51,6 +51,8 @@ export const envSchema = z
     // TODO mailer-service-active: MAILERSEND_API_KEY: z.string(),
     // TODO mailer-service-active: MAILERSEND_SENDER_EMAIL: z.string().email(),
     // TODO mailer-service-active: MAILERSEND_SENDER_NAME: z.string(),
+    // TODO mailer-service-active: // Development mail catcher (Mailpit). When set, emails go to its inbox instead of MailerSend; development only, never set it in production
+    // TODO mailer-service-active: MAIL_CATCHER_URL: z.string().url().or(z.literal('')).optional(),
 
     // Harness-owned live lifecycle seam. Both values are injected together and remain
     // absent from normal generated-project environments.

@@ -11,6 +11,12 @@ function formatValue(value: string): string {
   return `"${escaped}"`
 }
 
+/** Whether the dotenv file sets `key` (a commented line does not count). */
+export function hasEnvKey(filePath: string, key: string): boolean {
+  if (!fs.existsSync(filePath)) return false
+  return new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`, 'm').test(fs.readFileSync(filePath, 'utf8'))
+}
+
 export function upsertEnvKey(filePath: string, key: string, value: string): void {
   const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : ''
   const lines = existing.length > 0 ? existing.split(/\r?\n/) : []

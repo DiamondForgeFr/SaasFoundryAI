@@ -2,7 +2,8 @@ import chalk from 'chalk'
 import fs from 'fs'
 import path from 'path'
 
-import { canConnect, DEFAULT_PORTS, waitForPort } from '../ports'
+import { MAIL_CATCHER_SERVICE } from '../builders/dev-services.builder'
+import { canConnect, DEFAULT_PORTS, mailCatcherPort, waitForPort } from '../ports'
 import { run, runRequired } from '../run'
 import { appPaths } from '../status/collect'
 import type { SaaSFoundryManifest } from '../types'
@@ -135,6 +136,28 @@ async function startStorage(projectName: string, apiDir: string, consolePort: nu
   return done('storage containers up')
 }
 
+/**
+ * The email module's inbox (#976): `sf new` starts it with the other dev services, so the one
+ * command that claims to finish a setup has to start it too, or a project whose Mailpit failed to
+ * come up is back to a signup nobody can complete.
+ */
+async function startMailCatcher(projectName: string, apiDir: string, port: number, dryRun: boolean): Promise<StepResult> {
+  const compose = path.join(apiDir, 'docker-compose.dev-services.yml')
+  if (!fs.existsSync(compose)) return skipped(`no dev-services compose at ${compose} — \`sf update\` adds the mail catcher to a project that predates it`)
+  if (!new RegExp(`^  ${MAIL_CATCHER_SERVICE}:`, 'm').test(fs.readFileSync(compose, 'utf8'))) return skipped(`${compose} has no ${MAIL_CATCHER_SERVICE} service — \`sf update\` adds it`)
+
+  // Same reasoning as the database: `up -d` succeeds on a container already running.
+  if (await canConnect(port)) return skipped(`already answering on ${port}`)
+
+  if (dryRun) return done(`would run: docker compose -f ${compose} up -d ${MAIL_CATCHER_SERVICE}`)
+
+  run(`docker network create ${projectName}-network`)
+
+  const result = run(`docker compose -f ${compose} up -d ${MAIL_CATCHER_SERVICE}`)
+  if (result.code !== 0) return blocked(`could not start the mail catcher:\n${(result.stderr || result.stdout).trim()}`)
+  return done(`mail catcher up — inbox on http://localhost:${port}`)
+}
+
 async function setUpDatabase(apiDir: string, projectName: string, port: number, hostedHere: boolean, dryRun: boolean): Promise<StepResult> {
   // A dry run predicts, so it runs the read-only half: reachability and the table count.
   // Only the mutating step is withheld. A dry run that skips the checks announces work on a
@@ -234,6 +257,18 @@ export async function resumeCommand(options: ResumeOptions = {}): Promise<void> 
     steps.push({ label: 'storage', result: await startStorage(manifest.projectName, apiDir, manifest.ports?.s3Console ?? 9001, dryRun) })
   } else {
     steps.push({ label: 'storage', result: skipped(`s3Setup is "${manifest.modules?.s3Setup ?? 'unset'}" — this project does not host its own storage`) })
+  }
+  if (manifest.modules?.email?.provider === 'mailersend') {
+    // Like `sf new`, only for a project that hosts a Docker service already: this command does not ask Docker of someone who never did
+    const hostsDocker = manifest.modules?.dbSetup === 'docker' || manifest.modules?.s3Setup === 'docker'
+    steps.push({
+      label: 'mail catcher',
+      result: hostsDocker
+        ? await startMailCatcher(manifest.projectName, apiDir, mailCatcherPort(manifest.ports), dryRun)
+        : skipped('this project hosts no database or storage in Docker — start the inbox with `npm run services:up` in the API app when you want it')
+    })
+  } else {
+    steps.push({ label: 'mail catcher', result: skipped(`email is "${manifest.modules?.email?.provider ?? 'unset'}" — this project has no email module, so no inbox`) })
   }
   if (!servicesBlocked && manifest.modules?.dbSetup !== 'manual') {
     steps.push({ label: 'database setup', result: await setUpDatabase(apiDir, manifest.projectName, dbPort, manifest.modules?.dbSetup === 'docker', dryRun) })

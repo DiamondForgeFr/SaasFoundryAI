@@ -30,7 +30,11 @@ jest.mock('../../../tools/notion/srs.adapter', () => ({ NotionSrsAdapter: jest.f
 jest.mock('../../../builders/api.builder', () => ({ createApiApp: jest.fn() }))
 jest.mock('../../../builders/web.builder', () => ({ createWebApp: jest.fn() }))
 jest.mock('../../../builders/monorepo.builder', () => ({ createMonorepoRoot: jest.fn() }))
-jest.mock('../../../builders/dev-services.builder', () => ({ createDevServicesCompose: jest.fn() }))
+jest.mock('../../../builders/dev-services.builder', () => ({
+  ...jest.requireActual('../../../builders/dev-services.builder'),
+  createDevServicesCompose: jest.fn(),
+  ensureMailCatcherService: jest.fn()
+}))
 
 jest.mock('ora', () => () => ({ start: () => ({ text: '', succeed: jest.fn(), fail: jest.fn() }) }))
 

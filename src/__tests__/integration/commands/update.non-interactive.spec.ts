@@ -19,7 +19,11 @@ jest.mock('../../../installers/email.installer', () => ({ ...jest.requireActual(
 jest.mock('../../../installers/storage.installer', () => ({ ...jest.requireActual('../../../installers/storage.installer'), installStorageModule: jest.fn() }))
 jest.mock('../../../installers/analytics.installer', () => ({ ...jest.requireActual('../../../installers/analytics.installer'), installAnalyticsModule: jest.fn() }))
 jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual('../../../installers/skills.installer'), installSkills: jest.fn() }))
-jest.mock('../../../builders/dev-services.builder', () => ({ createDevServicesCompose: jest.fn() }))
+jest.mock('../../../builders/dev-services.builder', () => ({
+  ...jest.requireActual('../../../builders/dev-services.builder'),
+  createDevServicesCompose: jest.fn(),
+  ensureMailCatcherService: jest.fn()
+}))
 
 jest.mock('ora', () => () => ({
   start: () => ({ text: '', succeed: jest.fn(), fail: jest.fn(), stop: jest.fn() }),
@@ -114,7 +118,10 @@ describe('updateCommand (non-interactive integration)', () => {
     )
 
     const saved = JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
-    expect(saved.modules.email).toEqual({ provider: 'mailersend', version: 1 })
+    // Born at the module's current version: it carries the dev mail catcher already (#976)
+    expect(saved.modules.email).toEqual({ provider: 'mailersend', version: 2 })
+    // The inbox's port is chosen and recorded with the module, whatever the project's ports were
+    expect(saved.ports).toMatchObject({ mail: expect.any(Number) })
   })
 
   it('propagates storage flags (credentials) to the storage installer', async () => {

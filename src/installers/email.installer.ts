@@ -4,13 +4,20 @@ import { readFile, rename, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
 import type { ModuleInstaller } from '../migrations/module/types'
-import { overlaysPath } from '../types'
+import { DEFAULT_PORTS } from '../ports'
 import { fileExists } from '../utils'
+import { addDevMailCatcher } from './email.migrations'
+import { MAILERSEND_SERVICE_TEMPLATE, rewireMailerSendToSharedTypes } from './email.service-template'
 
+/**
+ * v1 → v2 (#976): the development mail catcher. A v1 project signs users up and invites them with
+ * no way to read the email locally; the migration gives it the Mailpit service, the explicit
+ * `MAIL_CATCHER_URL` of its dev `.env`, and the service and schema that read it.
+ */
 export const emailInstallerMeta: ModuleInstaller = {
   name: 'email',
-  currentVersion: 1,
-  migrations: []
+  currentVersion: 2,
+  migrations: [addDevMailCatcher]
 }
 
 interface InstallEmailModuleParams {
@@ -20,6 +27,12 @@ interface InstallEmailModuleParams {
   mailersendApiKey: string
   mailersendSenderEmail: string
   mailersendSenderName: string
+  /**
+   * Host port of the development mail catcher, written into the dev `.env` as `MAIL_CATCHER_URL`.
+   * The module installs the catcher with it, so the default is the catcher's own (8025); the
+   * port a project actually runs on is the one resolved at `sf new` or recorded in its manifest.
+   */
+  mailCatcherPort?: number
 }
 
 /** A single-quoted shell word: the deploy script must not expand `$` in a sender name. */
@@ -35,7 +48,7 @@ function shellQuote(value: string): string {
  * 2. Uncomments `// TODO mailer-service-active:` markers in auth, invitation, env, and email services
  * 3. Updates email.module.ts to register the MailerSendService provider
  * 4. Renames the disabled email spec file to enable it
- * 5. Updates .env with MailerSend credentials
+ * 5. Updates .env with MailerSend credentials and the dev mail catcher's `MAIL_CATCHER_URL` (#976)
  * 6. Updates .env.test with test credentials
  * 7. Updates deployment.yml with MailerSend env vars (if file exists)
  * 8. (Mono only) Deposits `EmailOptions` in `packages/shared-types` and rewires
@@ -45,11 +58,10 @@ function shellQuote(value: string): string {
  *
  * Used by both `sf new` (during initial project generation) and `sf update` (when adding the module later).
  */
-export async function installEmailModule({ apiPath, isMonorepo, projectName, mailersendApiKey, mailersendSenderEmail, mailersendSenderName }: InstallEmailModuleParams) {
+export async function installEmailModule({ apiPath, isMonorepo, projectName, mailersendApiKey, mailersendSenderEmail, mailersendSenderName, mailCatcherPort }: InstallEmailModuleParams) {
   // Copy MailerSend service to the API email services directory
-  const mailerSendServicePath = resolve(overlaysPath, 'modules/email/services/mailersend.service.ts')
   const apiServicesPath = `${apiPath}/src/modules/email/services`
-  await copy(mailerSendServicePath, `${apiServicesPath}/mailersend.service.ts`)
+  await copy(MAILERSEND_SERVICE_TEMPLATE, `${apiServicesPath}/mailersend.service.ts`)
 
   // Uncomment email sending code in auth.service.ts
   const authServicePath = `${apiPath}/src/modules/auth/services/auth.service.ts`
@@ -101,6 +113,11 @@ export async function installEmailModule({ apiPath, isMonorepo, projectName, mai
       .replace(/# MAILERSEND_API_KEY=.*$/m, `MAILERSEND_API_KEY="${mailersendApiKey}"`)
       .replace(/# MAILERSEND_SENDER_EMAIL=.*$/m, `MAILERSEND_SENDER_EMAIL="${mailersendSenderEmail}"`)
       .replace(/# MAILERSEND_SENDER_NAME=.*$/m, `MAILERSEND_SENDER_NAME="${mailersendSenderName}"`)
+    // The dev `.env` only: the deployment workflow and `.env.test` never carry it, so production
+    // and the test suites cannot fall into the catcher without somebody setting it (#976).
+    const catcherLine = `MAIL_CATCHER_URL="http://localhost:${mailCatcherPort ?? DEFAULT_PORTS.mail}"`
+    if (/^# MAIL_CATCHER_URL=.*$/m.test(envContent)) envContent = envContent.replace(/^# MAIL_CATCHER_URL=.*$/m, catcherLine)
+    else if (!/^MAIL_CATCHER_URL=/m.test(envContent)) envContent = `${envContent.replace(/\s*$/, '')}\n${catcherLine}\n`
     await writeFile(envPath, envContent)
   }
 
@@ -219,10 +236,7 @@ export async function depositEmailSharedTypes({ apiPath, projectName }: DepositE
     await writeFile(indexPath, `${indexContent.replace(/\s*$/, '')}\nexport * from './email'\n`)
   }
 
-  let mailerServiceContent = await readFile(mailerServicePath, 'utf8')
-  const inlineInterface = `export interface EmailOptions {\n  to: string\n  subject: string\n  html: string\n  text?: string\n}`
-  if (mailerServiceContent.includes(inlineInterface)) {
-    mailerServiceContent = mailerServiceContent.replace(inlineInterface, `import type { EmailOptions } from '@${projectName}/shared-types'\nexport type { EmailOptions }`)
-    await writeFile(mailerServicePath, mailerServiceContent)
-  }
+  const mailerServiceContent = await readFile(mailerServicePath, 'utf8')
+  const rewired = rewireMailerSendToSharedTypes(mailerServiceContent, projectName)
+  if (rewired !== mailerServiceContent) await writeFile(mailerServicePath, rewired)
 }

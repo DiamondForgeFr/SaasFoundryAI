@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { GENERATED_INSTRUCTIONS } from '../../../harness/agent-instructions'
+import { emailInstallerMeta } from '../../../installers/email.installer'
 import { buildTechnicalTransitionManifest, finalizeTechnicalAdoptionCandidate, readCandidateChildManifest } from '../../../scaffold/technical-stack.adoption'
 import { planTechnicalStackAdoption } from '../../../scaffold/technical-stack.planner'
 import { withTemporaryTechnicalStack, type RenderedTechnicalStack } from '../../../renderers/technical-stack.renderer'
@@ -93,7 +94,8 @@ describe('technical adoption candidate and manifest finalization', () => {
       modules: {
         harness: current.modules?.harness,
         advancedSkills: ['context7'],
-        email: { provider: 'none', version: 1 },
+        // A freshly rendered stack is born at the module's current version (#976: 2, the mail catcher)
+        email: { provider: 'none', version: emailInstallerMeta.currentVersion },
         dbSetup: 'docker',
         s3Setup: 'manual',
         includeAnalytics: true,
