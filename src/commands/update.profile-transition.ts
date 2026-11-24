@@ -136,7 +136,8 @@ function projectPorts(resolved: Awaited<ReturnType<typeof resolvePorts>>): Proje
     api: resolved.api.port,
     web: resolved.web.port,
     s3: resolved.s3?.port,
-    s3Console: resolved.s3Console?.port
+    s3Console: resolved.s3Console?.port,
+    mail: resolved.mail?.port
   }
 }
 
@@ -282,6 +283,7 @@ export async function handleProfileTransition(options: HandleProfileTransitionOp
   const resolved = await resolvePorts({
     dbSetup: config.dbSetup,
     s3Setup: config.s3Setup,
+    mailCatcher: config.emailService === 'mailersend',
     requested: { db: opts.dbPort ?? config.dbCredentials?.port, api: opts.apiPort, web: opts.webPort }
   })
   const ports = projectPorts(resolved)

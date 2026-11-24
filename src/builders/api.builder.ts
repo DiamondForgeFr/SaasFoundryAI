@@ -6,7 +6,7 @@ import { GENERATED_REGION_END, GENERATED_REGION_START } from '../harness/agent-i
 import { installEmailModule } from '../installers/email.installer'
 import { installStorageModule } from '../installers/storage.installer'
 import { installWorkflowArtifacts } from '../installers/harness.installer'
-import { DEFAULT_PORTS } from '../ports'
+import { DEFAULT_PORTS, mailCatcherPort } from '../ports'
 import { blueprintsPath, CreateApiAppParams, overlaysPath } from '../types'
 import { applyProjectIdentity, fileExists, generateJwtSecret, getNvmPrefix, monorepoBuildContext, replaceInFile, substitutePlaceholdersInFiles, validateProjectName } from '../utils'
 import { apiDocsIdentity, applyApiDocsIdentity } from '../utils/api-docs-identity'
@@ -129,7 +129,9 @@ export async function renderApiApp({
       projectName,
       mailersendApiKey: mailersendApiKey || '',
       mailersendSenderEmail: mailersendSenderEmail || '',
-      mailersendSenderName: mailersendSenderName || ''
+      mailersendSenderName: mailersendSenderName || '',
+      // The catcher the dev-services compose publishes: the .env names the port it was given (#976)
+      mailCatcherPort: mailCatcherPort(ports)
     })
   }
 

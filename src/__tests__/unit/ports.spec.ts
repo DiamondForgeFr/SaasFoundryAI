@@ -1,6 +1,6 @@
 import { createServer, Server } from 'node:net'
 
-import { DEFAULT_PORTS, isPortFree, resolvePorts } from '../../ports'
+import { DEFAULT_PORTS, isPortFree, mailCatcherPort, resolveMailCatcherPort, resolvePorts, withMailCatcherPort } from '../../ports'
 
 /**
  * #584 — a taken port stopped `sf new` and told the user to shut the other project down.
@@ -88,8 +88,8 @@ describe('a free default is kept as it is', () => {
 
   it('starts from 5435 / 3500 / 5173 when nothing overrides them', () => {
     // MinIO's two ports joined in #623: they were the only published ports still copied
-    // out of the template untouched.
-    expect(DEFAULT_PORTS).toEqual({ db: 5435, api: 3500, web: 5173, s3: 9000, s3Console: 9001 })
+    // out of the template untouched. The mail catcher's inbox joined with #976.
+    expect(DEFAULT_PORTS).toEqual({ db: 5435, api: 3500, web: 5173, s3: 9000, s3Console: 9001, mail: 8025 })
   })
 })
 
@@ -279,5 +279,79 @@ describe('storage ports are resolved like every other published port (#623)', ()
     expect(resolved.s3?.port).toBe(P + 51)
     expect(resolved.s3Console?.port).not.toBe(resolved.s3?.port)
     expect(resolved.s3Console?.port).toBe(P + 52)
+  })
+})
+
+/**
+ * #976 — a generated project could not complete a signup or an invitation locally: nothing on
+ * the machine read the email. The email module now brings a Mailpit inbox, which publishes one
+ * host port, and a port that is published has to be chosen like the others: two projects side by
+ * side are the case a scaffold generator exists for.
+ */
+describe('the mail catcher port is resolved like every other published port (#976)', () => {
+  it('is silent about the catcher when the project has no email module', async () => {
+    const resolved = await resolvePorts({ dbSetup: 'docker', defaults: BASE })
+    expect(resolved.mail).toBeUndefined()
+  })
+
+  it('resolves the inbox port when the project installs the email module', async () => {
+    const resolved = await resolvePorts({ dbSetup: 'docker', mailCatcher: true, defaults: { ...BASE, mail: P + 45 } })
+    expect(resolved.mail?.port).toBe(P + 45)
+    expect(resolved.mail?.movedFrom).toBeUndefined()
+  })
+
+  it('needs a port even when neither the database nor the storage runs in Docker', async () => {
+    const resolved = await resolvePorts({ dbSetup: 'manual', s3Setup: 'manual', mailCatcher: true, defaults: { ...BASE, mail: P + 45 } })
+    expect(resolved.mail?.port).toBe(P + 45)
+  })
+
+  it('moves off a taken inbox port and says which default it left', async () => {
+    await hold(P + 45)
+    const resolved = await resolvePorts({ dbSetup: 'docker', mailCatcher: true, defaults: { ...BASE, mail: P + 45 } })
+    expect(resolved.mail?.port).toBe(P + 46)
+    expect(resolved.mail?.movedFrom).toBe(P + 45)
+  })
+
+  it('never lands the inbox on a port another flag already claimed', async () => {
+    await hold(P + 45)
+    const resolved = await resolvePorts({ dbSetup: 'docker', mailCatcher: true, requested: { web: String(P + 46) }, defaults: { ...BASE, mail: P + 45 } })
+    expect(resolved.web.port).toBe(P + 46)
+    expect(resolved.mail?.port).toBe(P + 47)
+  })
+})
+
+describe('the mail catcher port of a project that already exists (#976)', () => {
+  const taken = (extra: Record<string, number> = {}) => ({ db: P, api: P + 10, web: P + 20, ...extra })
+
+  it('keeps the port the manifest recorded, without probing it', async () => {
+    // The project's own running catcher holds it: probing would read it as taken and move it.
+    await hold(P + 45)
+    expect(await resolveMailCatcherPort(taken({ mail: P + 45 }))).toEqual({ port: P + 45 })
+  })
+
+  it('chooses the first free port from the default for a project that predates the field', async () => {
+    expect(await resolveMailCatcherPort(taken(), { start: P + 45 })).toEqual({ port: P + 45 })
+  })
+
+  it('walks past a taken port, and past a port the project itself runs on even when nothing holds it now', async () => {
+    await hold(P + 45)
+    // The web app is stopped, so binding its port would succeed: the manifest still says it is the project's.
+    expect(await resolveMailCatcherPort(taken({ web: P + 46 }), { start: P + 45 })).toEqual({ port: P + 47, movedFrom: P + 45 })
+  })
+
+  it('treats a manifest without ports as the defaults a project of that age runs on', async () => {
+    const found = await resolveMailCatcherPort(undefined, { start: DEFAULT_PORTS.web })
+    // 5173 is the default web port of a project with no `ports` block: not the inbox's to take.
+    expect(found.port).not.toBe(DEFAULT_PORTS.web)
+  })
+
+  it('reads a missing recorded port as the default', () => {
+    expect(mailCatcherPort(undefined)).toBe(8025)
+    expect(mailCatcherPort({ mail: 8030 })).toBe(8030)
+  })
+
+  it('records the port without changing the ports the project runs on', () => {
+    expect(withMailCatcherPort({ db: 5436, api: 3501, web: 5174 }, 8026)).toEqual({ db: 5436, api: 3501, web: 5174, mail: 8026 })
+    expect(withMailCatcherPort(undefined, 8025)).toEqual({ db: 5435, api: 3500, web: 5173, mail: 8025 })
   })
 })

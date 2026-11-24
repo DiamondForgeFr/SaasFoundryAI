@@ -98,6 +98,12 @@
           "minimum": 1,
           "maximum": 65535,
           "description": "Host port MinIO's web console is published on. Same presence rule as `s3`; absent means 9001."
+        },
+        "mail": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Host port the development mail catcher (Mailpit) is published on: its web inbox and the HTTP API the generated API sends through. Present only when the email module is installed. Absent on manifests written before the catcher existed: the email module migration chooses a free port from 8025, records it here and writes it into the dev `.env` and the dev-services compose."
         }
       }
     },

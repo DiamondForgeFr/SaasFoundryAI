@@ -109,6 +109,36 @@ describe('the optional lines', () => {
     expect(find('MinIO Console', lines({ s3Setup: 'credentials' }))).toBeUndefined()
   })
 
+  // #976 — a project that signs users up needs somewhere to read the confirmation email
+  describe('the mail inbox of the email module', () => {
+    it('is shown on the port it was resolved to, and only with the email module', () => {
+      const withEmail = lines({ ports: { ...settled, mail: { port: 8026, movedFrom: 8025 } }, emailService: 'mailersend' })
+
+      expect(find('Mail inbox', withEmail)?.url).toBe('http://localhost:8026')
+      expect(find('Mail inbox', lines({ emailService: 'none' }))).toBeUndefined()
+      expect(find('Mail inbox', lines())).toBeUndefined()
+    })
+
+    it('names the default it was pushed off, like every other port', () => {
+      expect(find('Mail inbox', lines({ ports: { ...settled, mail: { port: 8026, movedFrom: 8025 } }, emailService: 'mailersend' }))?.note).toBe('8025 was taken')
+      expect(find('Mail inbox', lines({ ports: { ...settled, mail: { port: 8025 } }, emailService: 'mailersend' }))?.note).toBeUndefined()
+    })
+
+    it('falls back to the default port when no port was resolved', () => {
+      expect(find('Mail inbox', lines({ emailService: 'mailersend' }))?.url).toBe('http://localhost:8025')
+    })
+
+    it('does not claim the inbox answers when `sf new` did not start it, and says how to', () => {
+      const line = find('Mail inbox', lines({ emailService: 'mailersend', mailCatcherUp: false }))
+      expect(line?.unreachable).toBe('not started — run npm run services:up in the API app')
+    })
+
+    it('claims nothing about an inbox it started, or when it made no observation', () => {
+      expect(find('Mail inbox', lines({ emailService: 'mailersend', mailCatcherUp: true }))?.unreachable).toBeUndefined()
+      expect(find('Mail inbox', lines({ emailService: 'mailersend' }))?.unreachable).toBeUndefined()
+    })
+  })
+
   it('shows the board only when a workflow is configured', () => {
     expect(find('Project Board', lines({ projectUrl: 'https://github.com/orgs/x/projects/1' }))?.url).toBe('https://github.com/orgs/x/projects/1?layout=board')
     expect(find('Project Board')).toBeUndefined()

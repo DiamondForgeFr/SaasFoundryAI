@@ -64,6 +64,15 @@ export class MailerSendService {
         return
       }
 
+      // Development only: with MAIL_CATCHER_URL set in the dev `.env`, the email goes to the local
+      // Mailpit inbox (see docker-compose.dev-services.yml) instead of MailerSend. It is an explicit
+      // switch, never read from the deployment workflow, and refused in production.
+      const mailCatcherUrl = this.env.get('MAIL_CATCHER_URL')
+      if (mailCatcherUrl) {
+        await this.sendToMailCatcher(mailCatcherUrl, options)
+        return
+      }
+
       const emailParams = new EmailParams()
         .setFrom({
           email: this.senderEmail,
@@ -94,5 +103,33 @@ export class MailerSendService {
       this.logger.error(`Failed to send email to ${options.to}: ${errorMessage}`, errorStack, 'MailerSendService')
       throw new Error(`Failed to send email: ${errorMessage}`)
     }
+  }
+
+  /**
+   * Hand the email to the development mail catcher (Mailpit) over its HTTP API: no SMTP client, no
+   * new dependency. The message shows up in the inbox at the catcher's own URL.
+   */
+  private async sendToMailCatcher(catcherUrl: string, options: EmailOptions): Promise<void> {
+    if (this.env.get('NODE_ENV') === 'production') {
+      throw new Error('MAIL_CATCHER_URL is a development setting: remove it from the production environment')
+    }
+
+    const response = await fetch(`${catcherUrl.replace(/\/$/, '')}/api/v1/send`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        From: { Email: this.senderEmail, Name: this.senderName },
+        To: [{ Email: options.to }],
+        Subject: options.subject,
+        HTML: options.html,
+        Text: options.text ?? ''
+      })
+    }).catch((error: unknown) => {
+      const reason = error instanceof Error ? error.message : 'unknown error'
+      throw new Error(`The mail catcher at ${catcherUrl} did not answer (${reason}). Start it with \`npm run services:up\`, or remove MAIL_CATCHER_URL from .env to send through MailerSend`)
+    })
+    if (!response.ok) throw new Error(`The mail catcher at ${catcherUrl} rejected the message with status ${response.status}`)
+
+    this.logger.debug(`Email captured by the mail catcher for ${options.to}: open ${catcherUrl} to read it`, 'MailerSendService')
   }
 }

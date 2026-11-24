@@ -8,6 +8,7 @@ import terminalLink from 'terminal-link'
 import { commitBootstrap, describeBootstrapCommit } from '../builders/bootstrap-commit'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
+import { emailInstallerMeta } from '../installers/email.installer'
 import { computeHarnessFileHashes, harnessInstallerMeta, installHarness } from '../installers/harness.installer'
 import { describeBranchProvision, ensureWorkingBranch, provisionWorkflowLabels } from '../installers/harness-provisioning'
 import { missingBoardWarning } from '../utils/workflow-board'
@@ -16,6 +17,7 @@ import { installSkills } from '../installers/skills.installer'
 import { installSelectedAgentInstructions, writeMultirepoAgentManifests } from '../installers/agent-topology'
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { initAndStartDb } from '../runners/database.runner'
+import { initAndStartMailCatcher } from '../runners/mail.runner'
 import { initAndStartS3 } from '../runners/s3.runner'
 import { startBackend, startFrontend, startMonorepoApps, waitForServer } from '../runners/server.runner'
 import { bootstrapSrs } from '../runners/srs.runner'
@@ -79,6 +81,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   const ports = await resolvePorts({
     dbSetup: startProjectAnswers.dbSetup,
     s3Setup: startProjectAnswers.s3Setup,
+    // The email module brings its own inbox, which needs a host port as much as MinIO does (#976)
+    mailCatcher: startProjectAnswers.emailService === 'mailersend',
     requested: {
       db: opts.dbPort ?? startProjectAnswers.dbCredentials?.port,
       api: opts.apiPort,
@@ -88,8 +92,9 @@ export async function newCommand(opts: NewCommandOptions = {}) {
 
   // The flat shape the builders and the manifest consume. `ports` keeps the richer one —
   // which default each port moved off — because the closing summary has to say so (#585).
-  // The storage entries are absent unless this project hosts its own MinIO (#623).
-  const projectPorts = { db: ports.db.port, api: ports.api.port, web: ports.web.port, s3: ports.s3?.port, s3Console: ports.s3Console?.port }
+  // The storage entries are absent unless this project hosts its own MinIO (#623), the mail
+  // entry unless it installed the email module (#976).
+  const projectPorts = { db: ports.db.port, api: ports.api.port, web: ports.web.port, s3: ports.s3?.port, s3Console: ports.s3Console?.port, mail: ports.mail?.port }
   const apiDocsUrl = `http://localhost:${projectPorts.api}/api/docs`
   const webUrl = `http://localhost:${projectPorts.web}`
 
@@ -108,7 +113,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   }).start()
 
   // Calculate total steps
-  const hasDevServices = startProjectAnswers.dbSetup === 'docker' || startProjectAnswers.s3Setup === 'docker'
+  const hasDevServices = startProjectAnswers.dbSetup === 'docker' || startProjectAnswers.s3Setup === 'docker' || startProjectAnswers.emailService === 'mailersend'
   const totalSteps = 3 + (hasDevServices ? 1 : 0) + (startProjectAnswers.isMonorepo ? 1 : 0)
   let currentStep = 0
 
@@ -195,7 +200,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
       mainBranch: startProjectAnswers.mainBranch,
       ports: projectPorts,
       modules: {
-        email: { provider: startProjectAnswers.emailService, version: 1 },
+        email: { provider: startProjectAnswers.emailService, version: emailInstallerMeta.currentVersion },
         s3Setup: startProjectAnswers.s3Setup,
         dbSetup: startProjectAnswers.dbSetup,
         includeAnalytics: startProjectAnswers.includeAnalytics,
@@ -282,7 +287,14 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   let appsRequested: 'all' | 'backend' | 'frontend' | 'none' = 'none'
   let apiUp = false
   let webUp = false
+  // Whether `sf new` itself started the mail catcher: the inbox URL is not claimed live otherwise (#976)
+  let mailUp = false
   const needsS3Start = startProjectAnswers.s3Setup === 'docker'
+  // The email module's inbox (#976) starts with the Docker services the user chose. A project that
+  // hosts none of them in Docker (a hosted database, a hosted bucket) keeps its inbox in the compose
+  // for `npm run services:up`, but `sf new` does not start a container for someone who never asked
+  // for Docker: without it the step would fail, and so would the command.
+  const needsMailStart = startProjectAnswers.emailService === 'mailersend' && (startProjectAnswers.dbSetup === 'docker' || needsS3Start)
   const needsServiceSetup = needsDbInit || needsS3Start
 
   if (needsServiceSetup) {
@@ -291,7 +303,7 @@ export async function newCommand(opts: NewCommandOptions = {}) {
     if (needsDbInit && needsS3Start) {
       initMessage = 'Do you want to start dev services and initialize the database now?'
     } else if (needsS3Start) {
-      initMessage = 'Do you want to start dev services (MinIO) now?'
+      initMessage = `Do you want to start dev services (MinIO${needsMailStart ? ' + Mailpit' : ''}) now?`
     } else {
       initMessage = 'Do you want to initialize the database now?'
     }
@@ -346,6 +358,24 @@ export async function newCommand(opts: NewCommandOptions = {}) {
           failedSteps.push({
             step: 'MinIO S3 storage',
             fix: `docker compose -f ${startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`}/docker-compose.dev-services.yml up -d s3-dev s3-init`
+          })
+        }
+      }
+
+      // Start the mail catcher independently as well: an inbox that is down must not leave the schema unapplied
+      if (needsMailStart) {
+        const mailSpinner = ora('Starting the mail catcher (Mailpit)...').start()
+        try {
+          await initAndStartMailCatcher(startProjectAnswers.projectName, startProjectAnswers.isMonorepo, mailSpinner)
+          mailUp = true
+          mailSpinner.succeed(chalk.green('Mail catcher started successfully'))
+          console.log(chalk.blue(`Mail inbox available at: http://localhost:${projectPorts.mail ?? 8025}`))
+        } catch (error) {
+          mailSpinner.fail(chalk.red('Failed to start the mail catcher'))
+          console.error(error)
+          failedSteps.push({
+            step: 'Mail catcher (Mailpit)',
+            fix: `docker compose -f ${startProjectAnswers.isMonorepo ? 'apps/api' : `apps/${startProjectAnswers.projectName}-api`}/docker-compose.dev-services.yml up -d mail-dev`
           })
         }
       }
@@ -592,6 +622,8 @@ export async function newCommand(opts: NewCommandOptions = {}) {
   const urlLines = projectUrlLines({
     ports,
     s3Setup: startProjectAnswers.s3Setup,
+    emailService: startProjectAnswers.emailService,
+    mailCatcherUp: mailUp,
     dbSetup: startProjectAnswers.dbSetup,
     dbCredentials: startProjectAnswers.dbCredentials,
     projectUrl: startProjectAnswers.workflow?.projectUrl,

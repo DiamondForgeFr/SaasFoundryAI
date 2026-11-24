@@ -1,6 +1,7 @@
 import { createServer, Socket } from 'net'
 
 import { run } from './run'
+import type { ProjectPorts } from './types'
 
 /**
  * Choosing the ports a generated project will run on.
@@ -24,7 +25,7 @@ import { run } from './run'
  * already running another project's MinIO — the ordinary case this whole mechanism exists
  * for — got a container that could not bind and a console URL printed as a literal.
  */
-export const DEFAULT_PORTS = { db: 5435, api: 3500, web: 5173, s3: 9000, s3Console: 9001 } as const
+export const DEFAULT_PORTS = { db: 5435, api: 3500, web: 5173, s3: 9000, s3Console: 9001, mail: 8025 } as const
 
 const MAX_PORT = 65535
 
@@ -36,6 +37,13 @@ export type AlwaysPortName = 'db' | 'api' | 'web'
 /** Ports that exist only when the project hosts its own object storage. */
 export type StoragePortName = 's3' | 's3Console'
 
+/**
+ * The port of the development mail catcher (Mailpit), which exists only when the email module
+ * is installed (#976). One port is enough: the API sends over Mailpit's HTTP API, so the SMTP
+ * port is never published and two projects side by side cannot fight over it.
+ */
+export type MailPortName = 'mail'
+
 export interface ResolvedPort {
   port: number
   /** The default this port was moved off, when it was chosen by scanning. Absent when nothing moved. */
@@ -45,15 +53,18 @@ export interface ResolvedPort {
 /**
  * The storage ports are optional rather than always present: a project on `--s3-setup
  * credentials` points at somebody else's bucket, and inventing a local port for it would
- * be the same lie #584 removed from the database line.
+ * be the same lie #584 removed from the database line. The mail catcher port follows the same
+ * rule: a project without the email module has no inbox to publish.
  */
-export type ResolvedPorts = Record<AlwaysPortName, ResolvedPort> & Partial<Record<StoragePortName, ResolvedPort>>
+export type ResolvedPorts = Record<AlwaysPortName, ResolvedPort> & Partial<Record<StoragePortName | MailPortName, ResolvedPort>>
 
 export interface ResolvePortsParams {
   /** Only a `docker` database owns a local port. Under `credentials`/`manual` it belongs to someone else's server. */
   dbSetup: 'docker' | 'credentials' | 'manual'
   /** Same rule for storage: only a `docker` MinIO publishes ports on this machine. */
   s3Setup?: 'docker' | 'credentials' | 'manual'
+  /** The email module is installed, so the project hosts a Mailpit inbox and needs a port for it (#976). */
+  mailCatcher?: boolean
   /** Raw `--db-port` / `--api-port` / `--web-port` values, before any defaulting. */
   requested?: Partial<Record<PortName, string>>
   /** How far a default may walk before giving up. */
@@ -164,15 +175,16 @@ function takenBy(port: number): string {
  * Explicit flags are claimed first and never move, so a default scanning forward can
  * never land on a port another flag already asked for.
  */
-export async function resolvePorts({ dbSetup, s3Setup, requested = {}, scanLimit = 50, defaults = {} }: ResolvePortsParams): Promise<ResolvedPorts> {
+export async function resolvePorts({ dbSetup, s3Setup, mailCatcher = false, requested = {}, scanLimit = 50, defaults = {} }: ResolvePortsParams): Promise<ResolvedPorts> {
   const claimed = new Set<number>()
   const resolved = {} as ResolvedPorts
 
   // The storage ports are only resolved when this project publishes them. Under
   // `credentials` the bucket lives on someone else's host and has no local port to choose;
-  // omitting them keeps every reader from printing a number that means nothing.
+  // omitting them keeps every reader from printing a number that means nothing. The mail
+  // catcher is the same: its port exists only for a project that installed the email module.
   const hostsStorage = s3Setup === 'docker'
-  const names: PortName[] = hostsStorage ? ['db', 'api', 'web', 's3', 's3Console'] : ['db', 'api', 'web']
+  const names: PortName[] = ['db', 'api', 'web', ...(hostsStorage ? (['s3', 's3Console'] as const) : []), ...(mailCatcher ? (['mail'] as const) : [])]
 
   // A database the project does not host is not ours to move: `--db-port 6543` against a
   // Supabase pooler is a remote port, and scanning forward from it would silently point
@@ -210,26 +222,65 @@ export async function resolvePorts({ dbSetup, s3Setup, requested = {}, scanLimit
       continue
     }
 
-    // Stopping at MAX_PORT is not cosmetic: `listen(65536)` throws ERR_SOCKET_BAD_PORT
-    // synchronously, so walking off the end would surface a socket error instead of the
-    // "no free port in this range" this loop exists to report.
-    const last = Math.min(start + scanLimit - 1, MAX_PORT)
-
-    let chosen: number | undefined
-    for (let port = start; port <= last; port++) {
-      if (claimed.has(port)) continue
-      if (!(await isPortFree(port))) continue
-      chosen = port
-      break
-    }
-
-    if (chosen === undefined) {
-      throw new Error(`Could not find a free ${name} port between ${start} and ${last}.\n` + `Free one of them, or pass --${name}-port <port> to say which one to use.`)
-    }
-
-    resolved[name] = chosen === start ? { port: chosen } : { port: chosen, movedFrom: start }
-    claimed.add(chosen)
+    resolved[name] = await scanForPort(name, start, claimed, scanLimit)
+    claimed.add(resolved[name].port)
   }
 
   return resolved
+}
+
+/**
+ * The first free port from `start`, skipping the ones already `claimed`.
+ *
+ * Stopping at MAX_PORT is not cosmetic: `listen(65536)` throws ERR_SOCKET_BAD_PORT
+ * synchronously, so walking off the end would surface a socket error instead of the
+ * "no free port in this range" this loop exists to report.
+ */
+async function scanForPort(name: PortName, start: number, claimed: ReadonlySet<number>, scanLimit: number): Promise<ResolvedPort> {
+  const last = Math.min(start + scanLimit - 1, MAX_PORT)
+
+  for (let port = start; port <= last; port++) {
+    if (claimed.has(port)) continue
+    if (!(await isPortFree(port))) continue
+    return port === start ? { port } : { port, movedFrom: start }
+  }
+
+  throw new Error(`Could not find a free ${name} port between ${start} and ${last}.\n` + `Free one of them, or pass --${name}-port <port> to say which one to use.`)
+}
+
+/**
+ * The port of the mail catcher a project already created without one (#976).
+ *
+ * `resolvePorts` runs once, at `sf new`. A project whose email module arrives later, or that
+ * predates the catcher, has no port for it, and the ports it already runs on are not free to
+ * take just because nothing listens on them right now: they are `taken`, so the scan skips them.
+ * A port the project has already chosen is returned untouched: probing it again would read the
+ * project's own running catcher as "taken" and move it, and the compose file and the `.env` would
+ * stop agreeing with the manifest.
+ */
+export async function resolveMailCatcherPort(
+  ports: Partial<Record<PortName, number>> | undefined,
+  { scanLimit = 50, start = DEFAULT_PORTS.mail }: { scanLimit?: number; start?: number } = {}
+): Promise<ResolvedPort> {
+  if (ports?.mail !== undefined) return { port: ports.mail }
+  const taken = new Set(
+    Object.entries(ports ?? DEFAULT_PORTS)
+      .filter(([name, port]) => name !== 'mail' && typeof port === 'number')
+      .map(([, port]) => port as number)
+  )
+  return scanForPort('mail', start, taken, scanLimit)
+}
+
+/** The mail catcher port a project runs on: the recorded one, or the default for a project that predates the field. */
+export function mailCatcherPort(ports?: { mail?: number }): number {
+  return ports?.mail ?? DEFAULT_PORTS.mail
+}
+
+/**
+ * `ports` with the catcher's port recorded. A manifest with no `ports` block at all ran on the
+ * defaults, so those are what the block starts from: writing them down changes nothing any reader
+ * resolves, and the block's schema requires the three.
+ */
+export function withMailCatcherPort(ports: ProjectPorts | undefined, mail: number): ProjectPorts {
+  return { ...(ports ?? { db: DEFAULT_PORTS.db, api: DEFAULT_PORTS.api, web: DEFAULT_PORTS.web }), mail }
 }

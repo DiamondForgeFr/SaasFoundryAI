@@ -8,11 +8,18 @@ describe('moduleInstallers registry', () => {
     expect(names).toEqual([...EXPECTED_INSTALLERS].sort())
   })
 
-  it.each(EXPECTED_INSTALLERS.filter((name) => name !== 'harness'))('%s installer carries currentVersion=1 and an empty migrations array', (name) => {
+  it.each(EXPECTED_INSTALLERS.filter((name) => name !== 'harness' && name !== 'email'))('%s installer carries currentVersion=1 and an empty migrations array', (name) => {
     const installer = getModuleInstaller(name)
     expect(installer).toBeDefined()
     expect(installer!.currentVersion).toBe(1)
     expect(installer!.migrations).toEqual([])
+  })
+
+  it('email installer is at v2 through its migration chain (#976)', () => {
+    expect(getModuleInstaller('email')).toMatchObject({
+      currentVersion: 2,
+      migrations: [expect.objectContaining({ from: 1, to: 2, name: 'add-dev-mail-catcher' })]
+    })
   })
 
   it('harness installer is at v5 through its migration chain (#831, #425, #938, #935)', () => {

@@ -45,6 +45,8 @@ cp .env.test .env
 
 # 4. Start the database (creates the saasfoundry-network Docker network first if it is missing)
 npm run services:up
+# With the email module this also starts Mailpit, the development mail inbox (http://localhost:8025).
+# To send the API's emails there instead of to MailerSend, set MAIL_CATCHER_URL="http://localhost:8025" in .env
 
 # 5. Initialize database (migration-free: db push --force-reset + apply prisma/sql/*)
 npm run db:setup:dev

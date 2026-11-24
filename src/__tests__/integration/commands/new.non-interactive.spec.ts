@@ -194,7 +194,8 @@ describe('newCommand (non-interactive integration)', () => {
       structure: 'monorepo',
       mainBranch: 'main',
       modules: {
-        email: { provider: 'none', version: 1 },
+        // A new project is born at the email module's current version (v2: the dev mail catcher, #976)
+        email: { provider: 'none', version: 2 },
         s3Setup: 'manual',
         dbSetup: 'manual',
         includeAnalytics: true,

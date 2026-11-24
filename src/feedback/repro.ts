@@ -118,7 +118,7 @@ function summarizeProjection(value: unknown): ReproValue | undefined {
 
 function summarizePorts(value: unknown): ReproValue | undefined {
   if (!isRecord(value)) return undefined
-  return compact(['db', 'api', 'web', 's3', 's3Console'].map((key): [string, ReproValue | undefined] => [key, whole(value[key])]))
+  return compact(['db', 'api', 'web', 's3', 's3Console', 'mail'].map((key): [string, ReproValue | undefined] => [key, whole(value[key])]))
 }
 
 function summarizeLanguage(value: unknown): ReproValue | undefined {

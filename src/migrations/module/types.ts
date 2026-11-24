@@ -1,4 +1,21 @@
-import type { SaaSFoundryManifest } from '../../types'
+import type { ProjectPorts, SaaSFoundryManifest } from '../../types'
+
+/**
+ * What a module migration hands back to the dispatcher when the new version needs the manifest to
+ * record something the migration chose (#976: the host port of the mail catcher, picked among the
+ * ports free on this machine and written into the project's files at the same time). The
+ * dispatcher applies it, never the migration, so `up` keeps receiving the manifest it was given.
+ */
+export interface ModuleMigrationManifestPatch {
+  /** The complete `ports` block to record, the project's own ports included. */
+  ports?: ProjectPorts
+  /**
+   * The new baseline of the template files the migration rewrote in place. Without it the next
+   * template comparison reads a file the migration just wrote as a file the user edited, and
+   * reports a conflict nobody made whenever the template moved again in between.
+   */
+  fileHashes?: Record<string, string>
+}
 
 /**
  * A module migration upgrades an installed module's on-disk shape from one
@@ -15,12 +32,14 @@ import type { SaaSFoundryManifest } from '../../types'
  *   Bumping `modules.<name>.version` is owned by the dispatcher (#386), not the
  *   migration itself — keeps the contract symmetric with manifest migrations
  *   where the dispatcher records `appliedMigrations`.
+ * - `up` may return a `ModuleMigrationManifestPatch` for what only the migration can know and the
+ *   manifest must record; most migrations return nothing.
  */
 export interface ModuleMigration {
   from: number
   to: number
   name: string
-  up(projectDir: string, manifest: SaaSFoundryManifest): Promise<void>
+  up(projectDir: string, manifest: SaaSFoundryManifest): Promise<void | ModuleMigrationManifestPatch>
   /**
    * Read-only: what `up` would change, listed by `sf update --dry-run` (#938). It reads the
    * current tree, so a migration that depends on an earlier one in the same chain previews the

@@ -1,10 +1,30 @@
+import { existsSync } from 'fs'
 import { readFile, writeFile } from 'fs/promises'
 import { resolve } from 'path'
 
 import { blueprintsPath, CreateDevServicesParams } from '../types'
 import { applyProjectIdentity } from '../utils'
 
-export async function createDevServicesCompose({ apiPath, projectName, dbSetup, dbCredentials, s3Setup, s3Credentials, s3Ports }: CreateDevServicesParams) {
+/** The compose service of the development mail catcher (Mailpit). */
+export const MAIL_CATCHER_SERVICE = 'mail-dev'
+
+/**
+ * The `mail-dev` service block, exactly as it sits in a generated `docker-compose.dev-services.yml`.
+ *
+ * One function builds it for both a fresh file and an existing one (`ensureMailCatcherService`),
+ * so a project that received the catcher through `sf update` and a project generated with it hold
+ * the same bytes, and the template update that follows sees no difference nobody made (#976).
+ */
+async function mailCatcherServiceBlock(projectName: string, port: number): Promise<string> {
+  const template = await readFile(resolve(blueprintsPath, 'mail/docker-compose.mail.yml'), 'utf8')
+  const customized = applyProjectIdentity(template, projectName)
+    .replace(/container_name:.*$/m, `container_name: ${projectName}-mail-dev`)
+    // Only the host side moves. 8025 is Mailpit's own port inside its container.
+    .replace(/- '8025:8025'/, `- '${port}:8025'`)
+  return (customized.match(/services:\n([\s\S]*?)(?=\nnetworks:)/)?.[1] ?? '').replace(/\n$/, '')
+}
+
+export async function createDevServicesCompose({ apiPath, projectName, dbSetup, dbCredentials, s3Setup, s3Credentials, s3Ports, mailCatcher }: CreateDevServicesParams) {
   const serviceBlocks: string[] = []
   const volumeBlocks: string[] = []
 
@@ -73,6 +93,13 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
     volumeBlocks.push('  s3-dev-data:\n    driver: local')
   }
 
+  // --- Mail catcher block (conditional, last) ---
+  // Whenever the email module is installed, with or without a Docker database or storage:
+  // a project that signs users up needs somewhere to read the confirmation email (#976). It
+  // keeps no volume, so a recreated container starts with an empty inbox, which is what a
+  // catcher is for.
+  if (mailCatcher) serviceBlocks.push(await mailCatcherServiceBlock(projectName, mailCatcher.port))
+
   // --- Assemble unified file ---
   const lines: string[] = []
 
@@ -80,9 +107,13 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
   lines.push('services:')
   lines.push(serviceBlocks.join('\n\n'))
 
-  lines.push('')
-  lines.push('volumes:')
-  lines.push(volumeBlocks.join('\n'))
+  // A file that holds only the mail catcher declares no volume: an empty `volumes:` key is not
+  // something every Compose version accepts.
+  if (volumeBlocks.length > 0) {
+    lines.push('')
+    lines.push('volumes:')
+    lines.push(volumeBlocks.join('\n'))
+  }
 
   lines.push('')
   lines.push('networks:')
@@ -93,4 +124,51 @@ export async function createDevServicesCompose({ apiPath, projectName, dbSetup, 
   await writeFile(`${apiPath}/docker-compose.dev-services.yml`, lines.join('\n'))
 
   return true
+}
+
+/**
+ * Put the mail catcher into the dev-services compose of a project that has none yet.
+ *
+ * The same block `createDevServicesCompose` writes, inserted before the first top-level key that
+ * follows `services:` (`volumes:`, `networks:`) with the blank line the generator leaves between
+ * them, so the result is byte-identical to a fresh render of the same project (#976).
+ *
+ * Returns `null` when the file is not shaped the way the generator writes it (no `services:`, or
+ * services indented otherwise than by two spaces): inserting a block there would produce a file
+ * Compose refuses, so the caller says what to add by hand instead.
+ */
+export async function insertMailCatcherService(composeContent: string, projectName: string, port: number): Promise<string | null> {
+  if (new RegExp(`^  ${MAIL_CATCHER_SERVICE}:`, 'm').test(composeContent)) return composeContent
+  if (!/^services:[ \t]*\n {2}\S/m.test(composeContent)) return null
+
+  const block = await mailCatcherServiceBlock(projectName, port)
+  const servicesAt = composeContent.search(/^services:/m)
+  const following = /^(?:volumes|networks|secrets|configs):/m.exec(composeContent.slice(servicesAt))
+  if (!following) return `${composeContent.replace(/\s*$/, '')}\n\n${block}\n`
+
+  const at = servicesAt + following.index
+  return `${composeContent.slice(0, at)}${block}\n\n${composeContent.slice(at)}`
+}
+
+export type MailCatcherOutcome = 'created' | 'added' | 'present' | 'manual'
+
+/**
+ * Make sure `<apiPath>/docker-compose.dev-services.yml` declares the mail catcher, whatever else it
+ * holds: it is created when the project hosts neither a database nor a storage, and the service is
+ * added to the file the project already has. Idempotent; `manual` means the file was left alone
+ * because the service could not be added to it safely.
+ */
+export async function ensureMailCatcherService({ apiPath, projectName, port }: { apiPath: string; projectName: string; port: number }): Promise<MailCatcherOutcome> {
+  const composePath = `${apiPath}/docker-compose.dev-services.yml`
+  if (!existsSync(composePath)) {
+    await createDevServicesCompose({ apiPath, projectName, dbSetup: 'manual', s3Setup: 'manual', mailCatcher: { port } })
+    return 'created'
+  }
+
+  const current = await readFile(composePath, 'utf8')
+  const next = await insertMailCatcherService(current, projectName, port)
+  if (next === null) return 'manual'
+  if (next === current) return 'present'
+  await writeFile(composePath, next)
+  return 'added'
 }

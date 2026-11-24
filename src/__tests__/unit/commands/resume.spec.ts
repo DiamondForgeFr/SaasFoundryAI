@@ -129,6 +129,100 @@ describe('sf resume (#588)', () => {
     })
   })
 
+  /**
+   * #976 — the email module's inbox starts with the other dev services in `sf new`, so the command
+   * that promises to finish a setup has to start it too. Not for a project that hosts nothing in
+   * Docker: it would ask Docker of someone who never did, and fail.
+   */
+  describe('it starts the mail catcher of the email module', () => {
+    const ranMailUp = () => mockedRun.mock.calls.some(([cmd]) => String(cmd).includes('up -d mail-dev'))
+    const withEmail = (modules: Record<string, unknown> = {}, ports?: Record<string, number>) =>
+      write('.saasfoundry.json', JSON.stringify(manifest({ ...(ports ? { ports } : {}), modules: { ...manifest().modules, email: { provider: 'mailersend', version: 2 }, ...modules } })))
+
+    beforeEach(() => {
+      mkdirSync(join(dir, 'apps/demo-api/node_modules'), { recursive: true })
+      mkdirSync(join(dir, 'apps/demo-web/node_modules'), { recursive: true })
+      mkdirSync(join(dir, 'apps/demo-api/src/generated/prisma'), { recursive: true })
+      write('apps/demo-api/.env', 'DATABASE_URL="postgresql://db_dev_user:db_dev_password@localhost:5435/db_dev"\n')
+    })
+
+    it('starts the inbox when the project hosts its database in Docker and nothing answers on its port', async () => {
+      withEmail({}, { db: 5435, api: 3500, web: 5173, mail: 8026 })
+      write('apps/demo-api/docker-compose.dev-services.yml', 'services:\n  db-dev:\n\n  mail-dev:\n')
+      ;(portsModule.canConnect as jest.Mock).mockImplementation(async (port: number) => port !== 8026)
+
+      await resumeCommand({})
+
+      expect(ranMailUp()).toBe(true)
+      expect(output()).toContain('inbox on http://localhost:8026')
+    })
+
+    it('leaves a running inbox alone, and says why', async () => {
+      withEmail()
+      write('apps/demo-api/docker-compose.dev-services.yml', 'services:\n  db-dev:\n\n  mail-dev:\n')
+
+      await resumeCommand({})
+
+      expect(ranMailUp()).toBe(false)
+      expect(output()).toContain('already answering on 8025')
+    })
+
+    it('does not start a container for a project that hosts nothing in Docker', async () => {
+      withEmail({ dbSetup: 'credentials' })
+      write('apps/demo-api/docker-compose.dev-services.yml', 'services:\n  mail-dev:\n')
+      ;(portsModule.canConnect as jest.Mock).mockResolvedValue(false)
+
+      await resumeCommand({})
+
+      expect(ranMailUp()).toBe(false)
+      expect(output()).toContain('hosts no database or storage in Docker')
+      expect(output()).toContain('npm run services:up')
+    })
+
+    it('says a compose without the service predates it, instead of failing', async () => {
+      withEmail()
+      write('apps/demo-api/docker-compose.dev-services.yml', 'services:\n  db-dev:\n')
+      ;(portsModule.canConnect as jest.Mock).mockResolvedValue(false)
+
+      await resumeCommand({})
+
+      expect(ranMailUp()).toBe(false)
+      expect(output()).toContain('has no mail-dev service')
+    })
+
+    it('reports a blocked start like the other containers', async () => {
+      withEmail()
+      write('apps/demo-api/docker-compose.dev-services.yml', 'services:\n  db-dev:\n\n  mail-dev:\n')
+      ;(portsModule.canConnect as jest.Mock).mockImplementation(async (port: number) => port !== 8025)
+      mockedRun.mockImplementation((cmd: string) => (String(cmd).includes('mail-dev') ? { code: 1, stdout: '', stderr: 'port is already allocated' } : { code: 0, stdout: '1', stderr: '' }))
+
+      await resumeCommand({})
+
+      expect(output()).toContain('could not start the mail catcher')
+      expect(process.exitCode).toBe(1)
+    })
+
+    it('is silent about an inbox when the project has no email module', async () => {
+      healthyTree()
+
+      await resumeCommand({})
+
+      expect(output()).toContain('this project has no email module')
+      expect(ranMailUp()).toBe(false)
+    })
+
+    it('only reports it in a dry run', async () => {
+      withEmail()
+      write('apps/demo-api/docker-compose.dev-services.yml', 'services:\n  db-dev:\n\n  mail-dev:\n')
+      ;(portsModule.canConnect as jest.Mock).mockImplementation(async (port: number) => port !== 8025)
+
+      await resumeCommand({ dryRun: true })
+
+      expect(ranMailUp()).toBe(false)
+      expect(output()).toContain('would run: docker compose')
+    })
+  })
+
   describe('it refuses to run where there is nothing to finish', () => {
     it('needs a manifest', async () => {
       await resumeCommand()

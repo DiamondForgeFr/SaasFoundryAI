@@ -186,6 +186,12 @@ export interface CreateDevServicesParams {
   s3Credentials?: S3Credentials
   /** Resolved host ports for MinIO. Absent falls back to the template's 9000/9001 (#623). */
   s3Ports?: { api?: number; console?: number }
+  /**
+   * The development mail catcher (Mailpit). Present whenever the email module is installed,
+   * even when neither the database nor the storage is hosted in Docker (#976); absent
+   * otherwise. `port` is the host port of its web inbox and HTTP API.
+   */
+  mailCatcher?: { port: number }
 }
 
 // Workflow Configuration Interfaces
@@ -331,6 +337,13 @@ export interface ProjectPorts {
    */
   s3?: number
   s3Console?: number
+  /**
+   * The web inbox and HTTP API of the development mail catcher (Mailpit), present only when the
+   * email module is installed (#976). Absent on manifests written before it: `sf update` chooses
+   * a free port, records it here and writes it into the dev `.env` and the dev-services compose
+   * (the email module migration). An additive optional field, so no manifest migration.
+   */
+  mail?: number
 }
 
 export type { HarnessAgent } from './harness/agent-registry'

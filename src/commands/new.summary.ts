@@ -28,6 +28,14 @@ export interface ProjectUrlLine {
 export interface ProjectUrlParams {
   ports: ResolvedPorts
   s3Setup: 'docker' | 'credentials' | 'manual'
+  /** The email module hosts a development inbox (Mailpit): its URL is where the confirmation email of a signup is read (#976). */
+  emailService?: 'none' | 'mailersend'
+  /**
+   * Whether `sf new` started that inbox. It starts with the project's Docker services; one that hosts
+   * none, or whose services were not started, has an inbox that does not answer yet, and the line says
+   * how to start it. Omitted means no claim either way.
+   */
+  mailCatcherUp?: boolean
   dbSetup: 'docker' | 'credentials' | 'manual'
   dbCredentials?: DbCredentials
   /** Workflow board URL, when one is configured. */
@@ -67,7 +75,7 @@ function unreachableNote(apps: ProjectUrlParams['apps'], which: 'api' | 'web'): 
   return (which === 'api' ? apps.apiUp : apps.webUp) ? undefined : 'did not come up'
 }
 
-export function projectUrlLines({ ports, s3Setup, dbSetup, dbCredentials, projectUrl, apps }: ProjectUrlParams): ProjectUrlLine[] {
+export function projectUrlLines({ ports, s3Setup, emailService, mailCatcherUp, dbSetup, dbCredentials, projectUrl, apps }: ProjectUrlParams): ProjectUrlLine[] {
   const apiDown = unreachableNote(apps, 'api')
   const webDown = unreachableNote(apps, 'web')
   const lines: ProjectUrlLine[] = [
@@ -93,6 +101,15 @@ export function projectUrlLines({ ports, s3Setup, dbSetup, dbCredentials, projec
   if (s3Setup === 'docker') {
     const consolePort = ports.s3Console?.port ?? 9001
     lines.push({ label: 'MinIO Console', url: `http://localhost:${consolePort}`, note: movedNote(ports.s3Console ?? {}) })
+  }
+  // The inbox of the email module: signing up and inviting send their email there, not to MailerSend (#976).
+  if (emailService === 'mailersend') {
+    lines.push({
+      label: 'Mail inbox',
+      url: `http://localhost:${ports.mail?.port ?? 8025}`,
+      note: movedNote(ports.mail ?? {}),
+      unreachable: mailCatcherUp === false ? 'not started — run npm run services:up in the API app' : undefined
+    })
   }
   if (projectUrl) lines.push({ label: 'Project Board', url: `${projectUrl}?layout=board` })
 

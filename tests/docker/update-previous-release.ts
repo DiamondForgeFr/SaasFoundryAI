@@ -241,7 +241,7 @@ function assertUpdatedManifest(manifest: Record<string, unknown>): void {
   const modules = manifest.modules as
     | {
         harness?: { managed?: boolean }
-        email?: { provider?: string }
+        email?: { provider?: string; version?: number }
         s3Setup?: string
         includeAnalytics?: boolean
         pwa?: { version?: number }
@@ -251,6 +251,10 @@ function assertUpdatedManifest(manifest: Record<string, unknown>): void {
   if (manifest.structure !== 'multirepo') throw new Error('The historical lifecycle changed topology unexpectedly.')
   if (modules?.harness?.managed !== true) throw new Error('The late harness transition was not recorded.')
   if (modules.email?.provider !== 'mailersend') throw new Error('The late email module was not recorded.')
+  // #976 — the module comes with its development inbox: born at the current version, with a port the manifest records
+  if (modules.email?.version !== 2) throw new Error('The late email module was not recorded at the version that carries the mail catcher.')
+  const mailPort = (manifest.ports as { mail?: unknown } | undefined)?.mail
+  if (typeof mailPort !== 'number' || !Number.isInteger(mailPort) || mailPort < 1) throw new Error('The late email module did not record the mail catcher port in the manifest.')
   if (modules.s3Setup !== 'docker') throw new Error('The late storage module was not recorded.')
   if (modules.includeAnalytics !== true) throw new Error('The late analytics module was not recorded.')
   if (modules.pwa?.version !== 1) throw new Error('The late PWA module was not recorded.')
@@ -298,6 +302,19 @@ async function assertDeposits(projectRoot: string): Promise<void> {
     )
   )
     throw new Error('CLAUDE.md is still there: the harness v3 → v4 migration moves it into AGENTS.md (#938).')
+
+  // #976 — the late email module brought its development inbox: the service in the compose the late
+  // storage module regenerated, on the recorded port, and the explicit switch in the dev `.env` only
+  const manifest = JSON.parse(await readFile(join(projectRoot, '.saasfoundry.json'), 'utf8')) as { ports?: { mail?: number } }
+  const compose = await readFile(join(api, 'docker-compose.dev-services.yml'), 'utf8')
+  if (!/^ {2}mail-dev:/m.test(compose) || !compose.includes('axllent/mailpit:') || !compose.includes(`'${manifest.ports?.mail}:8025'`)) {
+    throw new Error('The late email module did not leave the Mailpit service, on the recorded port, in the dev-services compose.')
+  }
+  if (!/^ {2}s3-dev:/m.test(compose)) throw new Error('The late storage module lost its MinIO service while the compose gained the mail catcher.')
+  if (!(await readFile(join(api, '.env'), 'utf8')).includes(`MAIL_CATCHER_URL=http://localhost:${manifest.ports?.mail}`)) {
+    throw new Error('The late email module did not point the dev .env at the mail catcher.')
+  }
+  if ((await readFile(join(api, '.env.test'), 'utf8').catch(() => '')).includes('MAIL_CATCHER_URL')) throw new Error('The test environment must never carry MAIL_CATCHER_URL.')
 
   const apiClassifier = await readFile(join(api, 'scripts', 'saasfoundry', 'impact-classifier.mjs'))
   const webClassifier = await readFile(join(web, 'scripts', 'saasfoundry', 'impact-classifier.mjs'))

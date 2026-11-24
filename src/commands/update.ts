@@ -7,15 +7,15 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'pat
 import ora from 'ora'
 
 import { installAnalyticsModule } from '../installers/analytics.installer'
-import { installEmailModule } from '../installers/email.installer'
+import { emailInstallerMeta, installEmailModule } from '../installers/email.installer'
 import { installOptionalSkills } from '../installers/optional-skills.installer'
 import { installPwaModule, pwaInstallerMeta } from '../installers/pwa.installer'
 import { installSkills } from '../installers/skills.installer'
 import { assertHarnessWritePathsSafe, computeHarnessFileHashes, harnessInstallerMeta, installHarness, isHarnessTrackedPath, mergeHarnessUserFiles } from '../installers/harness.installer'
 import { installSrsSkill } from '../installers/srs-skill.installer'
 import { installStorageModule } from '../installers/storage.installer'
-import { DEFAULT_PORTS } from '../ports'
-import { createDevServicesCompose } from '../builders/dev-services.builder'
+import { DEFAULT_PORTS, resolveMailCatcherPort, withMailCatcherPort } from '../ports'
+import { createDevServicesCompose, ensureMailCatcherService, MAIL_CATCHER_SERVICE } from '../builders/dev-services.builder'
 import { inquirerRenderer } from '../config-engine/renderers/inquirer.renderer'
 import { runConfigSession } from '../config-engine/session'
 import { skillsStep } from '../config-engine/steps/skills.step'
@@ -35,7 +35,7 @@ import { acquireManifestMutationLock } from '../scaffold/technical-stack.transac
 import { createManifestFileSafe, readManifestFileSafe, replaceManifestFileSafe } from '../manifest-file'
 import { detectLegacyAdoption, type LegacyAdoptionReport } from '../legacy-adoption/legacy-adoption'
 import { Answers, HarnessAgent, SaaSFoundryManifest, SrsToolConfig, isScaffoldManifest } from '../types'
-import { upsertEnvKey } from '../utils/env-file'
+import { hasEnvKey, upsertEnvKey } from '../utils/env-file'
 import { reconcileSrsIntentHook } from '../utils/claude-settings'
 import { ensureGitignorePatterns } from '../utils/gitignore'
 import { checkNodeVersion, computeFileHashes, fileExists, getNvmPrefix, hashFileContent, validateManifestProjectName } from '../utils'
@@ -893,7 +893,9 @@ function stackModuleSeedPaths(selectedModules: string[], apiPath: string, webPat
         'src/modules/email/services/mailersend.service.ts',
         '.env',
         '.env.test',
-        '.github/workflows/deployment.yml'
+        '.github/workflows/deployment.yml',
+        // The module brings its development inbox: Mailpit joins this file, or the file is created (#976)
+        'docker-compose.dev-services.yml'
       ].map((path) => join(apiPath, path))
     )
     if (isMonorepo) paths.push('packages/shared-types/src/index.ts', 'packages/shared-types/src/email.ts')
@@ -2006,6 +2008,15 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
 
       let stackModuleTargetHashes: Record<string, string> = {}
       const hasStackModule = selectedModules.some((module) => ['email', 'storage', 'analytics', 'pwa'].includes(module))
+      // The inbox the email module brings (#976), for a project that has the module or is getting it
+      // now. Its host port is chosen before a file is written, so the compose, the dev .env and the
+      // manifest name the same one. A project that already recorded a port keeps it.
+      let mailCatcherSetup: { port: number } | undefined
+      const addsEmail = selectedModules.includes('email') && emailCredentials !== null
+      // Only the modules that write the dev-services compose can lose or need the inbox in it
+      if (addsEmail || (manifest.modules?.email?.provider === 'mailersend' && selectedModules.includes('storage'))) {
+        mailCatcherSetup = { port: (await resolveMailCatcherPort(manifest.ports)).port }
+      }
       if (hasStackModule) {
         moduleSpinner.text = 'Preparing conflict-safe module changes...'
         const stagedModules = await stageStackModuleChanges(manifest, moduleSpinner, conflictStrategy, selectedModules, apiPath, webPath, isMonorepo, async () => {
@@ -2017,8 +2028,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               projectName: manifest.projectName,
               mailersendApiKey: emailCredentials.mailersendApiKey,
               mailersendSenderEmail: emailCredentials.mailersendSenderEmail,
-              mailersendSenderName: emailCredentials.mailersendSenderName
+              mailersendSenderName: emailCredentials.mailersendSenderName,
+              mailCatcherPort: mailCatcherSetup?.port
             })
+            if (mailCatcherSetup) await ensureMailCatcherService({ apiPath, projectName: manifest.projectName, port: mailCatcherSetup.port })
           }
           if (selectedModules.includes('storage') && storageConfig) {
             moduleSpinner.text = 'Preparing S3 storage module...'
@@ -2032,12 +2045,14 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
               skipNpmInstall: true
             })
             if (storageConfig.s3Setup === 'docker') {
+              // Regenerated whole: a project that already runs the email module keeps its inbox in it
               await createDevServicesCompose({
                 apiPath,
                 projectName: manifest.projectName,
                 dbSetup: manifest.modules?.dbSetup ?? 'manual',
                 s3Setup: storageConfig.s3Setup,
-                s3Credentials: storageConfig.s3Credentials
+                s3Credentials: storageConfig.s3Credentials,
+                mailCatcher: mailCatcherSetup
               })
             }
           }
@@ -2061,6 +2076,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             upsertEnvKey(envPath, 'MAILERSEND_SENDER_EMAIL', emailCredentials.mailersendSenderEmail)
             upsertEnvKey(envPath, 'MAILERSEND_SENDER_NAME', emailCredentials.mailersendSenderName)
           }
+          // The explicit switch to the inbox, in the dev `.env` only: the staged copy of that file never
+          // reaches the project, as for the keys above (#976)
+          if (mailCatcherSetup && !hasEnvKey(join(apiPath, '.env'), 'MAIL_CATCHER_URL')) upsertEnvKey(join(apiPath, '.env'), 'MAIL_CATCHER_URL', `http://localhost:${mailCatcherSetup.port}`)
         }
         if (selectedModules.includes('storage') && storageConfig) {
           const endpoint = storageConfig.s3Setup === 'docker' ? 'http://localhost:9000' : storageConfig.s3Credentials?.endpoint || ''
@@ -2086,7 +2104,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           upsertEnvKey(join(webPath, '.env'), 'VITE_ANALYTICS_URL', '')
           upsertEnvKey(join(webPath, '.env'), 'VITE_ANALYTICS_WEBSITE_ID', '')
         }
-        if (selectedModules.includes('email') && emailCredentials) manifest.modules!.email = { provider: 'mailersend', version: 1 }
+        if (selectedModules.includes('email') && emailCredentials) {
+          manifest.modules!.email = { provider: 'mailersend', version: emailInstallerMeta.currentVersion }
+          if (mailCatcherSetup) manifest.ports = withMailCatcherPort(manifest.ports, mailCatcherSetup.port)
+        }
         if (selectedModules.includes('storage') && storageConfig) manifest.modules!.s3Setup = storageConfig.s3Setup
         if (selectedModules.includes('analytics')) manifest.modules!.includeAnalytics = true
         if (selectedModules.includes('pwa')) manifest.modules!.pwa = { version: pwaInstallerMeta.currentVersion }
@@ -2212,6 +2233,14 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       console.log(chalk.blue('  To start MinIO, run:'))
       console.log(chalk.blue(`    docker compose -f ${apiPath}/docker-compose.dev-services.yml up -d s3-dev s3-init`))
       console.log(chalk.blue(`  MinIO Console: http://localhost:${manifest.ports?.s3Console ?? 9001}`))
+      console.log()
+    }
+
+    if (selectedModules.includes('email')) {
+      console.log(chalk.blue('  To start the mail inbox (Mailpit), run:'))
+      console.log(chalk.blue(`    docker compose -f ${apiPath}/docker-compose.dev-services.yml up -d ${MAIL_CATCHER_SERVICE}`))
+      console.log(chalk.blue(`  Mail inbox: http://localhost:${manifest.ports?.mail ?? DEFAULT_PORTS.mail}`))
+      console.log(chalk.blue('  While MAIL_CATCHER_URL is set in the API .env, emails go there instead of to MailerSend.'))
       console.log()
     }
   } finally {
