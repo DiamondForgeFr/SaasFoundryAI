@@ -2,7 +2,17 @@ import { getAgentProfile } from './agent-registry'
 import { buildRouteRecord, readLedger, resolveLedgerDir, transact, type Complexity, type LedgerState, type Nature } from './delegation-ledger'
 import { readProjectRouting, type ProjectRouting } from './project-routing'
 import { adjustRouting, nextRung, selectTrial, type AdjustContext, type AdjustOutcome, type TrialOffer } from './routing-adjust'
-import { autoKindsFor, emptyLocalRouting, readLocalRouting, staleTierAgentPaths, updateLocalRouting, withLogEntry, type LocalAdjustment, type LocalRouting } from './routing-local'
+import {
+  autoKindsFor,
+  emptyLocalRouting,
+  readLocalRoutingWithSkipped,
+  skippedLocalRoutingNotice,
+  staleTierAgentPaths,
+  updateLocalRouting,
+  withLogEntry,
+  type LocalAdjustment,
+  type LocalRouting
+} from './routing-local'
 import { resolveRoute, ROUTING_PROVIDERS, type ResolvedRoute, type RoutingProvider, type TaskKind } from './routing-grid'
 import { modelAlias } from './tier-agents'
 
@@ -29,6 +39,8 @@ export interface LoadOptions {
   /** The folded ledger when the caller just wrote to it and has it: read nothing again. */
   ledger?: LedgerState
   onDamaged?: (message: string) => void
+  /** Told, in one line, which entries of the local layer this CLI skipped because it does not know them (#1309). */
+  onSkipped?: (notice: string) => void
 }
 
 /**
@@ -42,7 +54,11 @@ export async function loadRoutingState(root: string, options: LoadOptions = {}):
   const dir = 'dir' in options ? options.dir : await resolveLedgerDir(root)
   if (!dir) return { root, dir, project, ledger: emptyLedger(), local: emptyLocalRouting() }
   try {
-    return { root, dir, project, ledger: options.ledger ?? (await readLedger(dir)), local: await readLocalRouting(dir) }
+    const ledger = options.ledger ?? (await readLedger(dir))
+    const { local, skipped } = await readLocalRoutingWithSkipped(dir)
+    const notice = skippedLocalRoutingNotice(skipped)
+    if (notice) options.onSkipped?.(notice)
+    return { root, dir, project, ledger, local }
   } catch (error) {
     if (!options.onDamaged) throw error
     options.onDamaged(error instanceof Error ? error.message : String(error))

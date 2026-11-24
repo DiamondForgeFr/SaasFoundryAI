@@ -60,7 +60,8 @@ async function routeTask(options: AgentCommandOptions): Promise<void> {
   // The clone's own automatic moves and its trials come from the ledger: a damaged one is reported, not fatal.
   const state = await loadRoutingState(root, {
     project,
-    onDamaged: (message) => process.stderr.write(`Warning: the delegation history could not be read, so the route is the shared one (${message})\n`)
+    onDamaged: (message) => process.stderr.write(`Warning: the delegation history could not be read, so the route is the shared one (${message})\n`),
+    onSkipped: (notice) => process.stderr.write(`Notice: ${notice}\n`)
   })
   if (!options.record && (options.ticket !== undefined || options.complexity !== undefined || options.nature !== undefined || options.retryOf !== undefined)) {
     throw new Error('--ticket, --complexity, --nature and --retry-of describe the route record: add --record.')
