@@ -146,7 +146,10 @@ export const addDevMailCatcher: ModuleMigration = {
 
     console.log(chalk.gray(`  Email module: development mail catcher (Mailpit) on http://localhost:${port}`))
     for (const path of written) console.log(chalk.gray(`    • updated ${path}`))
-    if (envSet) console.log(chalk.gray(`    • set MAIL_CATCHER_URL in ${apiDir}/.env: emails now go to the inbox. Remove the line to send through MailerSend again.`))
+    if (envSet) {
+      const effect = proposals.length === 0 && manual.length === 0 ? 'emails now go to the inbox' : 'emails go to the inbox once the files below are merged'
+      console.log(chalk.gray(`    • set MAIL_CATCHER_URL in ${apiDir}/.env: ${effect}. Remove the line to send through MailerSend again.`))
+    }
     if (proposals.length > 0) {
       console.log(chalk.yellow('  Kept your edited files and wrote the change beside them: merge each .saasfoundry.new into its file, the catcher stays off until you do:'))
       for (const path of proposals) console.log(chalk.yellow(`    • ${path}`))
