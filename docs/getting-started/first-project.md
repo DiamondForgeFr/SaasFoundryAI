@@ -157,6 +157,8 @@ This delegates to `apps/api/docker-compose.dev-services.yml` and starts:
 
 - PostgreSQL (port 5435)
 - MinIO S3 (port 9000, console 9001)
+- Mailpit, the mail inbox of the [email module](/modules/email) (port 8025): while `MAIL_CATCHER_URL` is set in `apps/api/.env`, the confirmation and invitation emails land at http://localhost:8025
+  instead of going to MailerSend, so you can sign up and click the link locally
 
 The services join the project's Docker network, `<project>-network`, which the API and web containers share. The command creates it first when it does not exist yet, so it also works on a fresh clone;
 `npm run services:down` leaves it in place.
@@ -167,7 +169,7 @@ Verify services are running:
 docker ps
 ```
 
-You should see `saasfoundry-db-dev` and `saasfoundry-s3-dev` (plus `saasfoundry-s3-init` on first boot).
+You should see `saasfoundry-db-dev` and `saasfoundry-s3-dev` (plus `saasfoundry-s3-init` on first boot, and `saasfoundry-mail-dev` when the email module is installed).
 
 ### Initialize Database
 

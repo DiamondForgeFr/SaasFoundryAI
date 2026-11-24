@@ -127,7 +127,7 @@ Lors de l’ajout d’un module, l’installateur :
 ```json
 {
   "modules": {
-    "email": { "provider": "mailersend", "version": 1 },
+    "email": { "provider": "mailersend", "version": 2 },
     "s3Setup": "docker",
     "includeAnalytics": true
   }

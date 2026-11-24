@@ -143,7 +143,7 @@ Installed modules are tracked in `.saasfoundry.json`:
 ```json
 {
   "modules": {
-    "email": { "provider": "mailersend", "version": 1 },
+    "email": { "provider": "mailersend", "version": 2 },
     "s3Setup": "docker",
     "includeAnalytics": true
   }

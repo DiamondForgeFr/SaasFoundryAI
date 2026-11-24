@@ -127,6 +127,9 @@ Default local ports scan forward when already in use:
 | API        |  `3500` | Uses the next free port. |
 | Web        |  `5173` | Uses the next free port. |
 
+The services a module hosts in Docker follow the same rule, and exist only when the module is installed: MinIO (`9000` and console `9001`, with `--s3-setup docker`) and the Mailpit inbox of the
+[email module](/modules/email) (`8025`, recorded as `ports.mail`).
+
 An explicit port is never moved silently. If `--api-port 3500` is requested and unavailable, generation stops and explains the conflict. Database ports for `credentials` or `manual` setups refer to an
 external service and are passed through unchanged.
 

@@ -129,6 +129,9 @@ Les ports locaux par défaut avancent automatiquement lorsqu'ils sont déjà occ
 | API        |          `3500` | Utilise le prochain port libre. |
 | Web        |          `5173` | Utilise le prochain port libre. |
 
+Les services qu'un module héberge dans Docker suivent la même règle et n'existent que si le module est installé : MinIO (`9000` et console `9001`, avec `--s3-setup docker`) et la boîte Mailpit du
+[module email](/fr/modules/email) (`8025`, enregistré comme `ports.mail`).
+
 Un port demandé explicitement n'est jamais déplacé silencieusement. Si `--api-port 3500` est demandé mais indisponible, la génération s'arrête et décrit le conflit. Pour une base en mode `credentials`
 ou `manual`, le port désigne un service externe et reste inchangé.
 
