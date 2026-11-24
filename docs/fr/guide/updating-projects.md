@@ -171,6 +171,10 @@ Les diagnostics destinés à l’humain vont sur stderr ; stdout reste analysabl
 
 En CI, `sf update --dry-run --json > report.json` permet d’exposer les changements à venir avant leur arrivée sur la branche de travail.
 
+Le rapport liste chaque fichier que la vraie mise à jour écrit : les rafraîchissements des templates et du harness (`templateUpdate`, `harnessRefresh`), les instructions d’agent (`agentInstructions` :
+la région générée d’`AGENTS.md`, `.claude/rules/`, `.agents/skills/`, les agents de palier et `.codex/hooks.json`), `.claude/settings.json` (`harnessSettings`), `.codex/config.toml`
+(`codexInstructionLimit`) et le manifeste (`manifestWrites`). Voir [`sf update`](../cli/sf-update.md#chaque-fichier-que-la-mise-a-jour-ecrit).
+
 ## Ajouter des modules après génération
 
 Les modules ignorés pendant `sf new` restent disponibles :

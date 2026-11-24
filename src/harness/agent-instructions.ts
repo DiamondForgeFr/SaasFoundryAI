@@ -48,6 +48,8 @@ export type { HarnessAgent } from '../types'
 
 export interface AgentInstructionsReport {
   written: string[]
+  /** The written files that did not exist before: a subset of `written` (#1315). */
+  added?: string[]
   unchanged: string[]
   conflicts: string[]
   warnings: string[]
@@ -612,6 +614,7 @@ async function deposit(root: string, path: string, content: Buffer, mode: number
     // The planner rendered this file from its current bytes: only its generated region changed.
     await safeWriteAgentFile(root, path, content, mode, current)
     report.written.push(path)
+    if (!current) (report.added ??= []).push(path)
     return
   }
   if (classifyManagedFile(current, content, [baselines[path]]) === 'edited') {
@@ -632,6 +635,7 @@ async function deposit(root: string, path: string, content: Buffer, mode: number
   }
   await safeWriteAgentFile(root, path, content, mode, current)
   report.written.push(path)
+  if (!current) (report.added ??= []).push(path)
   report.fileHashes[path] = hash
 }
 
@@ -1091,9 +1095,86 @@ async function planCaptureHooks(targetPath: string, agents: HarnessAgent[], warn
  * instruction files predate the agent declaration and stay as they are.
  */
 export async function installTierAgents({ targetPath, agents, manifest }: InstallAgentInstructionsParams): Promise<AgentInstructionsReport> {
+  return installPlannedAgentInstructions(targetPath, planTierAgentFiles({ targetPath, agents, manifest }), manifest?.fileHashes)
+}
+
+/** The plan `installTierAgents` applies. */
+export function planTierAgentFiles({ agents, manifest }: InstallAgentInstructionsParams): AgentInstructionPlan {
   const warnings: string[] = []
-  const files = planTierAgents(agents, manifest, warnings)
-  return installPlannedAgentInstructions(targetPath, { files, warnings }, manifest?.fileHashes)
+  return { files: planTierAgents(agents, manifest, warnings), warnings }
+}
+
+/**
+ * The plan `installAgentInstructions` applies, without the Codex instruction limit: `sf update --dry-run`
+ * reports that one on its own (#1154), measured against the project's Git root, and renders the rest from a
+ * staged copy of the project (#1315).
+ */
+export async function planAgentInstructionFileSet(params: InstallAgentInstructionsParams): Promise<AgentInstructionPlan> {
+  return planInstructionFileSet(params)
+}
+
+/** What applying a plan would change in `targetPath`, file by file, with nothing written (#1315). */
+export interface AgentInstructionsPreview {
+  /** Files rewritten in place: an outdated render, or the generated region of a project-owned file. */
+  update: string[]
+  /** Files the plan creates. */
+  add: string[]
+  /** Files edited since their baseline, or unsafe destinations: left alone, with a `.saasfoundry.new` proposal when one can be written. */
+  conflict: string[]
+  /** Shared skill copies no longer generated, removed because they still hold their recorded bytes (#1248). */
+  remove: string[]
+  /** Whether applying the plan changes a baseline the manifest records, so the manifest is rewritten too. */
+  recordsBaselines: boolean
+  warnings: string[]
+}
+
+/**
+ * Classify every file of `plan` the way `installPlannedAgentInstructions` would act on it, reading the
+ * destination and never writing: the dry run of `sf update` lists exactly what the real run writes (#1315).
+ */
+export async function previewPlannedAgentInstructions(targetPath: string, plan: AgentInstructionPlan, baselines: Record<string, string> = {}): Promise<AgentInstructionsPreview> {
+  const preview: AgentInstructionsPreview = { update: [], add: [], conflict: [], remove: [], recordsBaselines: false, warnings: [...plan.warnings] }
+  // A file written or already current records its baseline, unless it is project-owned (merge).
+  const recordBaseline = (file: AgentInstructionFile): void => {
+    if (!file.merge && baselines[file.path] !== hashBytes(file.content)) preview.recordsBaselines = true
+  }
+  for (const file of plan.files) {
+    if (await hasLinkedAncestor(targetPath, file.path)) {
+      preview.conflict.push(file.path)
+      continue
+    }
+    let current: Buffer | undefined
+    try {
+      const stat = await lstat(join(targetPath, file.path))
+      if (!stat.isFile()) {
+        preview.conflict.push(file.path)
+        continue
+      }
+      current = await readFile(join(targetPath, file.path))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    if (current?.equals(file.content)) {
+      recordBaseline(file)
+      continue
+    }
+    if (current && !file.merge && classifyManagedFile(current, file.content, [baselines[file.path]]) === 'edited') {
+      preview.conflict.push(file.path)
+      continue
+    }
+    ;(current ? preview.update : preview.add).push(file.path)
+    recordBaseline(file)
+  }
+  for (const path of plan.retired ?? []) {
+    if (await hasLinkedAncestor(targetPath, path)) continue
+    try {
+      const stat = await lstat(join(targetPath, path))
+      if (stat.isFile() && hashBytes(await readFile(join(targetPath, path))) === baselines[path]) preview.remove.push(path)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+  return preview
 }
 
 export async function installAgentInstructions(params: InstallAgentInstructionsParams): Promise<AgentInstructionsReport> {

@@ -34,7 +34,7 @@ import { recoverTechnicalStackTransition, TECHNICAL_TRANSITION_JOURNAL, TECHNICA
 import { acquireManifestMutationLock } from '../scaffold/technical-stack.transaction'
 import { createManifestFileSafe, readManifestFileSafe, replaceManifestFileSafe } from '../manifest-file'
 import { detectLegacyAdoption, type LegacyAdoptionReport } from '../legacy-adoption/legacy-adoption'
-import { Answers, SaaSFoundryManifest, SrsToolConfig, isScaffoldManifest } from '../types'
+import { Answers, HarnessAgent, SaaSFoundryManifest, SrsToolConfig, isScaffoldManifest } from '../types'
 import { upsertEnvKey } from '../utils/env-file'
 import { reconcileSrsIntentHook } from '../utils/claude-settings'
 import { ensureGitignorePatterns } from '../utils/gitignore'
@@ -43,6 +43,7 @@ import { version as cliVersion } from '../../package.json'
 import {
   buildUpdatePrefillFromOptions,
   ConflictStrategy,
+  noteManifestWrite,
   parseConflictStrategy,
   parseTargetProfile,
   UpdateCommandOptions,
@@ -73,7 +74,14 @@ import { hookCliNotice } from '../harness/hook-cli-notice'
 import { DEFAULT_SHELL_SHAPE, recordedShellShape, shellShapeNotice } from '../harness/shell-guard-mode'
 import { TIER_AGENT_PATH } from '../harness/tier-agents'
 import { CLAUDE_CODE_RULE_PATH } from '../harness/agent-instructions'
-import { installSelectedAgentInstructions } from '../installers/agent-topology'
+import {
+  installSelectedAgentInstructions,
+  isAgentInstructionSource,
+  previewSelectedAgentInstructions,
+  type PendingRefreshWrites,
+  type SelectedAgentInstructionsSummary
+} from '../installers/agent-topology'
+import type { AgentInstructionsPreview } from '../harness/agent-instructions'
 import { renderTechnicalStack } from '../renderers/technical-stack.renderer'
 import { readLivePackageIdentity } from '../utils/package-identity'
 import { legacyRenderSettings, readLiveRenderSettings, sameRenderSettings, type RenderSettings } from '../utils/live-render-settings'
@@ -1026,6 +1034,59 @@ async function depositHarnessInTempDir(
   return { tempDir, hashes: await computeHarnessFileHashes(tempDir) }
 }
 
+/**
+ * The bytes a refresh would leave on the paths the agent-instruction render reads (#1315): `sf update
+ * --dry-run` renders the instructions from them, since the real run renders them after the refresh.
+ */
+async function pendingAgentSourceWrites(updates: FileUpdate[], sourceDir: string, strategy: ConflictStrategy): Promise<Map<string, Buffer | null>> {
+  const pending = new Map<string, Buffer | null>()
+  for (const update of updates) {
+    if (!isAgentInstructionSource(update.path)) continue
+    if (update.action === 'remove') pending.set(update.path, null)
+    else if (update.action !== 'conflict' || strategy === 'replace') pending.set(update.path, await readFile(join(sourceDir, update.path)))
+  }
+  return pending
+}
+
+/** Group paths by the host directory they belong to (`.claude/`, `.agents/`, `.codex/`…), project files under `project`. */
+function groupByHost(paths: readonly string[]): Array<[string, number]> {
+  const groups = new Map<string, number>()
+  for (const path of paths) {
+    const match = /^(?:apps\/[^/]+\/)?(\.[^/]+)\//.exec(path)
+    const host = match ? `${match[1]}/` : 'project'
+    groups.set(host, (groups.get(host) ?? 0) + 1)
+  }
+  return [...groups].sort(([a], [b]) => a.localeCompare(b))
+}
+
+const describeHosts = (paths: readonly string[]): string =>
+  groupByHost(paths)
+    .map(([host, count]) => `${host} ${count}`)
+    .join(', ')
+
+/** The dry-run lines for the agent-instruction refresh, one per action, counted per host (#1315). */
+function logAgentInstructionsPreview(preview: AgentInstructionsPreview): void {
+  const total = preview.update.length + preview.add.length + preview.conflict.length + preview.remove.length
+  if (total === 0) return
+  console.log(chalk.blue(`  Agent instructions: ${total} file(s) would change`))
+  if (preview.update.length) console.log(chalk.green(`    ${preview.update.length} file(s) to update (${describeHosts(preview.update)})`))
+  if (preview.add.length) console.log(chalk.green(`    ${preview.add.length} new file(s) to add (${describeHosts(preview.add)})`))
+  if (preview.conflict.length) console.log(chalk.yellow(`    ${preview.conflict.length} edited file(s) left as they are, with a .saasfoundry.new proposal (${describeHosts(preview.conflict)})`))
+  if (preview.remove.length) console.log(chalk.yellow(`    ${preview.remove.length} shared copy(ies) no longer generated, to remove (${describeHosts(preview.remove)})`))
+  console.log()
+}
+
+/** The closing lines of the agent-instruction refresh: what it wrote, counted per host (#1315). */
+function logAgentInstructionsSummary(summary: SelectedAgentInstructionsSummary): void {
+  if (summary.updated.length + summary.added.length + summary.removed.length + summary.conflicts.length === 0) return
+  console.log(chalk.green('  Agent instructions refreshed:'))
+  if (summary.updated.length) console.log(chalk.green(`    ${summary.updated.length} file(s) updated in place (${describeHosts(summary.updated)})`))
+  if (summary.added.length) console.log(chalk.green(`    ${summary.added.length} new file(s) added (${describeHosts(summary.added)})`))
+  if (summary.removed.length) console.log(chalk.green(`    ${summary.removed.length} shared copy(ies) no longer generated, removed (${describeHosts(summary.removed)})`))
+  if (summary.conflicts.length) console.log(chalk.yellow(`    ${summary.conflicts.length} edited file(s) left as they are (${describeHosts(summary.conflicts)})`))
+  console.log()
+}
+
 interface RefreshHarnessOptions {
   dryRun: boolean
   nonInteractive: boolean
@@ -1048,17 +1109,22 @@ interface RefreshHarnessOptions {
  * files become the baseline and every change lands as a conflict (sidecar),
  * because nothing can distinguish old templates from user edits.
  */
-async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, { dryRun, nonInteractive, conflictStrategy, dryRunReport, persistManifest }: RefreshHarnessOptions): Promise<void> {
+async function refreshHarnessDeposits(
+  manifest: SaaSFoundryManifest,
+  { dryRun, nonInteractive, conflictStrategy, dryRunReport, persistManifest }: RefreshHarnessOptions
+): Promise<PendingRefreshWrites> {
+  // On a dry run: what the refresh would leave on the agent-instruction sources (#1315).
+  let pending: PendingRefreshWrites = new Map()
   const currentHashes = await computeHarnessFileHashes('.')
   const hasDeposits = Object.keys(currentHashes).length > 0
   const tracked = (manifest.modules?.harness?.version ?? 0) > 0
 
-  if (!hasDeposits && !tracked) return
+  if (!hasDeposits && !tracked) return pending
 
   const adoption = !tracked && hasDeposits
   if (!adoption && manifest.version === cliVersion) {
     console.log(chalk.green('  Your AI harness is up to date with the current CLI version.\n'))
-    return
+    return pending
   }
 
   if (adoption) {
@@ -1066,7 +1132,7 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, { dryRun, n
     if (nonInteractive) {
       console.log(chalk.yellow('  Run `sf update` without --non-interactive once to confirm their adoption. Skipping.\n'))
       if (dryRunReport) dryRunReport.harnessRefresh = { status: 'adoption-needed' }
-      return
+      return pending
     }
     if (!dryRun) {
       const { adoptHarness } = await promptWithPrefill<{ adoptHarness: boolean }>(
@@ -1075,7 +1141,7 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, { dryRun, n
       )
       if (!adoptHarness) {
         console.log(chalk.gray('  Harness adoption skipped.\n'))
-        return
+        return pending
       }
     }
   }
@@ -1099,10 +1165,22 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, { dryRun, n
     // the global strategy says.
     const effectiveStrategy: ConflictStrategy = adoption ? 'save-new' : conflictStrategy
 
+    if (dryRun) {
+      // The real run records the version and the deposit baselines whatever the files say (#1315).
+      noteManifestWrite(dryRunReport, '.saasfoundry.json', 'version')
+      const baselinesChange = Object.keys(baseHashes).length !== Object.keys(deposit.hashes).length || Object.entries(deposit.hashes).some(([path, hash]) => baseHashes[path] !== hash)
+      if (baselinesChange) noteManifestWrite(dryRunReport, '.saasfoundry.json', 'fileHashes')
+    }
+
     if (updates.length === 0) {
       spinner.succeed(chalk.green('Harness deposits already match the current CLI.'))
     } else if (dryRun) {
       spinner.succeed('Harness refresh analysis complete (dry run).')
+      const count = (action: FileUpdate['action']) => updates.filter((u) => u.action === action).length
+      if (count('update')) console.log(chalk.green(`  ${count('update')} file(s) to update in place`))
+      if (count('add')) console.log(chalk.green(`  ${count('add')} new file(s) to add`))
+      if (count('conflict')) console.log(chalk.yellow(`  ${count('conflict')} file(s) you edited — strategy '${effectiveStrategy}'`))
+      pending = await pendingAgentSourceWrites(updates, tempDir, effectiveStrategy)
       if (dryRunReport) {
         dryRunReport.harnessRefresh = {
           status: 'would-apply',
@@ -1151,6 +1229,7 @@ async function refreshHarnessDeposits(manifest: SaaSFoundryManifest, { dryRun, n
   }
 
   console.log()
+  return pending
 }
 
 /**
@@ -1339,7 +1418,8 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     // chains rather than inside either refresh flow: a project already on the
     // current CLI version skips the harness/template refresh entirely, and would
     // otherwise never be offered the setting at all.
-    if (ensureLanguageBlock(manifest) && !dryRun) {
+    const languageBackfilled = ensureLanguageBlock(manifest)
+    if (languageBackfilled && !dryRun) {
       await persistManifest()
     }
 
@@ -1360,6 +1440,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           moduleAddition: { available: [], selected: [], skills: [], wouldRunNpmInstall: false }
         }
       : null
+    if (languageBackfilled) noteManifestWrite(dryRunReport, '.saasfoundry.json', 'language')
 
     // Display project info
     console.log(chalk.blue('\n  SaaSFoundryAI Project Update'))
@@ -1374,6 +1455,9 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     }
     if (dryRun) console.log(chalk.gray('  (dry-run — no files will be written)'))
     console.log()
+
+    // What the template or harness refresh would leave on the agent-instruction sources, on a dry run (#1315).
+    let agentSourcePending: PendingRefreshWrites = new Map()
 
     // ─── FLOW 1: Template updates (version differs) ───
     // Only meaningful for projects scaffolded by `sf new` — the marker is
@@ -1428,6 +1512,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
           if (updates.length === 0) {
             spinner.succeed(chalk.green('No template changes to apply.'))
             if (dryRunReport) dryRunReport.templateUpdate = { status: 'no-changes' }
+            noteManifestWrite(dryRunReport, '.saasfoundry.json', 'version')
             templateRefreshComplete = true
           } else {
             // Preview counts so the user can make an informed decision.
@@ -1465,7 +1550,10 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
             if (!proceed) {
               console.log(chalk.yellow('  Template update skipped. You can re-run `sf update` when ready.\n'))
             } else if (dryRun) {
-              // In dry-run we report but never mutate.
+              // In dry-run we report but never mutate: the agent-instruction preview renders from these bytes (#1315).
+              agentSourcePending = await pendingAgentSourceWrites(updates, tempProjectDir, conflictStrategy)
+              noteManifestWrite(dryRunReport, '.saasfoundry.json', 'version')
+              noteManifestWrite(dryRunReport, '.saasfoundry.json', 'fileHashes')
             } else {
               spinner.start('Applying updates...')
               const packageManifestsBefore = await readPackageManifests(
@@ -1580,7 +1668,7 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
       // no templates to regenerate, but their harness deposits (.claude/skills/
       // sf-*, .claude/docs) follow the CLI version through the same three-way
       // merge as FLOW 1, scoped to the deposit paths.
-      await refreshHarnessDeposits(manifest, { dryRun, nonInteractive, conflictStrategy, dryRunReport, persistManifest })
+      agentSourcePending = await refreshHarnessDeposits(manifest, { dryRun, nonInteractive, conflictStrategy, dryRunReport, persistManifest })
     } else {
       console.log(chalk.green('  Your project is up to date with the current CLI version.\n'))
     }
@@ -1593,12 +1681,34 @@ async function updateCommandInternal(opts: UpdateCommandOptions = {}) {
     // Existing projects may still carry the legacy unconditional SRS hook.
     // Reconcile it even when no modules are selected below.
     if (!dryRun) await reconcileSrsIntentHook('.', Boolean(manifest.tools?.srs?.enabled))
-    if (!dryRun && manifest.modules?.harness?.agents?.length) {
-      await installSelectedAgentInstructions(manifest, manifest.projectName, manifest.modules.harness.agents, persistManifest)
-    } else if (!dryRun && manifest.modules?.harness?.managed && manifest.structure !== 'multirepo') {
-      // A managed harness without an agents list is implicitly Claude Code: it still gets its tier
-      // agents (#929). An adopted (unmanaged) harness and multirepo apps keep their explicit flows.
-      await installSelectedAgentInstructions(manifest, manifest.projectName, undefined, persistManifest, { tierAgentsOnly: true })
+    // The agent instructions follow every update: AGENTS.md's generated region, the host rules, the shared
+    // skill copies, the tier agents and `.codex/hooks.json`. The dry run renders them from the project as the
+    // refresh above would leave it and lists each file the real run writes (#1315).
+    const agentInstructionScope: { agents: HarnessAgent[] | undefined; tierAgentsOnly: boolean } | undefined = manifest.modules?.harness?.agents?.length
+      ? { agents: manifest.modules.harness.agents, tierAgentsOnly: false }
+      : manifest.modules?.harness?.managed && manifest.structure !== 'multirepo'
+        ? // A managed harness without an agents list is implicitly Claude Code: it still gets its tier
+          // agents (#929). An adopted (unmanaged) harness and multirepo apps keep their explicit flows.
+          { agents: undefined, tierAgentsOnly: true }
+        : undefined
+    if (agentInstructionScope && dryRun) {
+      const preview = await previewSelectedAgentInstructions(manifest, manifest.projectName, agentInstructionScope.agents, {
+        tierAgentsOnly: agentInstructionScope.tierAgentsOnly,
+        pending: agentSourcePending
+      })
+      if (dryRunReport && preview.update.length + preview.add.length + preview.conflict.length + preview.remove.length > 0) {
+        dryRunReport.agentInstructions = { update: preview.update, add: preview.add, conflict: preview.conflict, remove: preview.remove }
+      }
+      for (const path of preview.manifests) noteManifestWrite(dryRunReport, path, 'fileHashes')
+      for (const warning of preview.warnings) console.warn(warning)
+      logAgentInstructionsPreview(preview)
+    }
+    for (const write of dryRunReport?.manifestWrites ?? []) console.log(chalk.blue(`  Would rewrite ${write.path} (${write.changes.join(', ')})\n`))
+    if (agentInstructionScope && !dryRun) {
+      const summary = await installSelectedAgentInstructions(manifest, manifest.projectName, agentInstructionScope.agents, persistManifest, {
+        tierAgentsOnly: agentInstructionScope.tierAgentsOnly
+      })
+      logAgentInstructionsSummary(summary)
     }
 
     // `.claude/settings.json` is the one file `sf agents refresh` kept for itself (#935): the delegation capture hooks

@@ -57,6 +57,25 @@ candidats ni demander les secrets fournisseurs.
 
 Un dry-run n'est pas un jeton d'autorisation pour l'application. Relisez-le, gardez un arbre Git propre, puis relancez une commande d'application qui exprime la même intention.
 
+### Chaque fichier que la mise à jour écrit
+
+L'aperçu liste chaque fichier que la vraie mise à jour écrit, sous la section qui l'écrit :
+
+| Section du rapport      | Fichiers                                                                                                                                                                                      |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `templateUpdate`        | Les fichiers d'application générés d'un projet scaffoldé.                                                                                                                                     |
+| `harnessRefresh`        | Les dépôts du harness : `.claude/skills/sf-*` et `.claude/docs/`.                                                                                                                             |
+| `agentInstructions`     | La région générée d'`AGENTS.md`, les règles d'hôte (`.claude/rules/`), les copies partagées des skills (`.agents/skills/`), les agents de palier de chaque hôte déclaré, `.codex/hooks.json`. |
+| `harnessSettings`       | `.claude/settings.json`.                                                                                                                                                                      |
+| `codexInstructionLimit` | `.codex/config.toml`.                                                                                                                                                                         |
+| `manifestWrites`        | `.saasfoundry.json`, avec les parties réécrites (`version`, `fileHashes`, `language`).                                                                                                        |
+
+`agentInstructions` est rendu à partir du projet tel que le rafraîchissement des templates ou du harness le laisserait : un fichier de skill que le rafraîchissement ajoute montre aussi sa copie
+partagée sous `.agents/skills/`. Chaque liste (`update`, `add`, `conflict`, `remove`) contient des chemins relatifs au projet, si bien que les fichiers de chaque hôte se lisent sous leur répertoire.
+L'aperçu lisible les compte par hôte, et la vraie mise à jour se termine sur les mêmes comptes pour ce qu'elle a écrit.
+
+`.codex/hooks.json` compte le plus : Codex ignore un hook dont le texte a changé tant qu'il n'est pas de nouveau approuvé avec `/hooks`.
+
 ## Comparaison des fichiers à trois voies
 
 Pour chaque chemin géré, le CLI compare :
