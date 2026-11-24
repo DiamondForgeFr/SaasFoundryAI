@@ -190,7 +190,8 @@ sf update --non-interactive \
 
 The `--add-modules` flag accepts a comma-separated list:
 
-- `email` — MailerSend transactional mail
+- `email` — MailerSend transactional mail, with a local Mailpit inbox for development (`ports.mail`, `MAIL_CATCHER_URL`); a project generated before the inbox existed gets it from `sf update`, see
+  [Projects created before the mail catcher](/modules/email#projects-created-before-the-mail-catcher)
 - `storage` — S3-compatible object storage (Docker MinIO or external credentials)
 - `analytics` — Umami self-hosted analytics
 - `pwa` — installable web app support, icons, manifest, and service worker

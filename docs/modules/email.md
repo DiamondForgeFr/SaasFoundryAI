@@ -9,6 +9,8 @@ The email module wires a production-grade transactional email provider into the 
 - ✅ **Three flows out of the box** — account confirmation, password reset, user invitation
 - ✅ **i18n ready** — HTML + plain-text templates in English and French
 - ✅ **Dev-friendly default** — without the module, rendered emails are logged to the console
+- ✅ **A local inbox out of the box** — with the module, the dev services start [Mailpit](https://mailpit.axllent.org), and the API sends there instead of to MailerSend: sign up, invite, click the
+  link
 - ✅ **Fully isolated** — emitted through a single `MailerSendService` so you can swap providers later
 - ✅ **Test mode built in** — a fake API key in `.env.test` keeps E2E tests offline
 
@@ -23,6 +25,8 @@ flows). What the module **adds** is the piece that puts bytes on the wire:
 - **Registers the provider** in `email.module.ts`
 - **Enables the E2E spec** by renaming `email.service.disabled-spec.ts` → `email.service.spec.ts`
 - **Writes credentials** into `.env` (production values), `.env.test` (fake test key), and `.github/workflows/deployment.yml` (GitHub Actions secret reference)
+- **Adds a development mail catcher** — a Mailpit service in `docker-compose.dev-services.yml` and a `MAIL_CATCHER_URL` line in the dev `.env` (see
+  [Local development with the mail catcher](#local-development-with-the-mail-catcher))
 
 This is why "without the module" is still useful: you can develop and sign users up locally without any third-party account — the emails just land in your server logs.
 
@@ -61,6 +65,8 @@ The installer will:
 3. Register `MailerSendService` as a provider in `EmailModule`
 4. Rename the disabled unit test so it runs in CI
 5. Replace the `# MAILERSEND_*=` placeholders in `.env`, `.env.test` and `deployment.yml` with real values
+6. Add the Mailpit service to `docker-compose.dev-services.yml` (the file is created when the project hosts no other Docker service), choose its host port, record it as `ports.mail` in
+   `.saasfoundry.json` and set `MAIL_CATCHER_URL` in the dev `.env`
 
 ## Usage
 
@@ -114,6 +120,15 @@ The `FRONTEND_URL` variable (shared across the API) is used to build the confirm
 ```env
 FRONTEND_URL="https://app.myapp.com"
 ```
+
+Optional, **development only** (`apps/api/.env` on your machine, never the deployment workflow):
+
+```env
+MAIL_CATCHER_URL="http://localhost:8025"
+```
+
+While it is set, the API sends every email to the local Mailpit inbox instead of to MailerSend. It is an explicit switch: production cannot fall into it silently, and the API refuses to send through
+it when `NODE_ENV` is `production`.
 
 ### Test mode
 
@@ -174,12 +189,38 @@ apps/api/src/modules/email/
 2. Import it in `translation.service.ts` and extend the dispatch map.
 3. Add the locale to the Prisma `Locale` enum in `prisma/schema/user.prisma`, then run `npx prisma db push` to sync the enum into the dev DB.
 
-## Local development without MailerSend
+## Local development with the mail catcher
+
+A project with the email module can complete a signup or an invitation on your machine: the dev services include [Mailpit](https://mailpit.axllent.org), a mail catcher, and the API's dev `.env` points
+at it.
+
+```bash
+npm run services:up     # in the API app: starts the database, MinIO (if hosted in Docker) and Mailpit
+```
+
+Then sign up, invite a member, or request a password reset: the email lands in the inbox at **http://localhost:8025** (the port is `ports.mail` in `.saasfoundry.json`; another is chosen when 8025 is
+taken, and `sf new` prints the inbox URL with the others). Open the message, click the link.
+
+How it works:
+
+- The `mail-dev` service of `docker-compose.dev-services.yml` runs `axllent/mailpit`. The module adds it **whenever it is installed**, even when neither the database nor the storage runs in Docker.
+  Only the web port is published: the API sends over Mailpit's HTTP API (`POST /api/v1/send`), so there is no SMTP client and no extra dependency.
+- `MAIL_CATCHER_URL` in `apps/api/.env` is the explicit switch. Remove the line (or comment it out) to send through MailerSend again. It is written to the dev `.env` only — never to the deployment
+  workflow or `.env.test` — and the API refuses to use it when `NODE_ENV` is `production`.
+- `sf new` (and `sf resume`) start the inbox together with the database and MinIO you chose to run in Docker. A project that hosts none of them in Docker (a hosted database and bucket) keeps
+  `mail-dev` in the compose for `npm run services:up`: no container is started for someone who never asked for Docker, and `sf new` prints the inbox URL marked as not started.
+- The inbox keeps no volume: recreating the container empties it.
+- `.env` is not committed: set `MAIL_CATCHER_URL` in each clone's `.env` that should use the catcher.
+
+`sf new --email-service none` is unchanged: no email module, no send, and the confirmation token stays in the API log.
+
+### Without the module
 
 The module is **optional on purpose**. If you do not install it, every auth flow still works — the rendered HTML and text are `console.log`ed in the API server window. Use this during feature
-development; install the module when you need real deliverability (staging, production, or when you want to click through a real link).
+development; install the module when you need a real inbox (the catcher above) or real deliverability (staging, production).
 
-To force the dev-log behaviour even with the module installed (e.g. on a feature branch where you do not want to send real email), point `MAILERSEND_API_KEY` at the fake test key:
+To force the dev-log behaviour even with the module installed and no catcher (e.g. on a feature branch where you do not want to send real email), remove `MAIL_CATCHER_URL` and point
+`MAILERSEND_API_KEY` at the fake test key:
 
 ```env
 MAILERSEND_API_KEY="ms_test_fake_key_12345abcdef67890ghijklmnopqrstuvwxyz"
@@ -212,6 +253,15 @@ The MailerSend API is unreachable from your server. Check:
 - Outbound HTTPS to `api.mailersend.com` is allowed (corporate proxies, VPC egress rules).
 - `MAILERSEND_API_KEY` is set (not `undefined` or a placeholder). The log on service init prints the first 5 chars of the key — if it shows `undefi`, the env var is missing.
 
+### "The mail catcher at http://localhost:8025 did not answer"
+
+`MAIL_CATCHER_URL` is set in `apps/api/.env` but Mailpit is not running. Start it with `npm run services:up` (or `docker compose -f docker-compose.dev-services.yml up -d mail-dev`, or `sf resume`), or
+remove the line to send through MailerSend. If the port moved, `ports.mail` in `.saasfoundry.json` and the port in `MAIL_CATCHER_URL` must agree.
+
+### "MAIL_CATCHER_URL is a development setting"
+
+The API runs with `NODE_ENV=production` and `MAIL_CATCHER_URL` set. Remove it from that environment: the catcher is for development only.
+
 ### Test emails are being sent against a real account
 
 You are running the non-test config against a live key. Verify `NODE_ENV=test` or your runner loads `.env.test`, not `.env`. The scaffolded Jest config already does this; if you changed it, switch
@@ -229,6 +279,18 @@ any other file: if you edit `email.service.ts` after install, subsequent updates
 
 The clean way to upgrade: keep your template customisations in the `locales/` and `templates/` folders (which the installer never touches), not in `email.service.ts` — the service file should stay
 close to the blueprint so template updates apply cleanly.
+
+### Projects created before the mail catcher
+
+A project whose `modules.email.version` is 1 gets the catcher from `sf update` (the email module migration, v1 → v2). It:
+
+- adds the `mail-dev` service to `docker-compose.dev-services.yml` (creating the file when the project has none) on the first free host port from 8025, and records it as `ports.mail`;
+- sets `MAIL_CATCHER_URL` in `apps/api/.env`, unless that file already sets it, so **your emails go to the inbox from then on** — remove the line to keep sending through MailerSend;
+- rewrites `mailersend.service.ts` and adds the optional `MAIL_CATCHER_URL` to `env.service.ts`. A file you edited is left as it is: the change is written next to it as `<file>.saasfoundry.new`, and
+  the two files always move together, so a service that reads the variable never meets a schema that does not declare it. Merge the sidecars, then the catcher is on;
+- changes nothing in a project without the module (`--email-service none`).
+
+`sf update --dry-run` lists these changes without making them. Start the inbox with `npm run services:up` in the API app.
 
 ## Next steps
 

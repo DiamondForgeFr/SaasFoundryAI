@@ -27,6 +27,7 @@ Exécutez la commande depuis la racine du projet, c'est-à-dire le dossier qui c
 | `dependencies`   | N'installe que ce qui manque : workspace racine en monorepo, API et web sinon  |
 | `dev services`   | Démarre le conteneur de base de données, sauf si son port répond déjà          |
 | `storage`        | Démarre les conteneurs MinIO, sauf si le port de la console répond déjà        |
+| `mail catcher`   | Avec le module email et un service Docker, démarre Mailpit sauf s'il répond    |
 | `database setup` | Applique le schéma, les fonctions SQL, les déclencheurs et les jeux de données |
 | `ORM client`     | Régénère le client Prisma                                                      |
 

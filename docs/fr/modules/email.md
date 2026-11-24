@@ -9,6 +9,7 @@ Le module relie un fournisseur transactionnel de production aux parcours d'authe
 - ✅ confirmation de compte, réinitialisation du mot de passe et invitation ;
 - ✅ modèles HTML et texte en anglais et en français ;
 - ✅ mode développement sans fournisseur, avec rendu dans les logs ;
+- ✅ boîte de réception locale prête à l'emploi : avec le module, les services de développement démarrent [Mailpit](https://mailpit.axllent.org) et l'API y envoie ses emails au lieu de MailerSend ;
 - ✅ fournisseur isolé derrière un unique `MailerSendService` ;
 - ✅ clé factice en test pour garder les E2E hors ligne.
 
@@ -20,7 +21,9 @@ Le socle contient déjà `EmailService`, la traduction et les six modèles. Le m
 - activation des marqueurs `TODO mailer-service-active:` dans les services concernés ;
 - enregistrement du provider dans `email.module.ts` ;
 - activation du test E2E en renommant `email.service.disabled-spec.ts` ;
-- configuration de `.env`, `.env.test` et de la référence au secret GitHub Actions.
+- configuration de `.env`, `.env.test` et de la référence au secret GitHub Actions ;
+- capteur d'emails de développement : un service Mailpit dans `docker-compose.dev-services.yml` et une ligne `MAIL_CATCHER_URL` dans le `.env` de développement (voir
+  [Développement local avec le capteur d'emails](#developpement-local-avec-le-capteur-d-emails)).
 
 Sans le module, les parcours fonctionnent et les emails rendus apparaissent dans les logs du serveur.
 
@@ -45,7 +48,9 @@ sf update --add-modules email \
   --mailersend-sender-name "My SaaS App"
 ```
 
-L'installateur copie le service, active les marqueurs, enregistre le provider, active le test et remplace les placeholders de configuration.
+L'installateur copie le service, active les marqueurs, enregistre le provider, active le test et remplace les placeholders de configuration. Il ajoute aussi le service Mailpit à
+`docker-compose.dev-services.yml` (le fichier est créé si le projet n'héberge aucun autre service Docker), choisit son port hôte, l'enregistre comme `ports.mail` dans `.saasfoundry.json` et renseigne
+`MAIL_CATCHER_URL` dans le `.env` de développement.
 
 ## Les trois parcours intégrés
 
@@ -88,6 +93,15 @@ FRONTEND_URL="https://app.myapp.com"
 ```
 
 `FRONTEND_URL` sert aux liens de confirmation, reset et invitation.
+
+Facultative, **réservée au développement** (le `apps/api/.env` de votre machine, jamais le workflow de déploiement) :
+
+```env
+MAIL_CATCHER_URL="http://localhost:8025"
+```
+
+Tant qu'elle est définie, l'API envoie tous les emails à la boîte Mailpit locale au lieu de MailerSend. C'est un interrupteur explicite : la production ne peut pas y basculer en silence, et l'API
+refuse de l'utiliser lorsque `NODE_ENV` vaut `production`.
 
 ### Mode test
 
@@ -142,12 +156,38 @@ apps/api/src/modules/email/
 2. Importez-la dans `translation.service.ts` et étendez la table de dispatch.
 3. Ajoutez la locale à l'enum Prisma `Locale` dans `prisma/schema/user.prisma`, puis synchronisez la base de développement.
 
-## Développement local sans MailerSend
+## Développement local avec le capteur d'emails
 
-L'absence du module est un mode de développement valide : les contenus rendus sont journalisés. Installez le provider lorsque la délivrabilité réelle devient nécessaire.
+Un projet qui a le module email peut terminer une inscription ou une invitation sur votre machine : les services de développement incluent [Mailpit](https://mailpit.axllent.org), un capteur d'emails,
+et le `.env` de développement de l'API le désigne.
 
-Avec le module installé, évitez une vraie clé sur une branche de fonctionnalité. La clé factice provoque un rejet explicite sans contacter un compte de production ; les logs conservent le contenu de
-débogage.
+```bash
+npm run services:up     # dans l'app API : démarre la base, MinIO (s'il est hébergé dans Docker) et Mailpit
+```
+
+Inscrivez-vous, invitez un membre ou demandez une réinitialisation de mot de passe : l'email arrive dans la boîte **http://localhost:8025** (le port est `ports.mail` dans `.saasfoundry.json` ; un
+autre est choisi quand 8025 est pris, et `sf new` affiche l'URL de la boîte avec les autres). Ouvrez le message, cliquez sur le lien.
+
+Fonctionnement :
+
+- Le service `mail-dev` de `docker-compose.dev-services.yml` exécute `axllent/mailpit`. Le module l'ajoute **dès qu'il est installé**, même quand ni la base ni le stockage ne tournent dans Docker.
+  Seul le port web est publié : l'API envoie par l'API HTTP de Mailpit (`POST /api/v1/send`), donc sans client SMTP ni dépendance supplémentaire.
+- `MAIL_CATCHER_URL` dans `apps/api/.env` est l'interrupteur explicite. Supprimez la ligne (ou commentez-la) pour envoyer de nouveau par MailerSend. Elle n'est écrite que dans le `.env` de
+  développement, jamais dans le workflow de déploiement ni dans `.env.test`, et l'API refuse de l'utiliser lorsque `NODE_ENV` vaut `production`.
+- `sf new` (et `sf resume`) démarrent la boîte avec la base et MinIO que vous avez choisi d'exécuter dans Docker. Un projet qui n'en héberge aucun dans Docker (base et bucket hébergés) garde
+  `mail-dev` dans le compose pour `npm run services:up` : aucun conteneur n'est lancé pour quelqu'un qui n'a jamais demandé Docker, et `sf new` affiche l'URL de la boîte marquée comme non démarrée.
+- La boîte n'a pas de volume : recréer le conteneur la vide.
+- `.env` n'est pas versionné : renseignez `MAIL_CATCHER_URL` dans le `.env` de chaque clone qui doit utiliser le capteur.
+
+`sf new --email-service none` ne change pas : pas de module email, pas d'envoi, et le jeton de confirmation reste dans le log de l'API.
+
+### Sans le module
+
+L'absence du module est un mode de développement valide : les contenus rendus sont journalisés. Installez le module lorsqu'il vous faut une vraie boîte (le capteur ci-dessus) ou la délivrabilité
+réelle (préproduction, production).
+
+Avec le module installé et sans capteur, évitez une vraie clé sur une branche de fonctionnalité : supprimez `MAIL_CATCHER_URL` et utilisez la clé factice. Elle provoque un rejet explicite sans
+contacter un compte de production ; les logs conservent le contenu de débogage.
 
 ## Configurer le compte MailerSend
 
@@ -169,6 +209,15 @@ débogage.
 
 Vérifiez l'accès HTTPS sortant à `api.mailersend.com` et la présence de `MAILERSEND_API_KEY`.
 
+### « The mail catcher at http://localhost:8025 did not answer »
+
+`MAIL_CATCHER_URL` est défini dans `apps/api/.env` mais Mailpit ne tourne pas. Démarrez-le avec `npm run services:up` (ou `docker compose -f docker-compose.dev-services.yml up -d mail-dev`, ou
+`sf resume`), ou supprimez la ligne pour envoyer par MailerSend. Si le port a changé, `ports.mail` dans `.saasfoundry.json` et le port de `MAIL_CATCHER_URL` doivent concorder.
+
+### « MAIL_CATCHER_URL is a development setting »
+
+L'API tourne avec `NODE_ENV=production` et `MAIL_CATCHER_URL` défini. Retirez la variable de cet environnement : le capteur est réservé au développement.
+
 ### Les tests envoient réellement
 
 Vérifiez `NODE_ENV=test` et le chargement de `.env.test`, jamais `.env`.
@@ -182,6 +231,20 @@ Testez dans de vrais clients email. Les règles inline et le support CSS diffèr
 Les fichiers activés diffèrent du blueprint initial. Le merge à trois voies considère vos modifications comme du contenu utilisateur et propose des conflits au lieu de réappliquer les marqueurs.
 
 Gardez les personnalisations dans `locales/` et `templates/`, que l'installateur ne réécrit pas, afin que les mises à jour de service restent propres.
+
+### Projets créés avant le capteur d'emails
+
+Un projet dont `modules.email.version` vaut 1 reçoit le capteur par `sf update` (la migration du module email, v1 → v2). Elle :
+
+- ajoute le service `mail-dev` à `docker-compose.dev-services.yml` (en créant le fichier si le projet n'en a pas), sur le premier port hôte libre à partir de 8025, et l'enregistre comme `ports.mail` ;
+- renseigne `MAIL_CATCHER_URL` dans `apps/api/.env`, sauf si ce fichier le définit déjà : **vos emails vont donc dans la boîte dès cette mise à jour**, supprimez la ligne pour continuer d'envoyer par
+  MailerSend ;
+- réécrit `mailersend.service.ts` et ajoute la variable facultative `MAIL_CATCHER_URL` à `env.service.ts`. Un fichier que vous avez modifié reste tel quel : le changement est écrit à côté, dans
+  `<fichier>.saasfoundry.new`, et les deux fichiers avancent toujours ensemble, de sorte qu'un service qui lit la variable ne rencontre jamais un schéma qui ne la déclare pas. Fusionnez les sidecars,
+  et le capteur est actif ;
+- ne change rien dans un projet sans le module (`--email-service none`).
+
+`sf update --dry-run` liste ces changements sans les appliquer. Démarrez la boîte avec `npm run services:up` dans l'app API.
 
 ## Étapes suivantes
 

@@ -156,7 +156,9 @@ npm run services:up
 La commande délègue à `apps/api/docker-compose.dev-services.yml` et démarre :
 
 - PostgreSQL sur le port 5435 ;
-- MinIO S3 sur le port 9000, avec la console sur 9001.
+- MinIO S3 sur le port 9000, avec la console sur 9001 ;
+- Mailpit, la boîte mail du [module email](/fr/modules/email), sur le port 8025 : tant que `MAIL_CATCHER_URL` est défini dans `apps/api/.env`, les emails de confirmation et d'invitation arrivent sur
+  http://localhost:8025 au lieu de partir chez MailerSend, ce qui permet de s'inscrire et de cliquer sur le lien en local.
 
 Les services rejoignent le réseau Docker du projet, `<projet>-network`, que partagent les conteneurs de l'API et du web. La commande le crée d'abord s'il n'existe pas encore : elle fonctionne donc
 aussi sur un clone neuf, et `npm run services:down` le laisse en place.
@@ -167,7 +169,7 @@ Vérifiez que les services fonctionnent :
 docker ps
 ```
 
-Vous devez voir `saasfoundry-db-dev` et `saasfoundry-s3-dev`, ainsi que `saasfoundry-s3-init` au premier démarrage.
+Vous devez voir `saasfoundry-db-dev` et `saasfoundry-s3-dev`, ainsi que `saasfoundry-s3-init` au premier démarrage et `saasfoundry-mail-dev` lorsque le module email est installé.
 
 ### Initialiser la base de données
 

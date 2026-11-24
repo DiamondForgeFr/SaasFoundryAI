@@ -36,7 +36,7 @@ La sélection exacte est enregistrée dans `.saasfoundry.json`, afin que le CLI 
   "structure": "monorepo",
   "modules": {
     "harness": { "version": 1 },
-    "email": { "provider": "mailersend", "version": 1 }
+    "email": { "provider": "mailersend", "version": 2 }
   }
 }
 ```
@@ -316,8 +316,8 @@ Optionnel signifie **pris en charge et installable**, pas activé dans chaque sc
 
 ### E-mail transactionnel
 
-Le [module E-mail](/fr/modules/email) active MailerSend pour la confirmation de compte, la réinitialisation du mot de passe et les invitations. Sans lui, les mêmes templates et parcours restent
-testables localement via les logs de développement.
+Le [module E-mail](/fr/modules/email) active MailerSend pour la confirmation de compte, la réinitialisation du mot de passe et les invitations, et ajoute une boîte Mailpit locale aux services de
+développement : une inscription ou une invitation se termine sur votre machine. Sans lui, les mêmes templates et parcours restent testables localement via les logs de développement.
 
 ```bash
 sf update --add-modules email \

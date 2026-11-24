@@ -27,6 +27,7 @@ Run it from the project root — the directory holding `.saasfoundry.json`.
 | `dependencies`   | Installs only what is missing — the root workspace in a monorepo, api and web otherwise |
 | `dev services`   | Starts the database container, unless something already answers on its port             |
 | `storage`        | Starts the MinIO containers, unless the console port already answers                    |
+| `mail catcher`   | With the email module and a Docker service, starts the Mailpit inbox unless it answers  |
 | `database setup` | Applies the schema, SQL functions, triggers and datasets                                |
 | `ORM client`     | Regenerates the Prisma client                                                           |
 

@@ -285,7 +285,7 @@ export const envSchema = z.object({
   "structure": "monorepo",
   "projectName": "my-saas",
   "modules": {
-    "email": { "provider": "mailersend", "version": 1 },
+    "email": { "provider": "mailersend", "version": 2 },
     "s3Setup": "docker",
     "includeAnalytics": true
   },

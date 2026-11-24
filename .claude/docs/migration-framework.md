@@ -83,6 +83,14 @@ export interface ModuleInstaller {
 - Same `from`/`to`/`name` discipline as manifest migrations, but per module.
 - `up` mutates files in `projectDir`. The dispatcher (not the migration) bumps `manifest.modules.<name>.version` on success.
 - Use `writeMigratedFile` from `src/migrations/module/conflict.ts` instead of `fs.writeFile` so user-edited files fall back to a `.saasfoundry.new` sidecar — same UX as the 3-way template merge.
+- `up` may return a `ModuleMigrationManifestPatch` (`src/migrations/module/types.ts`) for what only the migration can know and the manifest must record: the complete `ports` block when it chose a
+  port, and `fileHashes` for the template files it rewrote in place. The dispatcher merges the patch into the manifest it returns, never into the one `up` received. Return the new baseline of every
+  file written in place: without it the template update that follows `sf update` reads the file the migration just wrote as a file the user edited, and reports a conflict nobody made as soon as the
+  template moves again. A file that went to a sidecar keeps its old baseline, it is still the user's.
+- A migration that rewrites a **template** file must produce what a fresh `sf new` renders, byte for byte, from the same shared helpers the installer uses (a unit test compares the two). The module
+  installer holds the chain, so a helper both need lives in a third file (`email.service-template.ts`), never in an import cycle.
+- Files that depend on each other move together: when one of them cannot be written in place, propose all of them as sidecars (the email v1 → v2 migration holds the service back when the schema it
+  reads is edited).
 
 ### How to add one
 
@@ -127,6 +135,12 @@ export const emailInstallerMeta: ModuleInstaller = {
 
 If the user has hand-edited `mailersend.service.ts`, both writes land as `.saasfoundry.new` sidecars and the user reconciles manually. If untouched, the migration runs in-place and
 `modules.email.version` jumps to 2.
+
+The example above is hypothetical; the shipped one is the same module's `add-dev-mail-catcher` (v1 → v2, #976, `src/installers/email.migrations.ts`). A project generated before the development mail
+catcher gets, from `sf update`: the Mailpit service in `docker-compose.dev-services.yml` (created when the project has none), `MAIL_CATCHER_URL` in the local `.env`, the service and the environment
+schema that read it, and `ports.mail` in the manifest, on the first free port from 8025. It shows the three things a migration of a module that owns published ports needs: the free-port choice
+(`resolveMailCatcherPort`, which returns a recorded port untouched), the manifest patch, and a `preview` for `sf update --dry-run`. The new `ports.mail` field itself needed no manifest migration: an
+additive optional field with a default (8025) for the manifests that lack it (see "When NOT to add a migration").
 
 ---
 

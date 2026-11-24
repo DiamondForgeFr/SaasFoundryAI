@@ -192,7 +192,8 @@ sf update --non-interactive \
 
 `--add-modules` accepte une liste séparée par des virgules :
 
-- `email` — e-mail transactionnel MailerSend ;
+- `email` — e-mail transactionnel MailerSend, avec une boîte Mailpit locale pour le développement (`ports.mail`, `MAIL_CATCHER_URL`) ; un projet généré avant la boîte la reçoit de `sf update`, voir
+  [Projets créés avant le capteur d'emails](/fr/modules/email#projets-crees-avant-le-capteur-d-emails) ;
 - `storage` — stockage objet compatible S3, via MinIO Docker ou identifiants externes ;
 - `analytics` — analytics Umami auto-hébergés ;
 - `pwa` — application installable, icônes, manifeste et service worker ;
