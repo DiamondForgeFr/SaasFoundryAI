@@ -6,6 +6,12 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le pr
 
 ## [Non publié]
 
+### Corrigé
+
+- `sf update --dry-run` liste chaque fichier que la vraie mise à jour écrit : la région générée d'`AGENTS.md`, `.claude/rules/`, les copies partagées des skills sous `.agents/skills/`, les agents de
+  palier de chaque hôte déclaré et `.codex/hooks.json` (`agentInstructions`), ainsi que le manifeste (`manifestWrites`). La vraie mise à jour se termine sur les mêmes fichiers, comptés par hôte
+  ([#1315](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1315)).
+
 ## [1.3.0] - 2026-11-23
 
 Kimi Code fonctionne désormais comme agent de code aux côtés de Claude Code et de Codex, avec son propre routage et ses agents de palier. Le garde-fou refuse les lignes shell qu'il ne peut pas

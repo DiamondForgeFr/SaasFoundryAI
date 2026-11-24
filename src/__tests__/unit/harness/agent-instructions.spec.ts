@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
@@ -18,6 +19,7 @@ import {
   normalizeSkill,
   installPlannedAgentInstructions,
   planAgentInstructions,
+  previewPlannedAgentInstructions,
   resolveInstructionFile,
   STATUS_OUTPUT_INSTRUCTIONS,
   TICKET_FIRST_INSTRUCTIONS,
@@ -916,5 +918,62 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
     expect(refreshed).toContain('## Reading the project status')
     expect(refreshed).toContain('My notes.')
     expect(refreshed).not.toContain('old text')
+  })
+})
+
+// #1315 — the dry run classifies a plan the way its installation acts on it, and writes nothing.
+describe('previewPlannedAgentInstructions', () => {
+  let root: string
+  const hash = (content: string) => createHash('sha256').update(content).digest('hex')
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'sf-agent-preview-'))
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  const put = async (path: string, content: string) => {
+    await mkdir(dirname(join(root, path)), { recursive: true })
+    await writeFile(join(root, path), content)
+  }
+
+  it('matches what installPlannedAgentInstructions then does', async () => {
+    await put('current.md', 'same\n')
+    await put('outdated.md', 'old\n')
+    await put('edited.md', 'mine\n')
+    await put('AGENTS.md', 'project region\n')
+    await put('.agents/skills/sf-x/retired.md', 'retired\n')
+    await put('.agents/skills/sf-x/kept.md', 'edited retired\n')
+    const baselines = {
+      'outdated.md': hash('old\n'),
+      'edited.md': hash('template\n'),
+      '.agents/skills/sf-x/retired.md': hash('retired\n'),
+      '.agents/skills/sf-x/kept.md': hash('original\n')
+    }
+    const file = (path: string, content: string, merge = false) => ({ path, content: Buffer.from(content), mode: 0o644, ...(merge ? { merge } : {}) })
+    const plan = {
+      files: [file('current.md', 'same\n'), file('outdated.md', 'new\n'), file('edited.md', 'new\n'), file('new.md', 'new\n'), file('AGENTS.md', 'refreshed region\n', true)],
+      warnings: [],
+      retired: ['.agents/skills/sf-x/retired.md', '.agents/skills/sf-x/kept.md', '.agents/skills/sf-x/gone.md']
+    }
+
+    const preview = await previewPlannedAgentInstructions(root, plan, baselines)
+
+    expect(preview).toMatchObject({
+      update: ['outdated.md', 'AGENTS.md'],
+      add: ['new.md'],
+      conflict: ['edited.md'],
+      remove: ['.agents/skills/sf-x/retired.md'],
+      recordsBaselines: true
+    })
+    expect(await readFile(join(root, 'outdated.md'), 'utf8')).toBe('old\n')
+
+    const report = await installPlannedAgentInstructions(root, plan, baselines)
+    expect([...report.written].sort()).toEqual([...preview.update, ...preview.add].sort())
+    expect(report.added).toEqual(preview.add)
+    expect(report.conflicts).toEqual(preview.conflict)
+    expect(report.removed).toEqual(preview.remove)
   })
 })

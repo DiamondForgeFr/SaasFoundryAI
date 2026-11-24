@@ -55,6 +55,25 @@ would make (`moduleMigrations`), module selections, profile-transition blockers,
 
 A dry run does not become an authorization token for a normal update. Review it, keep the Git tree clean, then run the apply command with the same intent.
 
+### Every file the update writes
+
+The preview lists every file the real update writes, under the section that writes it:
+
+| Report section          | Files                                                                                                                                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `templateUpdate`        | The generated application files of a scaffolded project.                                                                                                                          |
+| `harnessRefresh`        | The harness deposits: `.claude/skills/sf-*` and `.claude/docs/`.                                                                                                                  |
+| `agentInstructions`     | The generated region of `AGENTS.md`, the host rules (`.claude/rules/`), the shared skill copies (`.agents/skills/`), the tier agents of every declared host, `.codex/hooks.json`. |
+| `harnessSettings`       | `.claude/settings.json`.                                                                                                                                                          |
+| `codexInstructionLimit` | `.codex/config.toml`.                                                                                                                                                             |
+| `manifestWrites`        | `.saasfoundry.json`, with the parts rewritten (`version`, `fileHashes`, `language`).                                                                                              |
+
+`agentInstructions` is rendered from the project as the template or harness refresh would leave it: a skill file the refresh adds also shows its shared copy under `.agents/skills/`. Each list
+(`update`, `add`, `conflict`, `remove`) holds project-relative paths, so the files of each host read under their directory. The human-readable preview counts them per host, and the real update closes
+with the same counts for what it wrote.
+
+`.codex/hooks.json` matters most: Codex skips a hook whose text changed until it is trusted again with `/hooks`.
+
 ## Three-way file comparison
 
 For each managed path, the CLI compares:

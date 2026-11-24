@@ -9,6 +9,8 @@ import type { Answers, DbCredentials, S3Credentials } from '../types'
 import { parseWorkflowFlag } from './workflow-flag'
 
 export type ConflictStrategy = 'keep' | 'replace' | 'save-new'
+/** The parts of a manifest an update rewrites: the CLI version it follows, the file baselines, the language block. */
+export type ManifestWriteChange = 'version' | 'fileHashes' | 'language'
 export type UpdateTargetProfile = 'full'
 
 export interface UpdateCommandOptions {
@@ -139,6 +141,22 @@ export interface UpdateDryRunReport {
         add: string[]
         conflict: string[]
       }
+  /**
+   * What the real update would write when it refreshes the agent instructions (#1315): the generated region
+   * of `AGENTS.md`, the host rules (`.claude/rules/`), the shared skill copies (`.agents/skills/`), the tier
+   * agents of every declared host and `.codex/hooks.json`. Rendered from the project as the template or
+   * harness refresh above would leave it. Absent when nothing would change.
+   */
+  agentInstructions?: {
+    update: string[]
+    add: string[]
+    /** Edited since their baseline: kept, with a `.saasfoundry.new` proposal. */
+    conflict: string[]
+    /** Shared skill copies no longer generated and never edited. */
+    remove: string[]
+  }
+  /** The manifests the real update would rewrite, and which of their parts (#1315). Absent when none. */
+  manifestWrites?: Array<{ path: string; changes: ManifestWriteChange[] }>
   moduleAddition: {
     available: string[]
     selected: string[]
@@ -167,6 +185,18 @@ export function parseTargetProfile(value: string | undefined): UpdateTargetProfi
 }
 
 /** Validate output-mode combinations before update performs any I/O. */
+/** Record on a dry-run report that the real update would rewrite `path`'s `change` (#1315). */
+export function noteManifestWrite(report: UpdateDryRunReport | null, path: string, change: ManifestWriteChange): void {
+  if (!report) return
+  const writes = (report.manifestWrites ??= [])
+  let entry = writes.find((write) => write.path === path)
+  if (!entry) {
+    entry = { path, changes: [] }
+    writes.push(entry)
+  }
+  if (!entry.changes.includes(change)) entry.changes.push(change)
+}
+
 export function validateUpdateOutputOptions(opts: Pick<UpdateCommandOptions, 'dryRun' | 'json'>): void {
   if (opts.json === true && opts.dryRun !== true) throw new Error('The --json option requires --dry-run.')
 }

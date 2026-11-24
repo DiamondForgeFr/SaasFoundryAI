@@ -169,6 +169,10 @@ Human-readable diagnostics go to stderr; stdout remains parseable. For example, 
 
 Pair this with `sf update --dry-run --json > report.json` in CI to surface upcoming changes before they reach the working branch.
 
+The report lists every file the real update writes: the template and harness refreshes (`templateUpdate`, `harnessRefresh`), the agent instructions (`agentInstructions`: the generated region of
+`AGENTS.md`, `.claude/rules/`, `.agents/skills/`, the tier agents and `.codex/hooks.json`), `.claude/settings.json` (`harnessSettings`), `.codex/config.toml` (`codexInstructionLimit`) and the manifest
+(`manifestWrites`). See [`sf update`](../cli/sf-update.md#every-file-the-update-writes).
+
 ## Adding modules post-generation
 
 The second flow is independent of the template update. Modules you skipped at `sf new` stay available forever — `sf update` detects them and offers to install:
