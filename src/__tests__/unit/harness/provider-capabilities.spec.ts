@@ -109,8 +109,15 @@ describe('a missing capability always says why (AC-3)', () => {
   })
 
   // FR-MAH-021: the identity is the explicit id and nothing else, so a name that looks like Kimi is no Kimi
-  it.each(['kimi-code', 'Kimi', 'moonshot', 'k3', 'kimi-k3', 'claude-code-kimi'])('does not read %s as the coding agent kimi', (name) => {
+  it.each(['moonshot', 'k3', 'kimi-k3', 'claude-code-kimi'])('does not read %s as the coding agent kimi, and has no suggestion either', (name) => {
     expect(() => parseRoutingProvider(name)).toThrow(`'${name}' is not a registered coding agent. Routed coding agents: claude-code, codex, kimi.`)
+    expect(findAgentProfile(name)).toBeUndefined()
+    expect(hasCapability(name, 'routing')).toBe(false)
+  })
+
+  // #1301: a name that is only a spelling of the registered id is still refused, and the refusal names the id
+  it.each(['kimi-code', 'Kimi', 'kimi_code', 'KIMI CODE'])('refuses %s, never reads it as kimi, and suggests kimi', (name) => {
+    expect(() => parseRoutingProvider(name)).toThrow(`'${name}' is not a registered coding agent. Did you mean kimi? Routed coding agents: claude-code, codex, kimi.`)
     expect(findAgentProfile(name)).toBeUndefined()
     expect(hasCapability(name, 'routing')).toBe(false)
   })

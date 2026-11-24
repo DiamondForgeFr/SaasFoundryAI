@@ -277,8 +277,50 @@ export function isHarnessAgent(value: unknown): value is HarnessAgent {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(profiles, value)
 }
 
+/** A name reduced to its letters and digits, so `kimi-code`, `kimi_code` and `Kimi Code` read the same. */
+const nameKey = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+/** Whether two keys are equal or differ by one inserted, deleted or replaced character. */
+function withinOneEdit(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false
+  let index = 0
+  while (index < a.length && index < b.length && a[index] === b[index]) index++
+  if (index === a.length && index === b.length) return true
+  if (a.length === b.length) return a.slice(index + 1) === b.slice(index + 1)
+  return a.length > b.length ? a.slice(index + 1) === b.slice(index) : a.slice(index) === b.slice(index + 1)
+}
+
+/**
+ * The registered id a name that no profile registers most likely meant: it spells an id or a display name apart from
+ * case and punctuation (`kimi-code`, `Kimi`, `kimi_code`), or with one typo. It is a hint for the developer, never an
+ * identity: no command accepts, infers or aliases the name it is given (FR-MAH-021), and a name with no close match has
+ * no suggestion.
+ */
+export function suggestAgentId(name: unknown): HarnessAgent | undefined {
+  if (typeof name !== 'string' || isHarnessAgent(name)) return undefined
+  const key = nameKey(name)
+  if (key.length < 4) return undefined
+  return getAgentIds().find((id) => [id, profiles[id].displayName].some((label) => withinOneEdit(key, nameKey(label))))
+}
+
+/** ` Did you mean kimi?` for a name that is close to a registered id, and nothing for any other name. */
+export function agentSuggestion(name: unknown): string {
+  const suggestion = suggestAgentId(name)
+  return suggestion ? ` Did you mean ${suggestion}?` : ''
+}
+
+/**
+ * What a command says about each requested name no profile registers, with the hint when one is close: the same words
+ * in `enable`, `replace`, `adopt`, `list` (a manifest that declares such a name) and `route`. Empty when every name is registered.
+ */
+export function unregisteredAgentNotice(requested: unknown): string {
+  const names = Array.isArray(requested) ? requested : [requested]
+  const unregistered = [...new Set(names.filter((name): name is string => typeof name === 'string' && !isHarnessAgent(name)))]
+  return unregistered.map((name) => `'${name}' is not a registered coding agent.${agentSuggestion(name)}`).join(' ')
+}
+
 export function getAgentProfile(id: string): AgentProfile {
-  if (!isHarnessAgent(id)) throw new Error(`Unknown coding agent '${id}'. Supported profiles: ${getAgentIds().join(', ')}. Model names and providers are separate.`)
+  if (!isHarnessAgent(id)) throw new Error(`Unknown coding agent '${id}'.${agentSuggestion(id)} Supported profiles: ${getAgentIds().join(', ')}. Model names and providers are separate.`)
   const profile = profiles[id]
   return {
     ...profile,

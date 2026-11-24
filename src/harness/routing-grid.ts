@@ -1,4 +1,4 @@
-import { agentsWith, capabilityLimitation, findAgentProfile, getAgentProfile, hasCapability, type RoutingProvider } from './agent-registry'
+import { agentsWith, agentSuggestion, capabilityLimitation, findAgentProfile, getAgentProfile, hasCapability, type RoutingProvider } from './agent-registry'
 import { adjustConfigIssues, type RoutingAdjustConfig } from './routing-adjust-config'
 import gridData from './routing-grid.json'
 import { createExecutionCandidateId } from '../execution/catalogue'
@@ -288,11 +288,12 @@ const routedAgents = (): string => `Routed coding agents: ${ROUTING_PROVIDERS.jo
 
 /**
  * Why an agent has no route, naming the limitation its profile documents (FR-MAH-020): never a bare "no routing". An
- * agent nobody registered has no profile and so no reason, and is said to be unregistered.
+ * agent nobody registered has no profile and so no reason, and is said to be unregistered, with a hint when its name is
+ * close to a registered id (`Did you mean kimi?`): the name is still refused, never read as the id it resembles.
  */
 export function routingUnavailableReason(id: string): string {
   const profile = findAgentProfile(id)
-  if (!profile) return `'${id}' is not a registered coding agent.`
+  if (!profile) return `'${id}' is not a registered coding agent.${agentSuggestion(id)}`
   return `${id} (${profile.displayName}) cannot be routed: ${capabilityLimitation(id, 'routing') ?? 'its profile declares no routing.'}`
 }
 

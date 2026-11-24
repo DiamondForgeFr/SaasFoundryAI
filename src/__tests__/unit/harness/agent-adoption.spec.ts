@@ -66,6 +66,8 @@ describe('safe existing-project agent adoption (#649)', () => {
     expect(invalid.prerequisites.join(' ')).toMatch(/Invalid JSON|Unexpected token/)
     await expect(apply(['codex'], invalid.planId, 'shared')).rejects.toThrow('conflicts or missing prerequisites')
     await expect(plan(['gpt-5'], 'shared')).rejects.toThrow('Choose coding agents')
+    // #1301: a name that is close to a registered id is still refused, and the refusal names the id as a suggestion
+    await expect(plan(['codex', 'kimi-code'], 'shared')).rejects.toThrow("'kimi-code' is not a registered coding agent. Did you mean kimi? Choose coding agents")
     expect(await get('.saasfoundry.json')).toBe(before)
     await missing('AGENTS.md')
   })

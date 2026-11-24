@@ -4,7 +4,7 @@ import { join, resolve } from 'path'
 
 import { inspectInstructionSource, AgentInstructionPlan } from './agent-instructions'
 import { enableAgents, replaceAgents, AgentSupportResult, AgentSelectionMode } from './agent-support'
-import { agentsWith, getAgentIds, getAgentProfile, isHarnessAgent } from './agent-registry'
+import { agentsWith, getAgentIds, getAgentProfile, isHarnessAgent, unregisteredAgentNotice } from './agent-registry'
 import type { HarnessAgent } from '../types'
 
 export interface AgentAdoptionPlan {
@@ -72,7 +72,10 @@ async function buildAdoptionPlan(params: AdoptionParams, capture?: (plan: AgentI
   const root = resolve(params.targetPath)
   const rootStat = await lstat(root)
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) throw new Error('Adoption requires a regular project directory.')
-  if (!params.agents.length || params.agents.some((agent) => !isHarnessAgent(agent))) throw new Error(`Choose coding agents from the registered tool profiles: ${getAgentIds().join(', ')}.`)
+  if (!params.agents.length || params.agents.some((agent) => !isHarnessAgent(agent))) {
+    const notice = unregisteredAgentNotice(params.agents)
+    throw new Error(`${notice ? `${notice} ` : ''}Choose coding agents from the registered tool profiles: ${getAgentIds().join(', ')}.`)
+  }
   if (params.scope !== undefined && !['local', 'shared'].includes(params.scope)) throw new Error('Agent scope must be local (default) or shared.')
   if (params.mode !== undefined && !['add', 'replace'].includes(params.mode)) throw new Error('Agent selection mode must be add (default) or replace.')
   const requestedAgents = getAgentIds().filter((agent) => params.agents.includes(agent))

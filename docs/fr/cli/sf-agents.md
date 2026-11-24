@@ -53,6 +53,17 @@ Ces commandes n'installent aucun runtime, ne modifient ni identifiants ni autori
 `claude-code`, `codex`, `kimi`, `gemini-cli`, `qwen-code` et `generic`. Consultez le catalogue versionné courant avec `sf agents catalog`. Les noms de modèles comme `gpt`, `sonnet` ou `k2` ne sont pas
 des identifiants d'agent. Les commandes n'installent pas les runtimes et ne testent pas leur comportement de découverte native.
 
+**Un nom non enregistré est refusé, avec une suggestion quand il ressemble à un nom enregistré.** `enable`, `replace`, `adopt`, `list` (un manifest qui déclare ce nom) et `route --provider` refusent
+un nom qu'aucun profil n'enregistre et sortent avec un code non nul. Quand le nom ne diffère d'un identifiant ou d'un nom d'affichage enregistré que par la casse, la ponctuation ou une faute de frappe
+(`kimi-code`, `Kimi`, `kimi_code`), le message ajoute `Did you mean kimi?` :
+
+```text
+'kimi-code' is not a registered coding agent. Did you mean kimi? Routed coding agents: claude-code, codex, kimi.
+```
+
+La suggestion n'est qu'une aide. sf n'accepte, n'infère et n'alias jamais le nom : relancez la commande avec l'identifiant enregistré. Un nom sans correspondance proche, comme `moonshot` ou `gpt-5`,
+est refusé sans suggestion.
+
 ## Commandes
 
 | Commande                                                             | Comportement                                                                                                                          |
@@ -400,6 +411,8 @@ sont `moonshot/kimi/<modèle>/<effort>` :
 - **Enregistrement à la main.** Une délégation à Kimi s'enregistre avec `sf agents outcome record --provider kimi …` (hôte `manual` : évaluée dans le rapport, elle ne déplace jamais le routage), et
   ses modèles ne sont pas valorisés tant que le projet ne déclare pas de prix dans `modules.harness.routing.adjust.prices`.
 - **Identité.** L'agent est `kimi`, déclaré explicitement (`sf agents enable kimi`). Aucun chemin ne l'infère d'un nom de modèle, et `kimi-code`, `moonshot` ou `k3` sont refusés comme non enregistrés.
+  `kimi-code` (et `Kimi`, `kimi_code`) est refusé avec `Did you mean kimi?` : un hôte qui nomme une session Kimi Code `kimi-code` apprend l'identifiant enregistré par le refus ; `moonshot` et `k3`
+  n'ont aucune suggestion.
 
 Un CLI antérieur à cette release ne connaît pas `kimi` comme agent routé : il refuse `sf agents route --provider kimi` et `sf agents outcome record --provider kimi`, et lit une ligne du registre dont
 le fournisseur est `kimi` comme une ligne invalide, qu'il ignore et compte. Mettez à jour le CLI de chaque clone qui partage un registre avant d'y enregistrer des délégations Kimi.

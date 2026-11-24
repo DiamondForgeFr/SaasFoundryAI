@@ -4,6 +4,7 @@ import { resolve } from 'path'
 import registry from '../../../harness/agent-profiles.json'
 import {
   AGENT_REGISTRY_VERSION,
+  agentSuggestion,
   getAgentIds,
   getAgentProfile,
   getSharedAgentEntrypoints,
@@ -13,6 +14,8 @@ import {
   needsSharedInstructions,
   needsSharedSkills,
   resolveHarnessAgents,
+  suggestAgentId,
+  unregisteredAgentNotice,
   validateAgentRegistry
 } from '../../../harness/agent-registry'
 
@@ -55,6 +58,37 @@ describe('bundled declarative agent registry (#666)', () => {
   })
   it.each([undefined, null, 4, {}, []])('does not coerce non-string agent identifiers %j', (value) => {
     expect(isHarnessAgent(value)).toBe(false)
+  })
+  // #1301: a hint for a name close to a registered id, never an identity (FR-MAH-021)
+  describe('suggests a registered id for a name that is close to one', () => {
+    it.each([
+      ['kimi-code', 'kimi'],
+      ['Kimi', 'kimi'],
+      ['kimi_code', 'kimi'],
+      ['KIMI CODE', 'kimi'],
+      ['claudecode', 'claude-code'],
+      ['Claude_Code', 'claude-code'],
+      ['codx', 'codex'],
+      ['Gemini CLI', 'gemini-cli'],
+      ['qwen-cod', 'qwen-code']
+    ])('suggests %s -> %s, and the name stays unregistered', (name, id) => {
+      expect(suggestAgentId(name)).toBe(id)
+      expect(agentSuggestion(name)).toBe(` Did you mean ${id}?`)
+      expect(isHarnessAgent(name)).toBe(false)
+      expect(() => getAgentProfile(name)).toThrow(`Unknown coding agent '${name}'. Did you mean ${id}? Supported profiles:`)
+    })
+    it.each(['moonshot', 'k3', 'kimi-k3', 'claude-code-kimi', 'gpt-5', 'sonnet', 'qwen', 'cursor', 'future-agent', '', 'constructor', '__proto__'])('suggests nothing for %s', (name) => {
+      expect(suggestAgentId(name)).toBeUndefined()
+      expect(agentSuggestion(name)).toBe('')
+    })
+    it.each([...getAgentIds(), undefined, null, 4, {}, []])('suggests nothing for a registered id or a non-string value %j', (value) => {
+      expect(suggestAgentId(value)).toBeUndefined()
+    })
+    it('names every unregistered requested name once, with its suggestion when it has one', () => {
+      expect(unregisteredAgentNotice(['codex'])).toBe('')
+      expect(unregisteredAgentNotice(['codex', 'kimi-code', 'gpt-5', 'kimi-code'])).toBe("'kimi-code' is not a registered coding agent. Did you mean kimi? 'gpt-5' is not a registered coding agent.")
+      expect(unregisteredAgentNotice('Kimi')).toBe("'Kimi' is not a registered coding agent. Did you mean kimi?")
+    })
   })
   it('validates all IDs before deciding whether shared instructions are needed', () => {
     expect(needsSharedInstructions([])).toBe(false)

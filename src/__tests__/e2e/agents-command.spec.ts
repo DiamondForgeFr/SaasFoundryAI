@@ -100,6 +100,46 @@ describe('compiled sf agents commands', () => {
     expect(await readFile(join(project, '.saasfoundry.json'), 'utf8')).toBe(manifest)
     expect(await readFile(join(project, 'AGENTS.md'), 'utf8')).toBe(agentsInstructions)
   })
+  // #1301 (AC-1, AC-2): a Kimi Code session that names itself `kimi-code` is refused by every command, with the same hint, and nothing is accepted or written
+  describe.each(['kimi-code', 'Kimi', 'kimi_code'])('refuses %s with a suggestion, in enable, replace, list and route', (name) => {
+    const hint = `'${name}' is not a registered coding agent. Did you mean kimi?`
+    it.each([['enable'], ['replace']])('%s exits non-zero, suggests kimi and leaves the project as it was', async (command) => {
+      const manifest = await readFile(join(project, '.saasfoundry.json'), 'utf8')
+      const text = run(command, name, '--scope', 'shared')
+      expect(text.status).not.toBe(0)
+      expect(text.stderr).toContain(hint)
+      const json = run(command, name, '--scope', 'shared', '--json')
+      expect(json.status).not.toBe(0)
+      expect(JSON.parse(json.stdout).error).toContain(hint)
+      expect(await readFile(join(project, '.saasfoundry.json'), 'utf8')).toBe(manifest)
+    })
+    it('list exits non-zero on a manifest that declares it, with the same hint, and never reads it as kimi', async () => {
+      const manifest = JSON.stringify({ version: 'test', projectName: 'agents-demo', generatedAt: '2026-09-08', structure: 'cli', modules: { harness: { version: 4, agents: ['claude-code', name] } } })
+      await writeFile(join(project, '.saasfoundry.json'), manifest)
+      const result = run('list', '--json')
+      expect(result.status).not.toBe(0)
+      expect(JSON.parse(result.stdout).error).toContain(hint)
+      expect(await readFile(join(project, '.saasfoundry.json'), 'utf8')).toBe(manifest)
+    })
+    it('route exits non-zero with the same hint and routes nothing', () => {
+      const result = run('route', '--task', 'bug-fix', '--provider', name)
+      expect(result.status).not.toBe(0)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toContain(`${hint} Routed coding agents: claude-code, codex, kimi.`)
+    })
+  })
+  it('gives a name with no close match no suggestion in enable, replace and route', () => {
+    for (const args of [
+      ['enable', 'moonshot'],
+      ['replace', 'moonshot'],
+      ['route', '--task', 'bug-fix', '--provider', 'moonshot']
+    ]) {
+      const result = run(...args)
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain("'moonshot' is not a registered coding agent.")
+      expect(result.stderr).not.toContain('Did you mean')
+    }
+  })
   it('never rewrites a user-authored AGENTS.md without a generated region when enabling an agent', async () => {
     await writeFile(join(project, 'AGENTS.md'), '# Personal agent instructions\n')
     const result = run('enable', 'codex', '--scope', 'shared', '--json')

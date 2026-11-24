@@ -49,6 +49,17 @@ These commands do not install runtimes, change credentials or permissions, or ve
 `qwen-code` and `generic`. Use `sf agents catalog` to inspect the current versioned catalog. Model names such as `gpt`, `sonnet` or `k2` are not agent identifiers. These commands do not install agent
 runtimes or probe their native discovery behavior.
 
+**An unregistered name is refused, with a hint when it is close to a registered one.** `enable`, `replace`, `adopt`, `list` (a manifest that declares the name) and `route --provider` refuse a name
+that no profile registers and exit non-zero. When the name differs from a registered id or display name only by case, punctuation or one typo (`kimi-code`, `Kimi`, `kimi_code`), the message adds
+`Did you mean kimi?`:
+
+```text
+'kimi-code' is not a registered coding agent. Did you mean kimi? Routed coding agents: claude-code, codex, kimi.
+```
+
+The hint is only a suggestion. sf never accepts, infers or aliases the name: run the command again with the registered id. A name with no close match, such as `moonshot` or `gpt-5`, is refused without
+a suggestion.
+
 ## Commands
 
 | Command                                                              | Behavior                                                                                                     |
@@ -375,7 +386,8 @@ Kimi Code is routed by its profile and the grid (`routing: { vendor: "moonshot",
   whole-ticket worktree run is verified. A refused or failed route never sends the session to another host's CLI (see [Delegated ticket delivery](#delegated-ticket-delivery-sf-agents-delegation)).
 - **Recording by hand.** A delegation to Kimi is recorded with `sf agents outcome record --provider kimi …` (host `manual`: rated for the report, never moves the routing), and its models are unpriced
   until the project declares a price in `modules.harness.routing.adjust.prices`.
-- **Identity.** The agent is `kimi`, declared explicitly (`sf agents enable kimi`). No path infers it from a model name, and `kimi-code`, `moonshot` or `k3` are refused as unregistered.
+- **Identity.** The agent is `kimi`, declared explicitly (`sf agents enable kimi`). No path infers it from a model name, and `kimi-code`, `moonshot` or `k3` are refused as unregistered. `kimi-code`
+  (and `Kimi`, `kimi_code`) is refused with `Did you mean kimi?`, so a host that names a Kimi Code session `kimi-code` learns the registered id from the refusal; `moonshot` and `k3` get no suggestion.
 
 A CLI older than this release does not know `kimi` as a routed agent: it refuses `sf agents route --provider kimi` and `sf agents outcome record --provider kimi`, and reads a ledger line whose
 provider is `kimi` as an invalid line, which it skips and counts. Upgrade the CLI of every clone that shares a ledger before recording Kimi delegations in it.
