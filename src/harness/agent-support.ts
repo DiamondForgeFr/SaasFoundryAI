@@ -20,7 +20,7 @@ import {
 } from './agent-instructions'
 import { inspectGitAgentScope, configureLocalAgentExcludes, removeLocalAgentExcludes, NotGitRepositoryError, GitAgentScope } from './git-agent-scope'
 import { safeWriteAgentFile } from './agent-file-writer'
-import { getAgentIds, isHarnessAgent, getSharedAgentEntrypoints } from './agent-registry'
+import { getAgentIds, isHarnessAgent, getSharedAgentEntrypoints, unregisteredAgentNotice } from './agent-registry'
 import {
   clearLocalDelegation,
   DELEGATION_SCOPES,
@@ -95,7 +95,10 @@ const isObject = (value: unknown): value is Record<string, unknown> => typeof va
 
 function validateAgents(agents: unknown): asserts agents is HarnessAgent[] {
   if (!Array.isArray(agents) || agents.length === 0 || agents.some((agent) => !isHarnessAgent(agent))) {
-    throw new Error(`Choose coding agents from the registered tool profiles: ${AGENTS.join(', ')}. Use sf agents catalog for profiles. Model/provider names are not tool identifiers.`)
+    const notice = unregisteredAgentNotice(agents)
+    throw new Error(
+      `${notice ? `${notice} ` : ''}Choose coding agents from the registered tool profiles: ${AGENTS.join(', ')}. Use sf agents catalog for profiles. Model/provider names are not tool identifiers.`
+    )
   }
 }
 

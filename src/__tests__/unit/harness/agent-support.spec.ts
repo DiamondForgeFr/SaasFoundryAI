@@ -218,6 +218,26 @@ describe('additive managed agent support (#660)', () => {
     expect(await get('.saasfoundry.json')).toBe(before)
     expect(await readdir(root)).not.toContain('AGENTS.md')
   })
+  // #1301: enable, replace and list refuse a name that only spells a registered id, and say which id it resembles (FR-MAH-021)
+  describe('suggests the registered id of a close name without accepting it', () => {
+    it.each(['kimi-code', 'Kimi', 'kimi_code'])('enable and replace refuse %s, name kimi and change nothing', async (name) => {
+      const before = await get('.saasfoundry.json')
+      const message = `'${name}' is not a registered coding agent. Did you mean kimi? Choose coding agents from the registered tool profiles: claude-code, codex, kimi,`
+      await expect(enable([name])).rejects.toThrow(message)
+      await expect(replace(['codex', name])).rejects.toThrow(message)
+      expect(await get('.saasfoundry.json')).toBe(before)
+      expect(await readdir(root)).not.toContain('AGENTS.md')
+    })
+    it.each(['moonshot', 'k3', 'gpt-5'])('enable names %s as unregistered, with no suggestion', async (name) => {
+      await expect(enable([name])).rejects.toThrow(`'${name}' is not a registered coding agent. Choose coding agents`)
+    })
+    it('list refuses a manifest that declares kimi-code, with the same hint', async () => {
+      const content = JSON.stringify({ ...MANIFEST, modules: { harness: { version: 4, agents: ['claude-code', 'kimi-code'] } } })
+      await put('.saasfoundry.json', content)
+      await expect(readAgentSupport(root)).rejects.toThrow("'kimi-code' is not a registered coding agent. Did you mean kimi? Choose coding agents")
+      expect(await get('.saasfoundry.json')).toBe(content)
+    })
+  })
   it.each(['{}', '[]', '{bad', JSON.stringify({ ...MANIFEST, modules: [] }), JSON.stringify({ ...MANIFEST, fileHashes: [] })])('rejects invalid manifests without mutation: %s', async (content) => {
     await put('.saasfoundry.json', content)
     await expect(enable(['codex'])).rejects.toThrow('Invalid')

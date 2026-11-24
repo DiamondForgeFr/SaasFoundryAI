@@ -66,7 +66,18 @@ describe('compiled sf agents route (#930)', () => {
     ],
     ['an agent no profile registers', ['--task', 'bug-fix', '--provider', 'cursor', '--json'], "'cursor' is not a registered coding agent."],
     // FR-MAH-021: the identity of Kimi Code is the explicit id `kimi`, never a name that looks like it
-    ['a name that only looks like kimi', ['--task', 'bug-fix', '--provider', 'kimi-code', '--json'], "'kimi-code' is not a registered coding agent. Routed coding agents: claude-code, codex, kimi."],
+    // #1301: the refusal stays, and names the registered id as a suggestion only
+    [
+      'a name that only looks like kimi',
+      ['--task', 'bug-fix', '--provider', 'kimi-code', '--json'],
+      "'kimi-code' is not a registered coding agent. Did you mean kimi? Routed coding agents: claude-code, codex, kimi."
+    ],
+    [
+      'another spelling of kimi',
+      ['--task', 'bug-fix', '--provider', 'kimi_code', '--json'],
+      "'kimi_code' is not a registered coding agent. Did you mean kimi? Routed coding agents: claude-code, codex, kimi."
+    ],
+    ['a model name next to kimi', ['--task', 'bug-fix', '--provider', 'moonshot', '--json'], "'moonshot' is not a registered coding agent. Routed coding agents: claude-code, codex, kimi."],
     ['an invalid override', ['--task', 'prose', '--json'], 'Invalid modules.harness.routing']
   ])('fails closed on %s', async (_, args, message) => {
     await manifest({ version: 4, agents: ['codex'], routing: { kinds: { prose: { tier: 'nowhere' } } } })

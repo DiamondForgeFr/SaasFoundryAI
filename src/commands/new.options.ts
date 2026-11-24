@@ -1,6 +1,6 @@
 import { Command } from 'commander'
 import { DEFAULT_OUTPUT_LANGUAGE } from '../language'
-import { getAgentIds, isHarnessAgent } from '../harness/agent-registry'
+import { agentSuggestion, getAgentIds, isHarnessAgent } from '../harness/agent-registry'
 import { assertGitBranchName } from '../run'
 import { findTool, ToolCategory, toolsByCategory } from '../tools/catalogue'
 import { Answers, DbCredentials, HarnessAgent, S3Credentials } from '../types'
@@ -395,7 +395,7 @@ export function parseAgentsOption(value: string): HarnessAgent[] {
   if (agents.length === 0) throw new Error('The --agents option requires at least one registered coding-agent profile.')
   const unsupported = agents.filter((agent) => !isHarnessAgent(agent))
   if (unsupported.length > 0) {
-    throw new Error(`Unknown coding agent '${unsupported[0]}'. Supported profiles: ${getAgentIds().join(', ')}. Model names and providers are separate.`)
+    throw new Error(`Unknown coding agent '${unsupported[0]}'.${agentSuggestion(unsupported[0])} Supported profiles: ${getAgentIds().join(', ')}. Model names and providers are separate.`)
   }
   return agents as HarnessAgent[]
 }
