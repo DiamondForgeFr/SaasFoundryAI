@@ -36,6 +36,12 @@ describe('buildPrefillFromOptions', () => {
     expect(() => parseAgentsOption('claude-code,sonnet')).toThrow('Unknown coding agent')
   })
 
+  // #1301: the refusal of a close name keeps refusing it, and names the registered id as a suggestion only
+  it('suggests the registered id of a close --agents name without accepting it', () => {
+    expect(() => parseAgentsOption('codex,kimi-code')).toThrow("Unknown coding agent 'kimi-code'. Did you mean kimi? Supported profiles:")
+    expect(() => parseAgentsOption('moonshot')).toThrow(/^Unknown coding agent 'moonshot'\. Supported profiles:/)
+  })
+
   it('converts --structure monorepo to isMonorepo=true', () => {
     expect(buildPrefillFromOptions({ structure: 'monorepo' }).isMonorepo).toBe(true)
     expect(buildPrefillFromOptions({ structure: 'multirepo' }).isMonorepo).toBe(false)
