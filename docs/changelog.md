@@ -6,12 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Fixed
-
-- `sf update --dry-run` lists every file the real update writes: the generated region of `AGENTS.md`, `.claude/rules/`, the shared skill copies under `.agents/skills/`, the tier agents of every
-  declared host and `.codex/hooks.json` (`agentInstructions`), and the manifest (`manifestWrites`). The real update closes with the same files counted per host
-  ([#1315](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1315)).
-
 ## [1.3.0] - 2026-11-23
 
 Kimi Code now works as a coding agent next to Claude Code and Codex, with its own routing and tier agents. The guard refuses shell lines it cannot check (substitutions, loops, chains, interpreter
