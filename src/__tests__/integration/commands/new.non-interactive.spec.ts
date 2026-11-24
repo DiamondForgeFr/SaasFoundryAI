@@ -17,6 +17,7 @@ jest.mock('../../../installers/skills.installer', () => ({ ...jest.requireActual
 
 jest.mock('../../../runners/database.runner', () => ({ initAndStartDb: jest.fn() }))
 jest.mock('../../../runners/s3.runner', () => ({ initAndStartS3: jest.fn() }))
+jest.mock('../../../runners/mail.runner', () => ({ initAndStartMailCatcher: jest.fn() }))
 jest.mock('../../../runners/server.runner', () => ({
   startBackend: jest.fn(),
   startFrontend: jest.fn(),
@@ -42,6 +43,7 @@ import { renderTechnicalStack } from '../../../renderers/technical-stack.rendere
 import { installSkills } from '../../../installers/skills.installer'
 import { initAndStartDb } from '../../../runners/database.runner'
 import { initAndStartS3 } from '../../../runners/s3.runner'
+import { initAndStartMailCatcher } from '../../../runners/mail.runner'
 import { openTerminal } from '../../../runners/terminal.runner'
 import { readAgentSupport } from '../../../harness/agent-support'
 
@@ -50,6 +52,7 @@ const mockedRenderTechnicalStack = renderTechnicalStack as jest.MockedFunction<t
 const mockedInstallSkills = installSkills as jest.MockedFunction<typeof installSkills>
 const mockedInitAndStartDb = initAndStartDb as jest.MockedFunction<typeof initAndStartDb>
 const mockedInitAndStartS3 = initAndStartS3 as jest.MockedFunction<typeof initAndStartS3>
+const mockedInitAndStartMail = initAndStartMailCatcher as jest.MockedFunction<typeof initAndStartMailCatcher>
 const mockedOpenTerminal = openTerminal as jest.MockedFunction<typeof openTerminal>
 
 describe('newCommand (non-interactive integration)', () => {
@@ -255,6 +258,68 @@ describe('newCommand (non-interactive integration)', () => {
     expect(mockedInitAndStartDb).toHaveBeenCalledTimes(1)
     expect(mockedInitAndStartS3).toHaveBeenCalledTimes(1)
     expect(mockedOpenTerminal).not.toHaveBeenCalled()
+  })
+
+  // #976 — the email module brings an inbox: a port of its own in the manifest and the renderer's
+  // ports, started with the Docker services the project already hosts, never alone
+  describe('the mail catcher of the email module', () => {
+    const emailOpts = { mailersendApiKey: 'ms-key', mailersendSenderEmail: 'hello@acme.com', mailersendSenderName: 'Acme' }
+    const readManifest = async () => JSON.parse(await readFile('.saasfoundry.json', 'utf8'))
+
+    it('records its port in the manifest and hands it to the renderer', async () => {
+      await newCommand({ ...baseOpts, ...emailOpts, emailService: 'mailersend' })
+
+      const manifest = await readManifest()
+      expect(manifest.ports.mail).toEqual(expect.any(Number))
+      expect(manifest.modules.email).toEqual({ provider: 'mailersend', version: 2 })
+      expect(mockedRenderTechnicalStack).toHaveBeenCalledWith(expect.objectContaining({ ports: expect.objectContaining({ mail: manifest.ports.mail }) }))
+    })
+
+    it('records no port, and starts nothing, without the email module', async () => {
+      await newCommand({ ...dockerOpts, startServices: true, startApps: 'none' })
+
+      expect((await readManifest()).ports).not.toHaveProperty('mail')
+      expect(mockedInitAndStartMail).not.toHaveBeenCalled()
+    })
+
+    it('starts the inbox together with the Docker services', async () => {
+      await newCommand({ ...dockerOpts, ...emailOpts, emailService: 'mailersend', startServices: true, startApps: 'none' })
+
+      expect(mockedInitAndStartMail).toHaveBeenCalledTimes(1)
+      expect(mockedInitAndStartMail).toHaveBeenCalledWith('acme', false, expect.anything())
+    })
+
+    it('starts nothing for a project that hosts no service in Docker: no container for someone who never asked for Docker', async () => {
+      await newCommand({
+        ...baseOpts,
+        ...emailOpts,
+        emailService: 'mailersend',
+        dbSetup: 'credentials',
+        dbHost: 'db.example.com',
+        dbPort: '5432',
+        dbUser: 'u',
+        dbPassword: 'p',
+        dbName: 'd',
+        startServices: true,
+        startApps: 'none'
+      })
+
+      expect(mockedInitAndStartMail).not.toHaveBeenCalled()
+      // The inbox is still in the project, for `npm run services:up`
+      expect((await readManifest()).ports.mail).toEqual(expect.any(Number))
+    })
+
+    it('says the inbox did not start rather than leaving the command to claim success', async () => {
+      mockedInitAndStartMail.mockRejectedValueOnce(new Error('docker is not running'))
+
+      await newCommand({ ...dockerOpts, ...emailOpts, emailService: 'mailersend', startServices: true, startApps: 'none' })
+
+      const printed = logSpy.mock.calls.flat().join('\n')
+      expect(printed).toContain('Mail catcher (Mailpit)')
+      expect(printed).toContain('up -d mail-dev')
+      expect(process.exitCode).toBe(1)
+      process.exitCode = undefined
+    })
   })
 
   it('passes manual service choices to the renderer', async () => {
