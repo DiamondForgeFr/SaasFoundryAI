@@ -779,6 +779,12 @@ les surcharges partagées du développeur (un type fixé dans `modules.harness.r
 Les fichiers des agents de palier sont suivis par Git et rendus depuis le routage partagé : un déplacement local ne les réécrit donc pas ; `adjust` et `report` disent combien diffèrent, et
 `sf agents route` fait foi.
 
+Les worktrees d'un clone partagent ce fichier : deux versions du CLI le lisent souvent, par exemple pendant une livraison qui change le routage. À partir de 1.4.0, un CLI ignore les entrées qu'il ne
+connaît pas (un fournisseur, un type de tâche, une clé ou une action du journal écrits par un CLI plus récent, ou une entrée dont il ne lit pas la forme), applique les autres, et nomme ce qu'il a
+ignoré sur une ligne `Notice:` dans la sortie d'erreur de `sf agents route`. Quand il écrit le fichier, il y remet ces entrées telles quelles. Seul un fichier qui ne peut pas être la couche (pas du
+JSON, ou sans ses sections) est refusé, et un fichier d'une version plus récente de la couche demande de mettre à jour le CLI, pas de supprimer le fichier. Le registre ne fait qu'ajouter des lignes :
+une ligne qu'un CLI plus ancien ne sait pas lire est ignorée et comptée, jamais réécrite.
+
 ```bash
 sf agents routing promote multi-file-feature      # copie le déplacement dans modules.harness.routing, en changement relisible
 sf agents routing promote --provider codex        # quand les deux agents ont déplacé le type différemment

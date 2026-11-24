@@ -104,7 +104,50 @@ export function localRoutingPath(dir: string): string {
   return join(dir, LOCAL_ROUTING_FILE)
 }
 
-function parseLocalRouting(text: string, path: string): LocalRouting {
+const KNOWN_KEYS: readonly string[] = ['version', 'kinds', 'boundaries', 'holds', 'ladders', 'log']
+type Section = 'kinds' | 'boundaries' | 'holds' | 'ladders'
+
+/**
+ * What the file holds that this CLI does not read (#1309): a provider, a task kind, a key or a log action a
+ * newer CLI wrote, or an entry whose shape this CLI does not know. The worktrees of one clone share the
+ * file, so two CLI versions reading it is the normal state during a delivery that changes the routing: the
+ * older one skips these entries, applies the rest, and writes them back untouched.
+ */
+interface ForeignParts {
+  top: Record<string, unknown>
+  sections: Record<Section, Record<string, unknown>>
+  log: Record<string, unknown>[]
+}
+
+const emptyForeign = (): ForeignParts => ({ top: {}, sections: { kinds: {}, boundaries: {}, holds: {}, ladders: {} }, log: [] })
+
+/** The layer this CLI applies, what it skipped (named by path) and the skipped parts, kept for the next write. */
+interface ParsedLocalRouting {
+  state: LocalRouting
+  skipped: string[]
+  foreign: ForeignParts
+}
+
+const isHold = (hold: unknown): boolean => object(hold) && typeof hold.reason === 'string' && typeof hold.since === 'string' && ISO_MILLIS.test(hold.since)
+const isLadderEntry = (entry: unknown): boolean =>
+  object(entry) && typeof entry.candidate === 'string' && typeof entry.since === 'string' && ISO_MILLIS.test(entry.since) && ['new', 'accepted'].includes(String(entry.status))
+const isAdjustment = (entry: unknown): boolean =>
+  object(entry) &&
+  typeof entry.tier === 'string' &&
+  TIER.test(entry.tier) &&
+  typeof entry.from === 'string' &&
+  TIER.test(entry.from) &&
+  ['escalate', 'deescalate'].includes(String(entry.action)) &&
+  typeof entry.at === 'string' &&
+  ISO_MILLIS.test(entry.at) &&
+  object(entry.evidence)
+const isBoundary = (at: unknown): boolean => typeof at === 'string' && ISO_MILLIS.test(at)
+
+/**
+ * Parse the layer. Only a file that cannot be the layer at all is refused: not JSON, another version, or
+ * without its sections. An entry this CLI does not know is skipped, never the whole file (#1309).
+ */
+function parseLocalRouting(text: string, path: string): ParsedLocalRouting {
   const fail = (detail: string): never => {
     throw new Error(`Invalid local routing in ${path} (${detail}). It only caches the automatic moves of this clone: delete the file to start over.`)
   }
@@ -114,65 +157,125 @@ function parseLocalRouting(text: string, path: string): LocalRouting {
   } catch {
     return fail('not JSON')
   }
+  if (object(value) && typeof value.version === 'number' && value.version > LOCAL_VERSION) {
+    throw new Error(`The local routing in ${path} was written by a newer CLI (version ${value.version}; this CLI reads version ${LOCAL_VERSION}). Upgrade this CLI to apply it.`)
+  }
   if (!object(value) || value.version !== LOCAL_VERSION) return fail(`expected version ${LOCAL_VERSION}`)
-  if (Object.keys(value).some((key) => !['version', 'kinds', 'boundaries', 'holds', 'ladders', 'log'].includes(key))) return fail('unknown key')
   if (!object(value.kinds) || !object(value.boundaries) || !Array.isArray(value.log)) return fail('kinds, boundaries and log are required')
   // A layer written before holds and ladders existed has neither: both start empty.
-  if (value.holds === undefined) value.holds = {}
-  if (value.ladders === undefined) value.ladders = {}
-  if (!object(value.holds) || !object(value.ladders)) return fail('holds and ladders must be objects')
-  for (const [kind, providers] of Object.entries(value.holds)) {
-    if (!isKind(kind) || !object(providers)) return fail(`holds.${kind}`)
-    for (const [provider, hold] of Object.entries(providers)) {
-      if (!isRoutingProvider(provider) || !object(hold) || typeof hold.reason !== 'string' || typeof hold.since !== 'string' || !ISO_MILLIS.test(hold.since)) return fail(`holds.${kind}.${provider}`)
-    }
+  const holds = value.holds === undefined ? {} : value.holds
+  const ladders = value.ladders === undefined ? {} : value.ladders
+  if (!object(holds) || !object(ladders)) return fail('holds and ladders must be objects')
+
+  const foreign = emptyForeign()
+  const skipped: string[] = []
+  for (const key of Object.keys(value)) {
+    if (KNOWN_KEYS.includes(key)) continue
+    foreign.top[key] = value[key]
+    skipped.push(key)
   }
-  for (const [provider, tiers] of Object.entries(value.ladders)) {
-    if (!isRoutingProvider(provider) || !object(tiers)) return fail(`ladders.${provider}`)
-    for (const [tier, entry] of Object.entries(tiers)) {
-      if (
-        !TIER.test(tier) ||
-        !object(entry) ||
-        typeof entry.candidate !== 'string' ||
-        typeof entry.since !== 'string' ||
-        !ISO_MILLIS.test(entry.since) ||
-        !['new', 'accepted'].includes(String(entry.status))
-      )
-        return fail(`ladders.${provider}.${tier}`)
+
+  /** Keep the known entries of a two-level section (`outer.inner`); set the others aside, by path. */
+  const section = (
+    name: Section,
+    raw: Record<string, unknown>,
+    isOuter: (key: string) => boolean,
+    isInner: (key: string) => boolean,
+    valid: (entry: unknown) => boolean
+  ): Record<string, Record<string, unknown>> => {
+    const kept: Record<string, Record<string, unknown>> = {}
+    for (const [outer, inner] of Object.entries(raw)) {
+      if (!isOuter(outer) || !object(inner)) {
+        foreign.sections[name][outer] = inner
+        skipped.push(`${name}.${outer}`)
+        continue
+      }
+      for (const [key, entry] of Object.entries(inner)) {
+        if (isInner(key) && valid(entry)) {
+          ;(kept[outer] ??= {})[key] = entry
+          continue
+        }
+        const aside = (foreign.sections[name][outer] ??= {}) as Record<string, unknown>
+        aside[key] = entry
+        skipped.push(`${name}.${outer}.${key}`)
+      }
     }
+    return kept
   }
-  for (const [kind, providers] of Object.entries(value.kinds)) {
-    if (!isKind(kind) || !object(providers)) return fail(`kinds.${kind}`)
-    for (const [provider, entry] of Object.entries(providers)) {
-      if (!isRoutingProvider(provider) || !object(entry)) return fail(`kinds.${kind}.${provider}`)
-      if (typeof entry.tier !== 'string' || !TIER.test(entry.tier) || typeof entry.from !== 'string' || !TIER.test(entry.from)) return fail(`kinds.${kind}.${provider}.tier`)
-      if (!['escalate', 'deescalate'].includes(String(entry.action)) || typeof entry.at !== 'string' || !ISO_MILLIS.test(entry.at) || !object(entry.evidence)) return fail(`kinds.${kind}.${provider}`)
-    }
-  }
-  for (const [kind, providers] of Object.entries(value.boundaries)) {
-    if (!isKind(kind) || !object(providers)) return fail(`boundaries.${kind}`)
-    for (const [provider, at] of Object.entries(providers)) if (!isRoutingProvider(provider) || typeof at !== 'string' || !ISO_MILLIS.test(at)) return fail(`boundaries.${kind}.${provider}`)
+
+  const state: LocalRouting = {
+    version: LOCAL_VERSION,
+    kinds: section('kinds', value.kinds, isKind, isRoutingProvider, isAdjustment) as LocalRouting['kinds'],
+    boundaries: section('boundaries', value.boundaries, isKind, isRoutingProvider, isBoundary) as LocalRouting['boundaries'],
+    holds: section('holds', holds, isKind, isRoutingProvider, isHold) as LocalRouting['holds'],
+    ladders: section('ladders', ladders, isRoutingProvider, (tier) => TIER.test(tier), isLadderEntry) as LocalRouting['ladders'],
+    log: []
   }
   for (const entry of value.log) {
-    if (!object(entry) || !isKind(entry.kind) || typeof entry.at !== 'string' || !LOG_ACTIONS.includes(String(entry.action))) return fail('log entry')
+    if (object(entry) && isKind(entry.kind) && typeof entry.at === 'string' && LOG_ACTIONS.includes(String(entry.action))) {
+      state.log.push(entry as unknown as LocalLogEntry)
+      continue
+    }
+    // A log line kept for the next write needs its time, to stay in order; one without it is dropped there.
+    if (object(entry)) foreign.log.push(entry)
+    skipped.push('log entry')
   }
-  return value as unknown as LocalRouting
+  return { state, skipped: [...new Set(skipped)], foreign }
 }
 
-/** The clone's local layer; an absent file is an empty layer. */
-export async function readLocalRouting(dir: string): Promise<LocalRouting> {
+async function readParsedLocalRouting(dir: string): Promise<ParsedLocalRouting> {
   const path = localRoutingPath(dir)
   try {
     const info = await lstat(path)
     if (!info.isFile() || info.isSymbolicLink()) throw new Error(`Expected a regular file for the local routing layer, not a link or directory: ${path}`)
     return parseLocalRouting(await readFile(path, 'utf8'), path)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return emptyLocalRouting()
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: emptyLocalRouting(), skipped: [], foreign: emptyForeign() }
     throw error
   }
 }
 
-async function writeLocalRouting(dir: string, state: LocalRouting): Promise<void> {
+/** The clone's local layer; an absent file is an empty layer. Entries this CLI does not know are left out (see `readLocalRoutingWithSkipped`). */
+export async function readLocalRouting(dir: string): Promise<LocalRouting> {
+  return (await readParsedLocalRouting(dir)).state
+}
+
+/** The clone's local layer, and the paths of the entries this CLI left out because it does not know them. */
+export async function readLocalRoutingWithSkipped(dir: string): Promise<{ local: LocalRouting; skipped: string[] }> {
+  const { state, skipped } = await readParsedLocalRouting(dir)
+  return { local: state, skipped }
+}
+
+/** The one-line notice naming what an older CLI skipped in the layer; undefined when it skipped nothing. */
+export function skippedLocalRoutingNotice(skipped: readonly string[]): string | undefined {
+  if (!skipped.length) return undefined
+  const shown = skipped.slice(0, 5).join(', ')
+  const more = skipped.length > 5 ? ` and ${skipped.length - 5} more` : ''
+  return `the local routing cache holds entries this CLI does not know (${shown}${more}), probably written by a newer CLI: they are kept, not applied.`
+}
+
+/** The layer to write: `state`, with the parts this CLI did not read put back where they were; what `state` says wins. */
+function withForeign(state: LocalRouting, foreign: ForeignParts): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...state, ...foreign.top }
+  for (const name of ['kinds', 'boundaries', 'holds', 'ladders'] as const) {
+    const aside = foreign.sections[name]
+    if (!Object.keys(aside).length) continue
+    const out: Record<string, unknown> = { ...aside }
+    for (const [outer, inner] of Object.entries(state[name] as Record<string, Record<string, unknown>>)) {
+      const kept = aside[outer]
+      out[outer] = object(kept) ? { ...kept, ...inner } : inner
+    }
+    merged[name] = out
+  }
+  if (foreign.log.length) {
+    const lines = [...state.log, ...foreign.log.filter((entry) => typeof entry.at === 'string')] as { at: string }[]
+    // Stable: entries of one time keep their order, known ones first.
+    merged.log = lines.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).slice(-ROUTING_LOG_LIMIT)
+  }
+  return merged
+}
+
+async function writeLocalRouting(dir: string, state: Record<string, unknown>): Promise<void> {
   const path = localRoutingPath(dir)
   await mkdir(dir, { recursive: true, mode: 0o700 })
   const temporary = `${path}.${randomUUID()}.tmp`
@@ -194,14 +297,16 @@ async function writeLocalRouting(dir: string, state: LocalRouting): Promise<void
 
 /**
  * Read, change and write the layer under its own lock, so two hooks that finish together cannot lose
- * each other's move. `change` returns the next state, or undefined to leave the file as it is.
+ * each other's move. `change` returns the next state, or undefined to leave the file as it is. The entries
+ * this CLI does not know are written back as they were (#1309): a newer CLI sharing the clone keeps them.
  */
 export async function updateLocalRouting<T>(dir: string, change: (state: LocalRouting) => { next?: LocalRouting; result: T } | Promise<{ next?: LocalRouting; result: T }>): Promise<T> {
   return withLock(
     dir,
     async () => {
-      const { next, result } = await change(await readLocalRouting(dir))
-      if (next) await writeLocalRouting(dir, next)
+      const { state, foreign } = await readParsedLocalRouting(dir)
+      const { next, result } = await change(state)
+      if (next) await writeLocalRouting(dir, withForeign(next, foreign))
       return result
     },
     LOCK_NAME

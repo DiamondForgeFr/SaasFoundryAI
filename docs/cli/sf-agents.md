@@ -730,6 +730,11 @@ The moves live in `<git-common-dir>/saasfoundry/routing.json`, next to the ledge
 
 The tier agent files are tracked and rendered from the shared routing, so a local move does not rewrite them; `adjust` and `report` say how many differ, and `sf agents route` is the authority.
 
+The worktrees of a clone share this file, so two CLI versions often read it, for example while a delivery changes the routing. From 1.4.0, a CLI skips the entries it does not know (a provider, a task
+kind, a key or a log action a newer CLI wrote, or an entry whose shape it does not read), applies the others, and names what it skipped in one `Notice:` line on the stderr of `sf agents route`. When
+it writes the file, it writes those entries back as they were. Only a file that cannot be the layer (not JSON, or without its sections) is refused, and a file of a newer layer version asks you to
+upgrade the CLI, not to delete the file. The ledger is append-only: a line an older CLI cannot read is skipped and counted, and never rewritten.
+
 ```bash
 sf agents routing promote multi-file-feature      # copy the move into modules.harness.routing, as a reviewable change
 sf agents routing promote --provider codex        # when the two agents moved the kind differently

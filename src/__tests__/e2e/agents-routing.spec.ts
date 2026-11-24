@@ -231,6 +231,25 @@ describe('compiled sf agents routing and the adjusted route (#1035)', () => {
     expect(JSON.parse(adjust.stdout).error).toContain('Invalid local routing')
   })
 
+  // #1309: a worktree on a newer CLI wrote a ladder for a provider this CLI does not route (`ladders.kimi` on 1.2.0)
+  it('keeps applying the moves it knows when a newer CLI wrote entries it does not, names them in one line, and keeps them', async () => {
+    await seed('sssssssfff')
+    expect(sf(['routing', 'adjust']).status).toBe(0)
+    const written = JSON.parse(await readFile(layer(), 'utf8'))
+    const future = { fix: { candidate: 'future-model/high', since: '2026-10-01T08:00:00.000Z', status: 'new' } }
+    await writeFile(layer(), JSON.stringify({ ...written, ladders: { ...written.ladders, 'future-agent': future } }))
+    const result = sf(['route', '--task', 'multi-file-feature', '--provider', 'claude-code', '--no-trial', '--json'])
+    expect(result.status).toBe(0)
+    expect(result.stderr).not.toContain('could not be read')
+    expect(result.stderr).toContain('Notice: the local routing cache holds entries this CLI does not know (ladders.future-agent)')
+    expect(result.stderr).not.toContain('delete the file')
+    expect(JSON.parse(result.stdout).routes[0]).toMatchObject({ tier: 'fix', source: 'auto' })
+    // the commands that write still work, and write the entry back
+    const reset = sf(['routing', 'reset', 'multi-file-feature'])
+    expect(reset.status).toBe(0)
+    expect(JSON.parse(await readFile(layer(), 'utf8')).ladders['future-agent']).toEqual(future)
+  })
+
   it('does nothing outside a Git checkout', async () => {
     const elsewhere = await mkdtemp(join(tmpdir(), 'sf-agents-routing-nogit-'))
     try {

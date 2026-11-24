@@ -9,7 +9,9 @@ import {
   listLocalHolds,
   localRoutingPath,
   readLocalRouting,
+  readLocalRoutingWithSkipped,
   ROUTING_LOG_LIMIT,
+  skippedLocalRoutingNotice,
   staleTierAgentPaths,
   updateLocalRouting,
   withLogEntry,
@@ -84,17 +86,20 @@ describe('the local routing layer (#1035)', () => {
   describe('a file that is not what the CLI wrote', () => {
     it.each([
       ['not JSON', '{ nope', 'not JSON'],
-      ['another version', JSON.stringify({ ...emptyLocalRouting(), version: 2 }), 'expected version 1'],
-      ['an unknown key', JSON.stringify({ ...emptyLocalRouting(), budget: 1 }), 'unknown key'],
-      ['an unknown task kind', JSON.stringify({ ...emptyLocalRouting(), kinds: { deploy: {} } }), 'kinds.deploy'],
-      ['an unrouted provider', JSON.stringify({ ...emptyLocalRouting(), kinds: { tests: { 'gemini-cli': move('fix', 'build') } } }), 'kinds.tests.gemini-cli'],
-      ['a tier that is not an identifier', JSON.stringify({ ...emptyLocalRouting(), kinds: { tests: { codex: { ...move('fix', 'build'), tier: 'Fix!' } } } }), 'kinds.tests.codex.tier'],
-      ['a boundary that is not a time', JSON.stringify({ ...emptyLocalRouting(), boundaries: { tests: { codex: 'yesterday' } } }), 'boundaries.tests.codex']
+      ['an unversioned file', JSON.stringify({ ...emptyLocalRouting(), version: 0 }), 'expected version 1'],
+      ['a file without its sections', JSON.stringify({ version: 1, kinds: {} }), 'kinds, boundaries and log are required'],
+      ['holds that are not an object', JSON.stringify({ ...emptyLocalRouting(), holds: [] }), 'holds and ladders must be objects']
     ])('refuses %s, and says it only caches the moves of this clone', async (_, content, detail) => {
       await mkdir(dir, { recursive: true })
       await writeFile(localRoutingPath(dir), content)
       await expect(readLocalRouting(dir)).rejects.toThrow(detail)
       await expect(readLocalRouting(dir)).rejects.toThrow('delete the file to start over')
+    })
+
+    it('says a newer version needs a newer CLI, and never asks to delete the file (#1309)', async () => {
+      await writeFile(localRoutingPath(dir), JSON.stringify({ ...emptyLocalRouting(), version: 2 }))
+      await expect(readLocalRouting(dir)).rejects.toThrow('written by a newer CLI (version 2; this CLI reads version 1). Upgrade this CLI')
+      await expect(readLocalRouting(dir)).rejects.not.toThrow('delete the file')
     })
 
     it('refuses a link in place of the file', async () => {
@@ -152,16 +157,75 @@ describe('the local routing layer (#1035)', () => {
     it('keeps the log for the last hundred entries', () => {
       expect(ROUTING_LOG_LIMIT).toBe(100)
     })
+  })
 
+  // #1309: the worktrees of one clone share the layer, so an older CLI reads what a newer one wrote. It skips
+  // what it does not know, applies the rest, names what it skipped, and writes the skipped entries back.
+  describe('entries a newer CLI wrote', () => {
+    const known = { tests: { codex: move('terminal', 'build') } }
     it.each([
-      ['a hold that is not a reason', { holds: { tests: { codex: { reason: 3, since: AT } } } }, 'holds.tests.codex'],
-      ['a hold for a kind that does not exist', { holds: { deploy: {} } }, 'holds.deploy'],
-      ['a candidate with a status nobody wrote', { ladders: { codex: { build: { candidate: 'a/b', since: AT, status: 'maybe' } } } }, 'ladders.codex.build'],
-      ['a candidate for a provider that is not routed', { ladders: { 'gemini-cli': {} } }, 'ladders.gemini-cli'],
-      ['a log entry with an action nobody writes', { log: [{ at: AT, kind: 'tests', action: 'bless' }] }, 'log entry']
-    ])('refuses %s', async (_, patch, detail) => {
-      await writeFile(localRoutingPath(dir), JSON.stringify({ ...emptyLocalRouting(), ...patch }))
-      await expect(readLocalRouting(dir)).rejects.toThrow(detail)
+      ['an unknown key', { budget: 1 }, 'budget'],
+      ['an unknown task kind', { kinds: { ...known, deploy: { codex: move('fix', 'build') } } }, 'kinds.deploy'],
+      ['an unrouted provider', { kinds: { tests: { ...known.tests, 'future-agent': move('fix', 'build') } } }, 'kinds.tests.future-agent'],
+      ['a tier that is not an identifier', { kinds: { ...known, prose: { codex: { ...move('fix', 'build'), tier: 'Fix!' } } } }, 'kinds.prose.codex'],
+      ['a boundary that is not a time', { kinds: known, boundaries: { tests: { codex: 'yesterday' } } }, 'boundaries.tests.codex'],
+      ['a hold that is not a reason', { kinds: known, holds: { tests: { codex: { reason: 3, since: AT } } } }, 'holds.tests.codex'],
+      ['a hold for a kind that does not exist', { kinds: known, holds: { deploy: {} } }, 'holds.deploy'],
+      ['a candidate with a status nobody wrote', { kinds: known, ladders: { codex: { build: { candidate: 'a/b', since: AT, status: 'maybe' } } } }, 'ladders.codex.build'],
+      ['a ladder for a provider this CLI does not route', { kinds: known, ladders: { 'future-agent': { fix: { candidate: 'm/high', since: AT, status: 'new' } } } }, 'ladders.future-agent'],
+      ['a log entry with an action nobody writes', { kinds: known, log: [{ at: AT, kind: 'tests', action: 'bless' }] }, 'log entry']
+    ])('skips %s, keeps applying the rest, and names what it skipped', async (_, patch, path) => {
+      await writeFile(localRoutingPath(dir), JSON.stringify({ ...emptyLocalRouting(), kinds: known, ...patch }))
+      const { local, skipped } = await readLocalRoutingWithSkipped(dir)
+      expect(local.kinds.tests?.codex).toEqual(move('terminal', 'build'))
+      expect(skipped).toEqual([path])
+      expect(await readLocalRouting(dir)).toEqual(local)
+      expect(skippedLocalRoutingNotice(skipped)).toContain(path)
+    })
+
+    it('says nothing when it skipped nothing, and names five entries at most', () => {
+      expect(skippedLocalRoutingNotice([])).toBeUndefined()
+      const notice = skippedLocalRoutingNotice(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
+      expect(notice).toContain('(a, b, c, d, e and 2 more)')
+      expect(notice).toContain('kept, not applied')
+      expect(notice).not.toContain('delete')
+    })
+
+    it('writes the entries it skipped back as they were, next to its own changes', async () => {
+      const later = '2026-10-21T08:00:00.000Z'
+      const written = {
+        ...emptyLocalRouting(),
+        budget: { usd: 3 },
+        kinds: { tests: { 'future-agent': move('fix', 'build') }, deploy: { codex: move('fix', 'build') } },
+        ladders: { 'future-agent': { fix: { candidate: 'm/high', since: AT, status: 'new' } }, codex: { build: { candidate: 'a/b', since: AT, status: 'accepted' } } },
+        log: [{ at: later, kind: 'tests', action: 'bless', provider: 'future-agent' }]
+      }
+      await writeFile(localRoutingPath(dir), JSON.stringify(written))
+      await updateLocalRouting(dir, (state) => ({
+        next: withLogEntry(
+          { ...state, kinds: { tests: { codex: move('terminal', 'build') } } },
+          { at: AT, action: 'escalate', kind: 'tests', provider: 'codex', from: 'build', to: 'terminal', evidence: null, note: null }
+        ),
+        result: null
+      }))
+      const raw = JSON.parse(await readFile(localRoutingPath(dir), 'utf8'))
+      expect(raw.budget).toEqual({ usd: 3 })
+      expect(raw.kinds).toEqual({ tests: { 'future-agent': move('fix', 'build'), codex: move('terminal', 'build') }, deploy: { codex: move('fix', 'build') } })
+      expect(raw.ladders).toEqual(written.ladders)
+      // the log stays in time order, the skipped line at its place
+      expect(raw.log.map((entry: { action: string }) => entry.action)).toEqual(['escalate', 'bless'])
+      // and the older CLI reads its own change back, the skipped entries still left out
+      const { local, skipped } = await readLocalRoutingWithSkipped(dir)
+      expect(local.kinds).toEqual({ tests: { codex: move('terminal', 'build') } })
+      expect(skipped).toEqual(['budget', 'kinds.tests.future-agent', 'kinds.deploy', 'ladders.future-agent', 'log entry'])
+    })
+
+    it('lets its own known entry win over a skipped one at the same place', async () => {
+      await writeFile(localRoutingPath(dir), JSON.stringify({ ...emptyLocalRouting(), ladders: { codex: { build: { candidate: 'a/b', since: AT, status: 'maybe' } } } }))
+      const entry = { candidate: 'c/d', since: AT, status: 'accepted' as const }
+      await updateLocalRouting(dir, (state) => ({ next: { ...state, ladders: { codex: { build: entry } } }, result: null }))
+      expect(JSON.parse(await readFile(localRoutingPath(dir), 'utf8')).ladders).toEqual({ codex: { build: entry } })
+      expect((await readLocalRoutingWithSkipped(dir)).skipped).toEqual([])
     })
   })
 })
