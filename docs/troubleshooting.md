@@ -61,6 +61,28 @@ npm --version
 
 If you cannot move off an older Node version, you can set `nvmrc` per project, but the build will keep refusing — there is no compatibility shim.
 
+## A commit hook fails with `EBADDEVENGINES`
+
+**Symptom** — `git commit` from a GUI client or a coding agent fails in a generated project, while the same commands pass in your terminal:
+
+```
+npm error EBADDEVENGINES Invalid semver version ">=11.0.0" does not match "10.9.2" for "packageManager"
+husky - pre-commit script failed (code 1)
+```
+
+**Cause** — Git runs the hooks with the `PATH` of the process that commits. A GUI client or an agent's non-login shell often has the machine's default Node first (Node 22 with npm 10), not the Node 24
+that `.nvmrc` names.
+
+**Fix** — Since 1.4.0, every hook sources `.husky/project-node.sh` first. When the Node on `PATH` is older than the major version `.nvmrc` names, it puts the nvm-installed version first on `PATH` (the
+exact one, otherwise the most recent of the same major). When nvm has none, the hook prints the Node it runs under, the one `.nvmrc` asks for and what to do:
+
+```bash
+nvm install    # in the project root: installs the version .nvmrc names
+```
+
+With another version manager, put that Node first on the `PATH` the commit runs with. Never commit with `--no-verify` to get past it. A project generated before 1.4.0 receives the helper with
+`sf update`.
+
 ## `.saasfoundry.json` is invalid (ajv error on every command)
 
 **Symptom**

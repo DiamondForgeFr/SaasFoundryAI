@@ -54,6 +54,29 @@ npm --version
 
 Ne forcez pas une installation contre `devEngines` : les builds et les commandes du projet continueront à refuser une version incompatible.
 
+## Un hook de commit échoue avec `EBADDEVENGINES`
+
+**Symptôme** — Dans un projet généré, `git commit` lancé depuis un client graphique ou un agent de code échoue, alors que les mêmes commandes passent dans votre terminal :
+
+```text
+npm error EBADDEVENGINES Invalid semver version ">=11.0.0" does not match "10.9.2" for "packageManager"
+husky - pre-commit script failed (code 1)
+```
+
+**Cause** — Git lance les hooks avec le `PATH` du processus qui commite. Un client graphique ou le shell non interactif d'un agent place souvent en premier le Node par défaut de la machine (Node 22
+avec npm 10), et non le Node 24 que nomme `.nvmrc`.
+
+**Correction** — Depuis la 1.4.0, chaque hook source d'abord `.husky/project-node.sh`. Quand le Node du `PATH` est plus ancien que la version majeure de `.nvmrc`, il place en tête du `PATH` la version
+installée par nvm (la version exacte, sinon la plus récente de la même majeure). Quand nvm n'en a aucune, le hook affiche le Node sous lequel il tourne, celui que demande `.nvmrc` et la marche à
+suivre :
+
+```bash
+nvm install    # à la racine du projet : installe la version nommée par .nvmrc
+```
+
+Avec un autre gestionnaire de versions, placez ce Node en tête du `PATH` du commit. Ne contournez jamais l'erreur avec `--no-verify`. Un projet généré avant la 1.4.0 reçoit ce fichier avec
+`sf update`.
+
 ## `.saasfoundry.json` est invalide
 
 **Symptôme**

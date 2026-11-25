@@ -18,6 +18,12 @@ if [ "$source_type" = "merge" ] || [ "$source_type" = "message" ]; then
   exit 0
 fi
 
+# node is the one .nvmrc names, even when the committing shell has an older Node first on PATH (#1317).
+sf_project_node="$(dirname "$0")/project-node.sh"
+if [ -f "$sf_project_node" ]; then
+  . "$sf_project_node"
+fi
+
 # Get current version
 current_version=$(node -p "require('./package.json').version")
 
