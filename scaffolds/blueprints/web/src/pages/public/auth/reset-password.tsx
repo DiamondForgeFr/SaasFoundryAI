@@ -9,6 +9,11 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 /**
+ * Dependencies
+ */
+import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
+
+/**
  * Components
  */
 import { ThemeToggleButton } from '@/components/theme/theme-toggle-button'
@@ -64,6 +69,7 @@ export function ResetPassword() {
       confirmPassword: ''
     }
   })
+  useFormLanguageSync(form)
 
   const onSubmit = (values: ResetPasswordPayloadDto) => {
     resetPasswordMutation.submit(values)

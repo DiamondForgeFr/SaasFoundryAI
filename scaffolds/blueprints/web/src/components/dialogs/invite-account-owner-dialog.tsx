@@ -13,6 +13,7 @@ import { z } from 'zod'
  */
 import { useInviteUser, useInviteUserSchema } from '@/hooks/api/accounts/mutations/useInviteUserCreate'
 import { useInvitedUsers } from '@/hooks/api/invitations/queries/useInvitedUsers'
+import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
 import { invitationRefusalOf } from '@/utils/invitation-refusal'
 
 /**
@@ -83,6 +84,7 @@ export function InviteAccountOwnerDialog({ isOpen, onOpenChange }: InviteAccount
       accountIds: []
     }
   })
+  useFormLanguageSync(form, { 'already-active': tAccount('dialogs.inviteUser.tk_already-active_') })
 
   // Live-suggest an account name based on the invitee's identity. We only auto-fill while the
   // user has not manually overridden the field (we track that via a `dirtyFields` flag from RHF).
@@ -115,7 +117,7 @@ export function InviteAccountOwnerDialog({ isOpen, onOpenChange }: InviteAccount
     } catch (error) {
       // An address that already has an active account is refused with a 409 and nothing is sent (#988).
       if (invitationRefusalOf(error).kind === 'already-active') {
-        form.setError('email', { type: 'server', message: tAccount('dialogs.inviteUser.tk_already-active_') })
+        form.setError('email', { type: 'already-active', message: tAccount('dialogs.inviteUser.tk_already-active_') })
         return
       }
       console.error('Failed to invite account owner', error)

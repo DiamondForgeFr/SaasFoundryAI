@@ -72,6 +72,8 @@ export function UserProfile() {
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema)
   })
+  // Displayed validation errors follow the current language
+  useFormLanguageSync(form)
 
   return <div>...</div>
 }

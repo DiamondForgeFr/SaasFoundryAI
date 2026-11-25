@@ -54,6 +54,7 @@ fields:
     tk_invalid-url_: URL invalide — doit inclure http:// ou https://
     tk_locale_: Locale invalide
     tk_required_: Ce champ est requis
+    tk_emailError_: Cet email n'est pas valide
     tk_minLength_: Ce champ ne respecte pas la longueur minimale
     tk_maxLength_: Ce champ dépasse la longueur maximale
     tk_minOneEntityOrDirectLink_: Vous devez sélectionner au moins une entité ou rattacher directement au compte
