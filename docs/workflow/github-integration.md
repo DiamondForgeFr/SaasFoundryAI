@@ -118,6 +118,16 @@ or a pull request into another branch does not count, and two pull requests that
 `sync-pr-review` moves every ticket the pull request resolves: the closing references GitHub verified on a pull request into the default branch, the `Resolves` lines on any other target. When it
 cannot move one of them, it still moves the others and ends with one line per ticket that names the cause; the check then fails. The same ticket on two `Resolves` lines is refused.
 
+### A pull request stacked on another branch
+
+A ticket's own pull request is found by its head branch (`feature/{N}-…` or `fix/{N}-…`), **whatever branch it targets**. A pull request stacked on another ticket's branch, or one into a work stream,
+targets that branch rather than the PR target, and it is still the ticket's one pull request: `ai-status`, `ready-pr`, `draft-pr`, `local-ci-gate`, `create-pr` (which reuses it instead of opening a
+second one), the PR-state guard of Human testing and In review, and the open-PR check of the Done guard all find it.
+
+Two things stay refused: a pull request from another repository, and a delivery branch's pull request into the release branch. Several open pull requests for one ticket are refused as ambiguous
+(`ai-status` included, which publishes on the head of the ticket's one pull request). The PR-merged guard still asks for a merge into the PR target, where the work has to arrive, and a pull request
+that only resolves the ticket from another ticket's branch (see above) still has to target the PR target.
+
 ### The local CI gate
 
 A pull request opened for review (`create-pr` without `--draft`), marked ready (`ready-pr`) and a ticket moved to **Human testing** need the project's local CI statuses green on the exact head commit

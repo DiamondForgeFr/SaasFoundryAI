@@ -270,6 +270,74 @@ describe('sf-workflow CLI — PR-existence guard (→ In Review)', () => {
     })
   })
 
+  // #1280 — a pull request stacked on another ticket's branch (or into a work stream) targets that branch, not the
+  // delivery branch. The ticket is found by its head branch, whatever the base is.
+  describe('a pull request stacked on another branch (#1280)', () => {
+    const stacked = (changes: Record<string, unknown> = {}) =>
+      JSON.stringify([{ number: 555, isDraft: false, isCrossRepository: false, headRefName: 'feature/42-add-stuff', baseRefName: 'feature/41-parent', body: '', ...changes }])
+
+    it.each([
+      ['another ticket branch', 'feature/41-parent'],
+      ['a fix branch of another ticket', 'fix/41-parent'],
+      ['a work stream', 'stream/billing']
+    ])('allows "In review" for a ready pull request that targets %s (%s)', async (_label, baseRefName) => {
+      sandbox = await buildSandbox(stacked({ baseRefName }), { natureLabel: 'internal' })
+      const res = await runCli(['update-status', '42', 'In review'], sandbox)
+      expect(res.code).toBe(0)
+      expect(readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))).toHaveLength(1)
+    })
+
+    it.each([
+      ['Human testing', true, 0],
+      ['Human testing', false, 2],
+      ['In review', true, 2],
+      ['In review', false, 0]
+    ])('requires the correct state of a stacked pull request for %s (draft=%s), as for any pull request', async (target, isDraft, code) => {
+      sandbox = await buildSandbox(stacked({ isDraft }), { currentStatus: 'Human testing' })
+      const res = await runCli(['update-status', '42', String(target)], sandbox)
+      expect(res.code).toBe(code)
+    })
+
+    it('does not hardcode a base: it accepts a stacked pull request whatever the configured PR target is', async () => {
+      sandbox = await buildSandbox(stacked({ baseRefName: 'stream/billing' }), { natureLabel: 'internal', prTargetBranch: 'integration' })
+      expect((await runCli(['update-status', '42', 'In review'], sandbox)).code).toBe(0)
+    })
+
+    it.each([
+      ['comes from a fork', { isCrossRepository: true }],
+      ['has no repository information', { isCrossRepository: undefined }],
+      ['targets the release branch', { baseRefName: 'master' }],
+      ['is the branch of another ticket', { headRefName: 'feature/43-other' }],
+      ['is the branch of a ticket whose number starts with this one', { headRefName: 'feature/420-other' }]
+    ])('refuses a stacked pull request that %s', async (_label, changes) => {
+      sandbox = await buildSandbox(stacked(changes), { natureLabel: 'internal' })
+      const res = await runCli(['update-status', '42', 'In review'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('has no open PR')
+      expect(readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))).toEqual([])
+    })
+
+    it('refuses as ambiguous a stacked pull request and a pull request into the delivery branch for the same ticket', async () => {
+      const prs = JSON.parse(stacked()) as object[]
+      sandbox = await buildSandbox(JSON.stringify([...prs, { number: 556, isDraft: false, isCrossRepository: false, headRefName: 'fix/42-other-try', baseRefName: 'develop' }]), {
+        natureLabel: 'internal'
+      })
+      const res = await runCli(['update-status', '42', 'In review'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('ambiguous')
+      expect(readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))).toEqual([])
+    })
+
+    it('prefers the ticket own stacked pull request over a pull request that only resolves it', async () => {
+      const prs = JSON.parse(stacked()) as object[]
+      sandbox = await buildSandbox(
+        JSON.stringify([...prs, { number: 178, isDraft: false, isCrossRepository: false, headRefName: 'feature/170-five-stories', baseRefName: 'develop', body: 'Resolves #170\nResolves #42' }]),
+        { natureLabel: 'internal' }
+      )
+      expect((await runCli(['update-status', '42', 'In review'], sandbox)).code).toBe(0)
+    })
+  })
+
   it('rejects a delivery PR that targets the release branch', async () => {
     sandbox = await buildSandbox('[{"number":555,"isDraft":false,"headRefName":"feature/42-add-stuff","baseRefName":"master"}]', { natureLabel: 'internal' })
     const res = await runCli(['update-status', '42', 'In review'], sandbox)

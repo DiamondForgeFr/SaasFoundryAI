@@ -255,6 +255,25 @@ describe('sf-workflow CLI — PR-merged guard', () => {
     expect(res.stderr).toContain('open PR (#410)')
   })
 
+  // #1280 — a pull request stacked on another ticket's branch is the ticket's open PR; it is merged into the
+  // delivery branch only once it reached that branch (a merge into the branch it was stacked on is not delivery)
+  it('blocks "Done" while the ticket has an open pull request stacked on another branch', async () => {
+    sandbox = await buildSandbox('[{"number":334,"headRefName":"feature/42-do-the-thing","baseRefName":"feature/41-parent","isCrossRepository":false,"body":"","mergedAt":null}]')
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('open PR (#334)')
+    expect(readLog(sandbox.toolLogPath).filter((l) => l.startsWith('update-status'))).toEqual([])
+  })
+
+  it('does not count a pull request merged into the branch it was stacked on as delivered', async () => {
+    sandbox = await buildSandbox('[]', {
+      mergedPrListPayload: '[{"number":334,"headRefName":"feature/42-do-the-thing","baseRefName":"feature/41-parent","isCrossRepository":false,"body":"","mergedAt":"2026-09-09T10:00:00Z"}]'
+    })
+    const res = await runCli(['update-status', '42', 'Done'], sandbox)
+    expect(res.code).toBe(2)
+    expect(res.stderr).toContain('no verified merged PR')
+  })
+
   it('blocks "Done" when the ticket has no open or verified merged PR', async () => {
     sandbox = await buildSandbox('[{"number":999,"headRefName":"feature/77-other-ticket","baseRefName":"develop","body":"","mergedAt":null}]')
     const res = await runCli(['update-status', '42', 'Done'], sandbox)

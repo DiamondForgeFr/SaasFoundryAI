@@ -781,6 +781,21 @@ PR_RESOLVES_JQ_DEFS='
   def resolves_ticket($t): resolved_tickets | index($t) != null;
 '
 
+# Whether a pull request is the ticket's own (#1280): its head branch follows the ticket's delivery naming
+# (`$patterns`, from ticket_pattern) and it comes from this repository, whatever branch it targets. A pull
+# request stacked on another ticket's branch, or one into a work stream, targets that branch and not the
+# delivery branch, and the ticket still has the one pull request. Two things stay refused: a pull request
+# of another repository, unless it targets the delivery branch (as before), and one into the release
+# branch, which a delivery branch never goes to directly. `$stacked` false keeps the match to the delivery
+# branch alone, for the question "did this reach it" (the PR-merged guard). Read on a `gh pr list --json` object.
+PR_OWN_BRANCH_JQ_DEFS='
+  def own_branch_pr($patterns; $delivery_branch; $release_branch; $stacked):
+    (.headRefName | type) == "string"
+    and (.headRefName as $branch | any($patterns[]; . as $pattern | $branch | test($pattern)))
+    and (.baseRefName == $delivery_branch
+      or ($stacked and .isCrossRepository == false and (.baseRefName | type) == "string" and .baseRefName != $release_branch));
+'
+
 # One branch regex per line: the branches that deliver ticket $1 (feature, fix), "any" for a delivery branch
 # of any ticket, "release" for the release branches. Nothing when the naming has no usable pattern.
 delivery_branch_patterns() {
@@ -1135,19 +1150,23 @@ is_done_target() {
 }
 
 # Resolve a ticket's delivery PR from manifest conventions. Ordinary feature/fix
-# PRs must target the working branch. Release tickets use the configured RC
+# PRs are found by their head branch, whatever they target (PR_OWN_BRANCH_JQ_DEFS, #1280: a PR stacked
+# on another ticket's branch is the ticket's PR), except that the PR-merged guard asks for the delivery
+# branch alone, where the work has to arrive. Release tickets use the configured RC
 # pattern, target the release branch, and carry exactly one explicit `Closes #N`
 # directive because GitHub omits native closing references for non-default bases.
 #
 # A ticket with no PR of its own matches the same-repository PR into the delivery branch that resolves it
 # (PR_RESOLVES_JQ_DEFS): one PR that delivers several tickets (#1093). Its own branch always wins.
+#
+# Prints the number of the first match, or with $3 `all` the numbers of every match on one line, separated by spaces.
 get_pr_for_ticket() {
-  local ticket=$1 state=$2 payload
+  local ticket=$1 state=$2 listing=${3:-first} payload
   payload=$(gh pr list --state "$state" --limit 1000 \
     --json number,title,headRefName,headRefOid,headRepository,headRepositoryOwner,isCrossRepository,baseRefName,body,mergedAt,mergeCommit,closingIssuesReferences 2>/dev/null) || return 1
   echo "$payload" | jq -r \
-    --arg t "$ticket" --arg working "$WORKING_BRANCH" --arg state "$state" \
-    --slurpfile manifest .saasfoundry.json "${PR_RESOLVES_JQ_DEFS}"'
+    --arg t "$ticket" --arg working "$WORKING_BRANCH" --arg state "$state" --arg listing "$listing" \
+    --slurpfile manifest .saasfoundry.json "${PR_RESOLVES_JQ_DEFS}${PR_OWN_BRANCH_JQ_DEFS}"'
       def literal:
         explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
           then [92,$c] else [$c] end) | flatten | implode;
@@ -1176,14 +1195,7 @@ get_pr_for_ticket() {
                and (.headRefName | test($release_pattern))
                and .baseRefName == $release_branch
                and [.body // "" | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$t]) as $is_release
-           | select(
-               (
-                 (.headRefName | type) == "string"
-                 and (.headRefName as $branch
-                   | any($delivery_patterns[]; . as $pattern | $branch | test($pattern)))
-                 and .baseRefName == $delivery_branch
-               ) or $is_release
-             )
+           | select(own_branch_pr($delivery_patterns; $delivery_branch; $release_branch; $state == "open") or $is_release)
            | {pr: ., is_release: $is_release}] as $own
           | (if ($own | length) > 0 then $own
              else [$payload[]
@@ -1219,7 +1231,8 @@ get_pr_for_ticket() {
                   | select((.mergedAt | type) == "string" and (.mergedAt | length) > 0)
                   | (.number | tostring)][0] // empty
                 end
-            else [$matches[] | (.pr.number | tostring)][0] // empty
+            else [$matches[] | (.pr.number | tostring)]
+              | if $listing == "all" then (if length > 0 then join(" ") else empty end) else .[0] // empty end
             end
         else error("Expected PR array") end
     '
@@ -1227,6 +1240,11 @@ get_pr_for_ticket() {
 
 get_open_pr_for_ticket() {
   get_pr_for_ticket "$1" open
+}
+
+# Every open PR of the ticket, numbers on one line: more than one is an ambiguity the caller refuses.
+get_open_prs_for_ticket() {
+  get_pr_for_ticket "$1" open all
 }
 
 get_merged_pr_for_ticket() {
@@ -1467,8 +1485,8 @@ check_pr_existence_guard() {
   payload=$(gh pr list --state open --limit 1000 --json number,headRefName,baseRefName,isDraft,isCrossRepository,body,closingIssuesReferences 2>/dev/null) || {
     echo "Error: unable to verify PR state; no status transition was made." >&2; return 1;
   }
-  # The ticket's own branch, or else the PR that resolves it among others (#1093)
-  matches=$(echo "$payload" | jq -ce --arg t "$ticket" --slurpfile manifest .saasfoundry.json "${PR_RESOLVES_JQ_DEFS}"'
+  # The ticket's own branch whatever it targets (#1280), or else the PR that resolves it among others (#1093)
+  matches=$(echo "$payload" | jq -ce --arg t "$ticket" --slurpfile manifest .saasfoundry.json "${PR_RESOLVES_JQ_DEFS}${PR_OWN_BRANCH_JQ_DEFS}"'
     def literal:
       explode | map(. as $c | if [92,46,94,36,124,63,42,43,40,41,91,93,123,125] | index($c)
         then [92,$c] else [$c] end) | flatten | implode;
@@ -1493,8 +1511,7 @@ check_pr_existence_guard() {
     | ($manifest[0].workflow.releaseBranch // $manifest[0].mainBranch // "master") as $release_branch
     | if ($payload | type) == "array" then
         [$payload[] | select(
-          ((.headRefName as $branch | any($patterns[]; . as $pattern | $branch | test($pattern)))
-            and .baseRefName == $delivery_branch)
+          own_branch_pr($patterns; $delivery_branch; $release_branch; true)
           or
           ((.headRefName | type) == "string"
             and (.headRefName | test($release_pattern))
@@ -1681,14 +1698,21 @@ ai_status() {
     echo "Usage: workflow-cli.sh ai-status <ticket> <step> <pending|success|failure> \"<description>\"" >&2
     return 2
   fi
-  local ticket=$1 step=${2//|//} state=$3 description=${4//|//} repo pr head icon row comment comment_id comment_url body_file
+  local ticket=$1 step=${2//|//} state=$3 description=${4//|//} repo pr prs head icon row comment comment_id comment_url body_file
   step=${step//$'\n'/ } description=${description//$'\n'/ }
   load_config
   [[ "$WORKFLOW_TOOL" == github-projects ]] || { echo "Error: ai-status requires github-projects." >&2; return 2; }
   if [[ "${GH_REPO:-}" =~ ([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$ ]]; then repo=${BASH_REMATCH[1]}; else repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || repo=""; fi
   [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Error: unable to resolve the repository." >&2; return 2; }
-  pr=$(get_open_pr_for_ticket "$ticket") || { echo "Error: unable to look up the pull request of ticket #${ticket}." >&2; return 2; }
-  [[ -n "$pr" ]] || { echo "Error: ticket #${ticket} has no open pull request — open one first: workflow-cli.sh create-pr ${ticket} --draft" >&2; return 2; }
+  # The ticket's pull request is found by its head branch whatever it targets (#1280); several are refused,
+  # because the status belongs on the head of the one the local CI gate reads
+  prs=$(get_open_prs_for_ticket "$ticket") || { echo "Error: unable to look up the pull request of ticket #${ticket}." >&2; return 2; }
+  [[ -n "$prs" ]] || { echo "Error: ticket #${ticket} has no open pull request — open one first: workflow-cli.sh create-pr ${ticket} --draft" >&2; return 2; }
+  if [[ "$prs" == *" "* ]]; then
+    echo "Error: several open pull requests match ticket #${ticket}: #${prs// /, #}. Close or merge the extra ones, then retry: the status goes on the head of the ticket's one pull request." >&2
+    return 2
+  fi
+  pr=$prs
   head=$(gh pr view "$pr" --json headRefOid --jq .headRefOid 2>/dev/null) || head=""
   [[ "$head" =~ ^[0-9a-f]{40}$ ]] || { echo "Error: unable to read the head commit of pull request #${pr}." >&2; return 2; }
   case "$state" in pending) icon='⏳' ;; success) icon='✅' ;; failure) icon='❌' ;; esac
