@@ -57,6 +57,19 @@ sf srs eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--ma
 version, ou l’un des identifiants UR/FR/DS/TC/NFR que le lot déclare : deux sessions qui étendaient la même fonctionnalité écrivaient le même `v3` et les mêmes identifiants. `next-ids` donne les
 numéros à utiliser, lus dans le SRS lui-même plutôt que dans une lecture antérieure.
 
+Les deux lisent toutes les pages de la fonctionnalité : sa page, ses pages de version, les pages FR et les pages en dessous, avec le contenu des blocs repliables, encadrés, colonnes et sous-listes. Un
+identifiant compte partout où il est écrit : une cellule de tableau (cellules Related UR/DS/TC comprises), un titre, un paragraphe, un élément de liste ou un titre de page. Un identifiant
+sous-numéroté comme `TC-LOAN-001-1` réserve aussi `TC-LOAN-001`. `next-ids` ne propose de numéros que dans les domaines où la fonctionnalité numérote ses propres exigences : un identifiant cité depuis
+une autre fonctionnalité n’y donne pas de suite.
+
+`write` refuse aussi un identifiant que la fonctionnalité ne fait que mentionner, sans ligne de tableau ni page à lui, et nomme la page où il l’a trouvé : sa ligne manque peut-être dans les tableaux,
+ou il appartient à une autre fonctionnalité. Une FR peut citer un tel identifiant, pas le déclarer. S’il est destiné au contenu que vous écrivez, retirez-le du lot et ajoutez-le avec `apply-update`.
+Seule exception : une FR que sa version liste sans qu’aucune page ne la porte, comme en laisse un lot arrêté en chemin, est écrite si elle est rattachée à cette version.
+
+Trois endroits ne sont pas lus : les lignes d’une base de données Notion, les commentaires de page, et les identifiants qu’un intervalle sous-entend (`TC-LOAN-001…025` ne compte que pour
+`TC-LOAN-001`). La lecture fait une requête par page, une par tableau et une par bloc qui en contient d’autres, trois pages à la fois : elle peut prendre une minute sur une fonctionnalité de plusieurs
+dizaines de pages FR. Une page illisible arrête la commande.
+
 `apply-update` ajoute une UR, une FR, un DS, un TC ou une NFR (`add-ur`, `add-fr`, `add-ds`, `add-tc`, `add-nfr`) là où `write` l’aurait mis : dans son tableau sur la page de la fonctionnalité, avec
 la version de la page visée, et pour une FR aussi dans le tableau des FR et la liste des changements de sa version. Il n’ajoute sous un titre « Added … » que si la page n’appartient pas au SRS ou si
 le tableau manque, et le signale.
