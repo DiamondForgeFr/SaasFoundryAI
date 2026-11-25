@@ -220,6 +220,32 @@ test.describe('Authentication Flow', () => {
     await expect(page).toHaveURL(selectors.signIn.successURL)
   })
 
+  test('should suggest the account name in the current language and keep the one the user typed', async ({ page }) => {
+    let signInPayload: { accountName?: string } = {}
+    await (page as CustomPage).mockRoute(testApi.signIn.URL, async (route) => {
+      signInPayload = route.request().postDataJSON()
+      await route.fulfill({ status: testApi.signIn.success.status, contentType: 'application/json', body: JSON.stringify(testApi.signIn.success.body) })
+    })
+    await (page as CustomPage).mockRoute(testApi.meAdmin.URL, async (route) => {
+      await route.fulfill({ status: testApi.meAdmin.success.status, contentType: 'application/json', body: JSON.stringify(testApi.meAdmin.success.body) })
+    })
+
+    await page.addInitScript(() => localStorage.setItem('i18nextLng', 'fr'))
+    await page.goto(`${selectors.signIn.URL}?confirmAccountToken=${testData.confirmAccountToken}`)
+
+    const accountName = page.locator('#input-accountName')
+    await expect(accountName).toHaveValue('Compte de Bill Mate')
+    await page.locator('#input-firstname').fill('Alice')
+    await expect(accountName).toHaveValue("Compte d'Alice Mate")
+
+    await accountName.fill('Acme')
+    await page.locator('#input-firstname').fill('Bob')
+    await page.locator('#input-password').fill(testData.passwordValid)
+    await page.locator('form button[type="submit"]').click()
+    await expect(page).toHaveURL(selectors.signIn.successURL)
+    expect(signInPayload.accountName).toBe('Acme')
+  })
+
   test('should handle signout', async ({ page }) => {
     /**
      * Mock the user endpoint

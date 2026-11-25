@@ -14,6 +14,7 @@ import { useIsSessionActive } from '@/hooks/auth/useIsSession'
 import { useModuleAccess } from '@/hooks/auth/useModuleAccess'
 import { decodeJwtPayload } from '@/hooks/auth/useTokenDecoder'
 import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
+import { suggestAccountName } from '@/utils/account-name'
 import { readTokenFromUrl, removeTokenFromUrl } from '@/utils/tokenExtractor'
 
 /**
@@ -37,32 +38,6 @@ import { AlertCircle } from 'lucide-react'
  * API
  */
 import { useSignIn, useSignInSchema, type SignInPayloadDto } from '@/hooks/api/auth'
-
-/**
- * Helpers
- */
-function capitalize(s: string) {
-  if (!s) return s
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
-
-/**
- * Live default for the account name shown during first-login. Falls back through
- * firstname+lastname → firstname → email user-part → "Main account".
- */
-function suggestAccountName(firstname?: string, lastname?: string, email?: string): string {
-  const fn = firstname?.trim()
-  const ln = lastname?.trim()
-  if (fn && ln) return `${capitalize(fn)} ${capitalize(ln)}'s account`
-  if (fn) return `${capitalize(fn)}'s account`
-  const e = email?.trim()
-  if (e && e.includes('@')) {
-    const userPart = e.split('@')[0].split('+')[0]
-    const firstToken = userPart.split(/[._-]/)[0]
-    if (firstToken) return `${capitalize(firstToken)}'s account`
-  }
-  return 'Main account'
-}
 
 /**
  * React declaration
@@ -115,9 +90,9 @@ export function SignIn() {
   useEffect(() => {
     if (!isFirstLogin || awaitsPlatformAdmin) return
     if (form.formState.dirtyFields.accountName) return
-    const suggested = suggestAccountName(watchedFirstname, watchedLastname, watchedEmail)
+    const suggested = suggestAccountName(tCommon, { firstname: watchedFirstname, lastname: watchedLastname, email: watchedEmail })
     form.setValue('accountName', suggested, { shouldDirty: false })
-  }, [isFirstLogin, awaitsPlatformAdmin, watchedFirstname, watchedLastname, watchedEmail, form])
+  }, [isFirstLogin, awaitsPlatformAdmin, watchedFirstname, watchedLastname, watchedEmail, form, tCommon])
 
   // Redirect on successful login
   useEffect(() => {

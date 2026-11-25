@@ -10,6 +10,12 @@ user:
   tk_email_: Email
   tk_emailPlaceholder_: bill.matt@billmate.com
 
+# Account name suggested to its owner; `vowel` when the owner's name starts with one
+account:
+  tk_main_: Compte principal
+  tk_owned-by_: Compte de {{ name }}
+  tk_owned-by__vowel: Compte d'{{ name }}
+
 loading:
   tk_loadingSignin_: 'Connexion en cours...'
   tk_loadingCreate_: 'Création en cours...'
