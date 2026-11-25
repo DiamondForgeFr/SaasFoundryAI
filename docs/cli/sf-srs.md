@@ -57,6 +57,17 @@ sf srs eval [--path <dir>] [--root-page <id>] [--threshold <pct>] [--json] [--ma
 UR/FR/DS/TC/NFR id the batch declares — two sessions extending one feature used to write the same `v3` and the same ids. `next-ids` gives the numbers to use instead, read from the SRS itself rather
 than from an earlier reading.
 
+Both read every page of the feature: the feature page, its version pages, the FR pages and the pages below them, with what toggles, callouts, columns and sub-lists hold. An id counts wherever it is
+written: a table cell (a Related UR/DS/TC cell included), a heading, a paragraph, a list item or a page title. A sub-numbered id such as `TC-LOAN-001-1` also holds `TC-LOAN-001`. `next-ids` proposes
+numbers only in the areas the feature numbers its own requirements in, so an id cited from another feature gets no next id.
+
+`write` also refuses an id the feature only mentions, with no table row or page of its own, and names the page it was found on: its row may be missing from the tables, or it belongs to another
+feature. An FR may cite such an id; it may not declare it. When the id is meant for the content you are writing, leave it out of the batch and add it with `apply-update`. The one exception is an FR
+that its version lists while no page carries it, as a batch that stopped halfway leaves it: attached to that version, it is written.
+
+Three places are not read: the rows of a Notion database, page comments, and the ids a range leaves out (`TC-LOAN-001…025` counts as `TC-LOAN-001` only). Reading takes one request per page, one per
+table and one per block that holds others, three pages at a time, so it can take a minute on a feature of several dozen FR pages. A page that cannot be read stops the command.
+
 `apply-update` adds a UR, FR, DS, TC or NFR (`add-ur`, `add-fr`, `add-ds`, `add-tc`, `add-nfr`) where `write` would have put it: in its table on the feature page, with the version of the target page,
 and an FR also in its version's FR table and change list. It appends under an "Added …" heading only when the page is not part of the SRS or the table is missing, and says so.
 
