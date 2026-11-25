@@ -205,7 +205,7 @@ checks and the heavier pre-push gate.
 ```
 
 Each hook first sources `project-node.sh`: when the Node first on `PATH` is older than the one `.nvmrc` names, as in a GUI client or a coding agent's non-login shell, it runs the hook with the version
-nvm has installed for `.nvmrc`, or says which Node is in use and how to install the right one.
+nvm has installed for `.nvmrc`, or stops and says which Node is in use and how to install the right one.
 
 `prepare-commit-msg` and `pre-push` only act on release candidate branches (`rc-*`). On a detached HEAD, such as every step of a rebase, they exit without checking anything, so a rebase that stops on
 a conflict continues with `git rebase --continue`. Husky runs the hooks with `sh`, so they are written in POSIX shell: the `rc-*` checks also run where `sh` is dash, as on most Linux images.

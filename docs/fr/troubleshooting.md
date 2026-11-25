@@ -67,8 +67,8 @@ husky - pre-commit script failed (code 1)
 avec npm 10), et non le Node 24 que nomme `.nvmrc`.
 
 **Correction** — Depuis la 1.4.0, chaque hook source d'abord `.husky/project-node.sh`. Quand le Node du `PATH` est plus ancien que la version majeure de `.nvmrc`, il place en tête du `PATH` la version
-installée par nvm (la version exacte, sinon la plus récente de la même majeure). Quand nvm n'en a aucune, le hook affiche le Node sous lequel il tourne, celui que demande `.nvmrc` et la marche à
-suivre :
+installée par nvm (la version exacte, sinon la plus récente de la même majeure). Quand nvm n'en a aucune, le hook s'arrête et affiche le Node sous lequel il tourne, celui que demande `.nvmrc` et la
+marche à suivre :
 
 ```bash
 nvm install    # à la racine du projet : installe la version nommée par .nvmrc

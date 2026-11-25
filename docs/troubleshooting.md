@@ -74,7 +74,7 @@ husky - pre-commit script failed (code 1)
 that `.nvmrc` names.
 
 **Fix** — Since 1.4.0, every hook sources `.husky/project-node.sh` first. When the Node on `PATH` is older than the major version `.nvmrc` names, it puts the nvm-installed version first on `PATH` (the
-exact one, otherwise the most recent of the same major). When nvm has none, the hook prints the Node it runs under, the one `.nvmrc` asks for and what to do:
+exact one, otherwise the most recent of the same major). When nvm has none, the hook stops and prints the Node it runs under, the one `.nvmrc` asks for and what to do:
 
 ```bash
 nvm install    # in the project root: installs the version .nvmrc names
