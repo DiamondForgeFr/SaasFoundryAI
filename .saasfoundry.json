@@ -129,7 +129,7 @@
     ".agents/skills/sf-srs/data/clustering-rules.json": "3110294b18bf3229a320ea70f5878d18c1e874b8bbc511e61ee0c948dcf0bfee",
     ".agents/skills/sf-srs/scripts/detect-eval-signals.sh": "59bdb4d7757b91d9b7c833350f28c5d609c323fd19fe804c61a9c3a89032c481",
     ".agents/skills/sf-srs/scripts/srs-cli.sh": "2c4d6d8654dd54dfd49ee3901c5714447fcfb8042739a1a06a52fbcf943fb406",
-    ".agents/skills/sf-srs/SKILL.md": "62bd5d586b1879b055a35e834f5b848f96171e3176b74bd7cb7de54d69331c6c",
+    ".agents/skills/sf-srs/SKILL.md": "468d665020b94dea1b8c22ba4dd568aa3aae11908802fbe21094519cfab4ed40",
     ".agents/skills/sf-srs/templates/examples/example-epic.md": "353c7ab168a78283a0051f48b91775550b218ff25bf9e87ff9b668fdefa9864f",
     ".agents/skills/sf-srs/templates/examples/example-epic.spec.json": "028ec65c05b42717ad94ef207263754625431ad3ce2b482d0439dd994acbc52d",
     ".agents/skills/sf-srs/templates/examples/example-three-levels.spec.json": "710c232072e333a0fb6918629e25d3caa73952ea2bf4d11b284703cd0fbcb41c",

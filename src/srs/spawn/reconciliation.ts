@@ -44,6 +44,11 @@ export interface ExistingSrsTicket {
   issueType: string | null
   url: string
   srsLinks: string[]
+  /**
+   * Every FR id the title or the body names. A body cites other FRs as a matter of course
+   * (scope, acceptance criteria, dependencies), so ownership is never read from this list:
+   * see `declaredFrIds` (#1117).
+   */
   frIds: string[]
 }
 
@@ -217,12 +222,25 @@ function ambiguousPageReason(frId: string, exact: ExistingSrsTicket[]): string |
   return undefined
 }
 
+const FR_ID_PATTERN = /FR-(?:[A-Za-z0-9]+-)+[0-9]+/gi
+
 /**
- * Why an FR that is going to be created or reused cannot be, safely: a ticket names its id
- * without owning its page, or the ticket that owns the page belongs to another delivery tree.
+ * The FR ids a ticket claims: those of its ids that its title names, as spawn titles a Story
+ * `<FR id>: <title>`. An id the body alone mentions is a cross-reference to another FR, not a
+ * claim on it (#1117).
+ */
+function declaredFrIds(ticket: ExistingSrsTicket): string[] {
+  const titled = new Set((ticket.title.replace(/https?:\/\/[^\][()<>\s]+/g, '').match(FR_ID_PATTERN) ?? []).map((id) => id.toUpperCase()))
+  return ticket.frIds.map((id) => id.toUpperCase()).filter((id) => titled.has(id))
+}
+
+/**
+ * Why an FR that is going to be created or reused cannot be, safely: a ticket claims its id in
+ * its title without owning its page, or the ticket that owns the page belongs to another
+ * delivery tree.
  */
 function unsafeReuseReason(requirement: ReconciliationRequirement, frId: string, tickets: ExistingSrsTicket[], exact: ExistingSrsTicket[], parentTicket: string | null): string | undefined {
-  const idOnly = tickets.filter(isFrDeliveryTicket).filter((ticket) => ticket.frIds.map((id) => id.toUpperCase()).includes(frId) && !matchesCanonicalPage(ticket, requirement))
+  const idOnly = tickets.filter(isFrDeliveryTicket).filter((ticket) => declaredFrIds(ticket).includes(frId) && !matchesCanonicalPage(ticket, requirement))
   if (exact.length === 0 && idOnly.length > 0) {
     return `${frId} is ambiguous: ticket ${idOnly.map((ticket) => `#${ticket.number}`).join(', ')} matches the id but not the canonical SRS page`
   }

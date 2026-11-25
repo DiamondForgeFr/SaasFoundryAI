@@ -237,6 +237,20 @@ describe('sf srs spawn re-run after an FR is added (#986)', () => {
     for (const frId of ['FR-PROJ-001', 'FR-PROJ-002', 'FR-PROJ-003', 'FR-PROJ-004']) expect(board.storiesFor(frId)).toHaveLength(1)
   })
 
+  // #1117 — an existing Story that names the new FR's id in its body does not own it
+  it('creates the new FR’s Story when another Story of the batch cites its id', async () => {
+    const { epic, stories } = await spawnThenAddAnFr()
+    const citing = board.issues.find((issue) => issue.number === stories[0])!
+    citing.body += '\n\n## Dependencies\n\n- FR-PROJ-004 must land first'
+
+    await expect(run()).resolves.toBe(0)
+
+    expect(board.err.join('')).toBe('')
+    expect(board.storiesFor('FR-PROJ-004')).toHaveLength(1)
+    expect(board.storiesFor('FR-PROJ-004')[0].parentNumber).toBe(epic)
+    expect(board.drain()).toContain(`created 1, reused 3, skipped 0 Story ticket(s) under #${epic}`)
+  })
+
   it('points at --ticket instead of guessing when the Stories hang under an Epic it cannot recognise', async () => {
     const { epic } = await spawnThenAddAnFr()
     // An Epic made by hand: neither the version link nor the title spawn would give it

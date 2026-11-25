@@ -133,10 +133,12 @@ Avant de créer quoi que ce soit, `spawn` cherche dans le dépôt les tickets qu
 atteint cette limite, `spawn` attend 60 secondes puis réessaie, jusqu’à trois fois. La variable `SF_SEARCH_RATE_LIMIT_WAIT` (en secondes) change cette attente.
 
 `spawn` réutilise le ticket qui porte déjà la page canonique d’une FR, avec ou sans `--reconciliation-plan`. Un ticket fermé est réutilisé tel quel et jamais rouvert, un ticket fermé comme « not
-planned » (la façon de fermer un doublon) est ignoré, et une FR sans ticket est créée. Deux candidats pour une même FR, ou un candidat qui appartient à un autre parent, arrêtent l’exécution avec le
-code `10` avant que quoi que ce soit ne soit écrit. Sans `--ticket`, l’Epic de version ouvert qu’une exécution précédente a créé est adopté au lieu d’être recréé : `spawn` le reconnaît au lien vers la
-page de version qu’il a écrit dans le corps de l’Epic, puis à son titre `<feature> - <version>`, si bien qu’une page de version renommée entre deux exécutions garde son Epic. Quand les Stories
-dépendent d’un Epic que `spawn` ne reconnaît pas, par exemple un Epic créé à la main, l’exécution s’arrête et nomme cet Epic : passez `--ticket <n>` si c’est bien celui de la version.
+planned » (la façon de fermer un doublon) est ignoré, et une FR sans ticket est créée. Deux candidats pour une même FR, un ticket dont le titre nomme l’identifiant de la FR mais qui pointe vers une
+autre page, ou un candidat qui appartient à un autre parent, arrêtent l’exécution avec le code `10` avant que quoi que ce soit ne soit écrit. Un identifiant de FR qu’une Story cite seulement dans son
+corps, comme une FR voisine de la même version, n’en fait pas une candidate. Sans `--ticket`, l’Epic de version ouvert qu’une exécution précédente a créé est adopté au lieu d’être recréé : `spawn` le
+reconnaît au lien vers la page de version qu’il a écrit dans le corps de l’Epic, puis à son titre `<feature> - <version>`, si bien qu’une page de version renommée entre deux exécutions garde son Epic.
+Quand les Stories dépendent d’un Epic que `spawn` ne reconnaît pas, par exemple un Epic créé à la main, l’exécution s’arrête et nomme cet Epic : passez `--ticket <n>` si c’est bien celui de la
+version.
 
 #### Relancer spawn après l’ajout d’une FR
 
