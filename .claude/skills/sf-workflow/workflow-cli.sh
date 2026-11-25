@@ -744,7 +744,8 @@ check_bundled_pr_parent_guard() {
 # AI Testing with its work uncommitted, or committed and never pushed, and its test report then described
 # code that nobody else could fetch. The guard reads it from git alone, so it holds for every tool. It
 # fires on `→ AI testing` from any status, which covers the Human Testing loop "fix, commit, push, return
-# to AI Testing". Escape hatch: SF_WORKFLOW_BYPASS_PUSHED_GUARD=1.
+# to AI Testing". It asks GitHub one thing: whether a release ticket with no branch left is verified merged
+# (release_ticket_shipped, #1321). Escape hatch: SF_WORKFLOW_BYPASS_PUSHED_GUARD=1.
 
 # The jq definitions that turn workflow.branchNaming into branch regexes, as the PR guards read them: the
 # ticket placeholder is replaced by the ticket's number, `{description}` by `.+`, and everything else is
@@ -848,7 +849,8 @@ check_pushed_commits_guard() {
   hatch=$(developer_hatch_line "Pushed-commits guard" 2>&1)
   local refusal="✗ Ticket #${ticket} cannot enter 'AI Testing'"
   local nature owner=$ticket parent patterns any_patterns current origin_heads
-  local target_branch release_branch mode dir branch=""
+  local target_branch release_branch mode dir branch="" host_status
+  local shipped_notice="→ Ticket #${ticket} is a release ticket and its RC branch is gone from origin: its pull request is verified merged into the release branch"
 
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo -e "${RED}${refusal}: this directory is not a git repository, so the push of its work cannot be checked.${NC}" >&2
@@ -957,6 +959,10 @@ check_pushed_commits_guard() {
       echo -e "${YELLOW}⚠ Pushed-commits check for #${ticket}: this checkout is on ${current} and no worktree holds a branch of #${owner}; only origin was checked, and origin has ${names[0]} (${shas[0]:0:8}). The work itself is not in this checkout.${NC}" >&2
       return 0
     elif [[ ${#names[@]} -eq 0 ]]; then
+      if [[ "$owner" == "$ticket" ]] && release_ticket_shipped "$ticket"; then
+        echo "$shipped_notice (#${RELEASE_PR}, ${RELEASE_HEAD_REF} at ${RELEASE_HEAD_SHA:0:8})." >&2
+        return 0
+      fi
       echo -e "${RED}${refusal}: origin holds no branch of #${owner}, and no worktree of this repository holds one.${NC}" >&2
       echo "  Push the ticket branch first: git push -u origin <branch>   (pattern: workflow.branchNaming.feature / .fix)" >&2
       echo "$hatch" >&2
@@ -972,6 +978,18 @@ check_pushed_commits_guard() {
     local head_sha idx pick=-1 at_head=0
     head_sha=$(git rev-parse HEAD 2>/dev/null)
     if [[ ${#names[@]} -eq 0 ]]; then
+      # A shipped release, as long as this checkout holds no work that neither the release nor origin has
+      if [[ "$owner" == "$ticket" ]] && release_ticket_shipped "$ticket"; then
+        local base_heads
+        base_heads=$(awk -v a="refs/heads/${WORKING_BRANCH}" -v b="refs/heads/${release_branch}" '$2 == a || $2 == b {print $1}' <<<"$origin_heads")
+        # shellcheck disable=SC2086 # one commit id per word
+        if [[ -n "$head_sha" ]] && host_status=$(git status --porcelain --untracked-files=no 2>/dev/null) && [[ -z "$host_status" ]] \
+          && commit_contained_in "$dir" "$head_sha" "$RELEASE_HEAD_SHA" "$RELEASE_MERGE_SHA" $base_heads; then
+          echo "$shipped_notice (#${RELEASE_PR}, ${RELEASE_HEAD_REF} at ${RELEASE_HEAD_SHA:0:8})." >&2
+          return 0
+        fi
+        echo "  Its release PR #${RELEASE_PR} is merged, but this checkout holds work that is not committed, or that neither the release nor origin is known to have." >&2
+      fi
       echo -e "${RED}${refusal}: this checkout is on ${current} and origin holds no branch of #${owner}.${NC}" >&2
       echo "  Push the work to the ticket branch: git push origin HEAD:<branch>   (pattern: workflow.branchNaming.feature / .fix)" >&2
       echo "$hatch" >&2
@@ -1042,6 +1060,11 @@ check_pushed_commits_guard() {
     return 1
   }
   if [[ -z "$remote" ]]; then
+    # The RC branch of a shipped release, still checked out here: every commit of it is in the merged RC head
+    if [[ "$owner" == "$ticket" ]] && release_ticket_shipped "$ticket" && [[ "$branch" == "$RELEASE_HEAD_REF" ]] && commit_contained_in "$dir" "$head" "$RELEASE_HEAD_SHA"; then
+      echo "$shipped_notice (#${RELEASE_PR}, ${RELEASE_HEAD_REF} at ${RELEASE_HEAD_SHA:0:8})." >&2
+      return 0
+    fi
     echo -e "${RED}${refusal}: ${branch} is not on origin.${NC}" >&2
     echo "  Push it: ${push_new_cmd}" >&2
     echo "$hatch" >&2
@@ -1277,6 +1300,108 @@ is_bootstrap_ticket() {
   [[ "$(git log -1 --format=%s "$root" 2>/dev/null)" == "$(bootstrap_commit_message "$1")" ]]
 }
 
+# The closing directives GitHub acts on, as an extended regex for `grep -Ei`.
+CLOSING_DIRECTIVE_RE='(^|[^[:alnum:]_])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9][0-9]*'
+
+# What verify_release_merge proved about the release pull request of a ticket.
+RELEASE_PR="" RELEASE_REPO="" RELEASE_MERGE_SHA="" RELEASE_HEAD_SHA="" RELEASE_HEAD_REF=""
+
+# Prove the merged release pull request of ticket $1 from the immutable commits GitHub reports; $2 is the
+# tab-separated record of get_merged_pr_for_ticket. The pull request is of this repository, its merge commit has two
+# parents and keeps the RC head and its tree, and its message names the ticket and closes nothing: the body of a
+# merged pull request can still be edited, its merge commit cannot. Sets the RELEASE_* values. Returns 1 with the
+# refusal printed, on anything unreadable too; $3 ends the refusals.
+verify_release_merge() {
+  local ticket=$1 record=$2 outcome=$3
+  local number merge_sha head_sha head_ref head_owner head_repo title repo merge_commit rc_commit merge_message merge_first_line expected_github_message
+  RELEASE_PR="" RELEASE_REPO="" RELEASE_MERGE_SHA="" RELEASE_HEAD_SHA="" RELEASE_HEAD_REF=""
+  IFS=$'\t' read -r number merge_sha head_sha head_ref head_owner head_repo title <<< "$record"
+  repo=${GITHUB_REPOSITORY:-}
+  if [[ -z "$repo" ]]; then
+    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
+      echo "Error: unable to resolve the repository for immutable release-ticket verification." >&2
+      return 1
+    }
+  fi
+  if [[ "$repo" != */* || "${head_owner}/${head_repo}" != "$repo" ]]; then
+    echo "Error: release PR #${number} is not verified as a same-repository PR; no status transition was made." >&2
+    return 1
+  fi
+  merge_commit=$(gh api "repos/${repo}/git/commits/${merge_sha}" 2>/dev/null) || {
+    echo "Error: unable to verify the immutable release merge commit; no status transition was made." >&2
+    return 1
+  }
+  rc_commit=$(gh api "repos/${repo}/git/commits/${head_sha}" 2>/dev/null) || {
+    echo "Error: unable to verify the immutable RC head; no status transition was made." >&2
+    return 1
+  }
+  if ! jq -e --arg head "$head_sha" '
+    (.message | type) == "string"
+    and (.tree.sha | type) == "string" and (.tree.sha | test("^[0-9a-f]{40}$"))
+    and (.parents | type) == "array" and (.parents | length) == 2
+    and .parents[1].sha == $head
+  ' <<< "$merge_commit" >/dev/null 2>&1; then
+    echo -e "${RED}✗ Release PR #${number} was not integrated with a two-parent merge commit preserving the RC head — ${outcome}.${NC}" >&2
+    return 1
+  fi
+  if ! jq -e --arg tree "$(jq -r '.tree.sha' <<< "$merge_commit")" \
+    '(.tree.sha | type) == "string" and .tree.sha == $tree' <<< "$rc_commit" >/dev/null 2>&1; then
+    echo -e "${RED}✗ Release merge tree differs from the verified RC tree — ${outcome}.${NC}" >&2
+    return 1
+  fi
+  merge_message=$(jq -r '.message' <<< "$merge_commit")
+  merge_first_line=${merge_message%%$'\n'*}
+  expected_github_message=$(printf 'Merge pull request #%s from %s/%s\n\n%s' "$number" "$head_owner" "$head_ref" "$title")
+  if [[ "$merge_message" == "$expected_github_message" ]]; then
+    if ! printf '%s\n' "$title" | grep -Eq "^(\\[#${ticket}\\]([[:space:]]|$)|[[:alnum:]_.-]+\\(#${ticket}\\)(!)?:)"; then
+      echo -e "${RED}✗ Verified release PR #${number} does not have a ticket-aware title for #${ticket} — ${outcome}.${NC}" >&2
+      return 1
+    fi
+  elif ! printf '%s\n' "$merge_first_line" | grep -Eq "^(\\[#${ticket}\\]([[:space:]]|$)|[[:alnum:]_.-]+\\(#${ticket}\\)(!)?:)"; then
+    echo -e "${RED}✗ Release PR body and immutable merge title do not agree on ticket #${ticket} — ${outcome}.${NC}" >&2
+    return 1
+  fi
+  if printf '%s\n' "$merge_message" | grep -Eqi "$CLOSING_DIRECTIVE_RE"; then
+    echo -e "${RED}✗ Release merge commit embeds a closing directive that would close the ticket during working-branch synchronization — ${outcome}.${NC}" >&2
+    return 1
+  fi
+  RELEASE_PR=$number RELEASE_REPO=$repo RELEASE_MERGE_SHA=$merge_sha RELEASE_HEAD_SHA=$head_sha RELEASE_HEAD_REF=$head_ref
+  return 0
+}
+
+# Whether ticket $1 is a release ticket whose RC pull request is verified merged into the release branch (#1321).
+# The RC branch is deleted once merged: nothing is left to push and no pull request can be open, so the guards of AI
+# testing and In review accept that proof in their place. Silent for an ordinary ticket, which never has one. No
+# relaxation while a pull request of the ticket is open (a new RC is work in flight), nor on anything GitHub does not
+# answer: the caller then refuses as it always did. Sets the RELEASE_* values.
+release_ticket_shipped() {
+  local ticket=$1 open record release_branch ancestry outcome="the merged release does not stand in for its branch"
+  open=$(get_open_pr_for_ticket "$ticket" 2>/dev/null) && record=$(get_merged_pr_for_ticket "$ticket" 2>/dev/null) || {
+    echo "  Whether #${ticket} is a release ticket that is already merged could not be verified: its pull requests are unreadable or ambiguous." >&2
+    return 1
+  }
+  [[ -z "$open" && "$record" == *$'\t'* ]] || return 1
+  verify_release_merge "$ticket" "$record" "$outcome" || return 1
+  release_branch=$(jq -r '.workflow.releaseBranch // .mainBranch // "master"' .saasfoundry.json)
+  ancestry=$(gh api "repos/${RELEASE_REPO}/compare/${RELEASE_MERGE_SHA}...${release_branch}" --jq .status 2>/dev/null) || ancestry=""
+  if [[ "$ancestry" != "identical" && "$ancestry" != "ahead" ]]; then
+    echo -e "${RED}✗ The merge commit of release PR #${RELEASE_PR} is not verified on ${release_branch} — ${outcome}.${NC}" >&2
+    return 1
+  fi
+  return 0
+}
+
+# Whether commit $2, as checkout $1 knows it, is contained in one of the commits that follow. A commit this
+# clone does not have proves nothing.
+commit_contained_in() {
+  local dir=$1 commit=$2 tip
+  shift 2
+  for tip in "$@"; do
+    if [[ -n "$tip" ]] && git -C "$dir" merge-base --is-ancestor "$commit" "$tip" 2>/dev/null; then return 0; fi
+  done
+  return 1
+}
+
 check_pr_merged_guard() {
   # Returns 0 if the caller may proceed, 1 if blocked (message printed).
   local ticket=$1
@@ -1340,44 +1465,11 @@ check_pr_merged_guard() {
     return 1
   fi
   if [[ "$merged_pr" == *$'\t'* ]]; then
-    local release_pr merge_sha rc_head_sha release_head_ref release_head_owner release_head_repo release_pr_title
-    local repo merge_commit rc_commit merge_message merge_first_line expected_github_message
-    local working_branch release_branch
-    local sync_pr_payload sync_match sync_merge_sha sync_commit sync_message sync_status
-    IFS=$'\t' read -r release_pr merge_sha rc_head_sha release_head_ref release_head_owner release_head_repo release_pr_title <<< "$merged_pr"
-    repo=${GITHUB_REPOSITORY:-}
-    if [[ -z "$repo" ]]; then
-      repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
-        echo "Error: unable to resolve the repository for immutable release-ticket verification." >&2
-        return 1
-      }
-    fi
-    if [[ "$repo" != */* || "${release_head_owner}/${release_head_repo}" != "$repo" ]]; then
-      echo "Error: release PR #${release_pr} is not verified as a same-repository PR; no status transition was made." >&2
-      return 1
-    fi
-    merge_commit=$(gh api "repos/${repo}/git/commits/${merge_sha}" 2>/dev/null) || {
-      echo "Error: unable to verify the immutable release merge commit; no status transition was made." >&2
-      return 1
-    }
-    rc_commit=$(gh api "repos/${repo}/git/commits/${rc_head_sha}" 2>/dev/null) || {
-      echo "Error: unable to verify the immutable RC head; no status transition was made." >&2
-      return 1
-    }
-    if ! jq -e --arg head "$rc_head_sha" '
-      (.message | type) == "string"
-      and (.tree.sha | type) == "string" and (.tree.sha | test("^[0-9a-f]{40}$"))
-      and (.parents | type) == "array" and (.parents | length) == 2
-      and .parents[1].sha == $head
-    ' <<< "$merge_commit" >/dev/null 2>&1; then
-      echo -e "${RED}✗ Release PR #${release_pr} was not integrated with a two-parent merge commit preserving the RC head — cannot transition to 'Done'.${NC}" >&2
-      return 1
-    fi
-    if ! jq -e --arg tree "$(jq -r '.tree.sha' <<< "$merge_commit")" \
-      '(.tree.sha | type) == "string" and .tree.sha == $tree' <<< "$rc_commit" >/dev/null 2>&1; then
-      echo -e "${RED}✗ Release merge tree differs from the verified RC tree — cannot transition to 'Done'.${NC}" >&2
-      return 1
-    fi
+    local repo merge_sha working_branch release_branch
+    local sync_pr_payload sync_candidates sync_number sync_oid sync_payload sync_kind sync_count=0 sync_ignored="" sync_merge_sha sync_commit sync_message sync_status
+    verify_release_merge "$ticket" "$merged_pr" "cannot transition to 'Done'" || return 1
+    repo=$RELEASE_REPO
+    merge_sha=$RELEASE_MERGE_SHA
     working_branch=$(jq -r '.workflow.workingBranch // "develop"' .saasfoundry.json)
     release_branch=$(jq -r '.workflow.releaseBranch // .mainBranch // "master"' .saasfoundry.json)
     sync_pr_payload=$(gh pr list --state merged --base "$working_branch" --head "$release_branch" --limit 100 \
@@ -1385,32 +1477,58 @@ check_pr_merged_guard() {
       echo "Error: unable to verify the release synchronization PR; no status transition was made." >&2
       return 1
     }
-    sync_match=$(jq -ce --arg head "$release_branch" --arg base "$working_branch" --arg release "$merge_sha" '
+    # Several merged synchronization pull requests can head the release commit: one merged by rebase or squash, when
+    # the trees were already the same, adds nothing and GitHub records the previous head of the working branch as its
+    # merge commit (#1321). The commits decide which one counts.
+    sync_candidates=$(jq -re --arg head "$release_branch" --arg base "$working_branch" --arg release "$merge_sha" '
       [.[]
        | select(.headRefName == $head and .baseRefName == $base and .headRefOid == $release)
        | select(.isCrossRepository == false and (.mergedAt | type) == "string" and (.mergedAt | length) > 0)
        | select((.closingIssuesReferences | type) == "array" and (.closingIssuesReferences | length) == 0)
        | select(([.body // "" | scan("(?i)(?:^|[^[:alnum:]_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9][0-9]*")] | length) == 0)
        | select((.mergeCommit.oid | type) == "string" and (.mergeCommit.oid | test("^[0-9a-f]{40}$")))]
-      | if length == 1 then .[0] else error("Expected exactly one release synchronization PR") end
+      | if length > 0 and all(.[]; (.number | type) == "number") then .[] | "\(.number)\t\(.mergeCommit.oid)"
+        else error("Expected a release synchronization PR") end
     ' <<< "$sync_pr_payload" 2>/dev/null) || {
       echo -e "${RED}✗ No unique clean ${release_branch} → ${working_branch} synchronization PR preserves release commit ${merge_sha} — cannot transition to 'Done'.${NC}" >&2
       return 1
     }
-    sync_merge_sha=$(jq -r '.mergeCommit.oid' <<< "$sync_match")
-    sync_commit=$(gh api "repos/${repo}/git/commits/${sync_merge_sha}" 2>/dev/null) || {
-      echo "Error: unable to verify the immutable release synchronization merge commit; no status transition was made." >&2
-      return 1
-    }
-    if ! jq -e --arg release "$merge_sha" '
-      (.message | type) == "string"
-      and (.parents | type) == "array" and (.parents | length) == 2 and .parents[1].sha == $release
-    ' <<< "$sync_commit" >/dev/null 2>&1; then
-      echo -e "${RED}✗ Release synchronization was not integrated with a two-parent merge commit whose second parent is the release commit — cannot transition to 'Done'.${NC}" >&2
+    while IFS=$'\t' read -r sync_number sync_oid; do
+      sync_payload=$(gh api "repos/${repo}/git/commits/${sync_oid}" 2>/dev/null </dev/null) || {
+        echo "Error: unable to verify the immutable release synchronization merge commit; no status transition was made." >&2
+        return 1
+      }
+      sync_kind=$(jq -re --arg release "$merge_sha" '
+        if (.message | type) == "string" and (.parents | type) == "array"
+          and all(.parents[]; (.sha | type) == "string" and (.sha | test("^[0-9a-f]{40}$")))
+        then (if (.parents | length) == 2 and any(.parents[]; .sha == $release) then "merge" else "ignored" end)
+        else error("Malformed commit") end
+      ' <<< "$sync_payload" 2>/dev/null) || {
+        echo "Error: the merge commit of synchronization PR #${sync_number} is malformed; no status transition was made." >&2
+        return 1
+      }
+      if [[ "$sync_kind" == merge ]]; then
+        sync_count=$((sync_count + 1))
+        sync_merge_sha=$sync_oid
+        sync_commit=$sync_payload
+      else
+        sync_ignored+="${sync_ignored:+, }#${sync_number}"
+      fi
+    done <<< "$sync_candidates"
+    if [[ "$sync_count" -gt 1 ]]; then
+      echo -e "${RED}✗ No unique clean ${release_branch} → ${working_branch} synchronization PR preserves release commit ${merge_sha}: ${sync_count} of them merged it — cannot transition to 'Done'.${NC}" >&2
       return 1
     fi
+    if [[ "$sync_count" -eq 0 ]] || ! jq -e --arg release "$merge_sha" '.parents[1].sha == $release' <<< "$sync_commit" >/dev/null 2>&1; then
+      echo -e "${RED}✗ Release synchronization was not integrated with a two-parent merge commit whose second parent is the release commit — cannot transition to 'Done'.${NC}" >&2
+      [[ -n "$sync_ignored" ]] && echo "  Merged without merging the release commit (rebase, squash or fast-forward): ${sync_ignored}." >&2
+      echo "  Open a ${release_branch} → ${working_branch} pull request and have it merged with: gh pr merge <N> --merge" >&2
+      echo "  (name the method: the GitHub button keeps the last one used)." >&2
+      return 1
+    fi
+    [[ -n "$sync_ignored" ]] && echo "→ Ignored synchronization PR ${sync_ignored}: its merge commit does not merge the release commit." >&2
     sync_message=$(jq -r '.message' <<< "$sync_commit")
-    if printf '%s\n' "$sync_message" | grep -Eqi '(^|[^[:alnum:]_])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9][0-9]*'; then
+    if printf '%s\n' "$sync_message" | grep -Eqi "$CLOSING_DIRECTIVE_RE"; then
       echo -e "${RED}✗ Release synchronization merge commit embeds a closing directive — cannot transition to 'Done'.${NC}" >&2
       return 1
     fi
@@ -1420,23 +1538,6 @@ check_pr_merged_guard() {
     }
     if [[ "$sync_status" != "identical" && "$sync_status" != "ahead" ]]; then
       echo -e "${RED}✗ Release synchronization merge is not an ancestor of ${working_branch}; merge the release branch back with a merge commit before 'Done'.${NC}" >&2
-      return 1
-    fi
-    merge_message=$(jq -r '.message' <<< "$merge_commit")
-    merge_first_line=${merge_message%%$'\n'*}
-    expected_github_message=$(printf 'Merge pull request #%s from %s/%s\n\n%s' \
-      "$release_pr" "$release_head_owner" "$release_head_ref" "$release_pr_title")
-    if [[ "$merge_message" == "$expected_github_message" ]]; then
-      if ! printf '%s\n' "$release_pr_title" | grep -Eq "^(\\[#${ticket}\\]([[:space:]]|$)|[[:alnum:]_.-]+\\(#${ticket}\\)(!)?:)"; then
-        echo -e "${RED}✗ Verified release PR #${release_pr} does not have a ticket-aware title for #${ticket} — cannot transition to 'Done'.${NC}" >&2
-        return 1
-      fi
-    elif ! printf '%s\n' "$merge_first_line" | grep -Eq "^(\\[#${ticket}\\]([[:space:]]|$)|[[:alnum:]_.-]+\\(#${ticket}\\)(!)?:)"; then
-      echo -e "${RED}✗ Release PR body and immutable merge title do not agree on ticket #${ticket} — cannot transition to 'Done'.${NC}" >&2
-      return 1
-    fi
-    if printf '%s\n' "$merge_message" | grep -Eqi '(^|[^[:alnum:]_])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9][0-9]*'; then
-      echo -e "${RED}✗ Release merge commit embeds a closing directive that would close the ticket during working-branch synchronization — cannot transition to 'Done'.${NC}" >&2
       return 1
     fi
   fi
@@ -1525,6 +1626,11 @@ check_pr_existence_guard() {
     echo "Error: invalid PR response; no status transition was made." >&2; return 1;
   }
   count=$(echo "$matches" | jq length)
+  if [[ "$count" -eq 0 && "$normalized" == "in review" ]] && release_ticket_shipped "$ticket"; then
+    # A release ticket that did not move while its RC PR was open (#1321). Human Testing keeps asking for a draft PR.
+    echo "→ Ticket #${ticket} is a release ticket and its pull request #${RELEASE_PR} (${RELEASE_HEAD_REF}) is verified merged: 'In Review' needs no open PR." >&2
+    return 0
+  fi
   if [[ "$count" -eq 0 ]]; then
     echo "✗ Ticket #${ticket} has no open PR — cannot transition to '$(if [[ "$normalized" == 'in review' ]]; then echo 'In Review'; else echo 'Human Testing'; fi)'." >&2
     echo "  Open a draft with workflow-cli.sh create-pr ${ticket} --draft for Human Testing." >&2

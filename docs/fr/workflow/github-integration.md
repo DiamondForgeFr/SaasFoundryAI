@@ -122,6 +122,27 @@ Deux choses restent refusées : une pull request d'un autre dépôt, et la pull 
 refusées comme ambiguës (`ai-status` compris, qui publie sur la tête de l'unique pull request du ticket). Le garde-fou de PR fusionnée exige toujours une fusion dans la cible des PR, là où le travail
 doit arriver, et une pull request qui ne fait que résoudre le ticket depuis la branche d'un autre ticket (voir plus haut) doit toujours viser la cible des PR.
 
+### Un ticket de release
+
+Un ticket de release est livré par sa branche RC (`workflow.branchNaming.release`, `rc-{version}` par défaut) et par la pull request de cette branche vers la branche de release. Le titre de la pull
+request nomme le ticket (`chore(#42): release v1.0.0`) et son corps porte une ligne qui est exactement `Closes #42`. Déplacez le ticket tant que la branche et la pull request existent :
+
+| Passage         | Moment                                                                                                                                   |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **In progress** | La branche RC est créée                                                                                                                  |
+| **AI testing**  | La branche RC est poussée                                                                                                                |
+| **In review**   | La pull request RC est prête ; `sync-pr-review` fait le passage quand le ticket est en AI testing et n'a pas à passer par Human testing  |
+| **Done**        | La RC est fusionnée avec un merge commit, et la branche de release est refusionnée dans la branche de travail avec un autre merge commit |
+
+Fusionnez la pull request de synchronisation avec `gh pr merge <N> --merge`. Nommez la méthode : le bouton GitHub garde la dernière utilisée, et un rebase ou un squash d'arbres identiques ne fusionne
+rien, alors que GitHub affiche la pull request comme fusionnée. Le garde-fou de Done ignore une telle pull request, et en exige exactement une dont le merge commit a deux parents et porte le commit de
+release.
+
+Quand le ticket n'a pas été déplacé à temps, la branche RC est déjà supprimée : il n'y a plus rien à pousser, et aucune pull request ne peut être ouverte. Les garde-fous d'AI testing et d'In review
+acceptent alors sa pull request RC **vérifiée fusionnée dans la branche de release** : une pull request de ce dépôt dont le merge commit a deux parents, garde la tête de la RC et son arbre, nomme le
+ticket et se trouve sur la branche de release, sans autre pull request du ticket encore ouverte. Un checkout qui porte d'autres travaux, une réponse de GitHub en échec ou malformée, et toute ambiguïté
+refusent comme avant. Human testing exige toujours un brouillon ouvert : sur le parcours Team, un ticket de release en retard a donc besoin du label `nature:internal`, qu'il vous revient d'ajouter.
+
 ### La porte de CI locale
 
 Une pull request ouverte pour la revue (`create-pr` sans `--draft`), rendue prête (`ready-pr`) et un ticket passé en **Human testing** exigent que les statuts de CI locale du projet soient verts sur

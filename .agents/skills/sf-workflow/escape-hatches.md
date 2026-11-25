@@ -215,7 +215,8 @@ The hook is a guardrail against the ordinary path the refusals used to teach, no
 - **Applies to:** `update-status <ticket> "AI testing"`, from any status, so the return from Human testing ("fix, commit, push, return to AI testing") is covered. Every tool: it needs git, not the
   board.
 - **Legitimate:** `origin` is down or refuses the push and the work is safe elsewhere (a bundle, another remote) that you name. Not a case for the hatch: a dirty tree (commit it), an unpushed commit
-  (push it), a branch named off the convention (rename it, or push to the ticket branch).
+  (push it), a branch named off the convention (rename it, or push to the ticket branch), or a release ticket whose RC branch was deleted by its merge: the guard reads that merge on GitHub and accepts
+  it when it is verified, as long as this checkout holds no other work (SKILL.md → "A release ticket").
 - **Illegitimate:** "I will push after the tests", leaving the work uncommitted so a test run is not disturbed, pushing later "for the report".
 - **Record:** automatic, a ticket comment naming the variable and `SF_WORKFLOW_BYPASS_REASON`. Complete it with what is unpushed and where the work is.
 
@@ -224,7 +225,8 @@ The hook is a guardrail against the ordinary path the refusals used to teach, no
 - **Protects:** Human testing needs an open draft PR and In review needs an open, ready PR whose head branch matches the ticket (`feature/<N>-...`, `fix/<N>-...` or the project's `branchNaming`) and
   targets the configured branch. Release PRs follow the RC branch pattern and an explicit `Closes #<N>`.
 - **Applies to:** `update-status` to Human testing or In review. Fails closed when the PR state is unknown or ambiguous.
-- **Legitimate:** the PR is real but opened from a differently named branch that cannot be renamed. State the PR URL.
+- **Legitimate:** the PR is real but opened from a differently named branch that cannot be renamed. State the PR URL. Not a case for the hatch: a release ticket whose RC PR is already merged, which In
+  review accepts when the merge is verified (Human testing does not).
 - **Illegitimate:** moving on without a PR; working around a `branchNaming` pattern that has no `{N}` placeholder. In that case realign `branchNaming` in `.saasfoundry.json`; the guard is correct.
 - **Record:** ticket comment with the PR URL and the branch name.
 
@@ -234,7 +236,8 @@ The hook is a guardrail against the ordinary path the refusals used to teach, no
   approval is not a merge. Aggregate Epics, verified `nature:bundled-pr` children, `srs:*` tickets and the bootstrap ticket are exempt without any hatch.
 - **Applies to:** `update-status <ticket> Done`. Fails closed when PR state cannot be verified.
 - **Legitimate:** the work reached the working branch without a PR that the guard can match (an emergency hotfix pushed directly, a PR merged into a differently configured branch, a squash that lost
-  the ticket link), and you can name the commit.
+  the ticket link), and you can name the commit. Not a case for the hatch: a release whose synchronization PR was merged by rebase or squash. Open another one and have it merged with
+  `gh pr merge <N> --merge`; the guard ignores the first.
 - **Illegitimate:** the PR is still open or awaiting merge; Done "because it was approved"; Done before CI finished.
 - **Record:** ticket comment with the commit SHA or PR URL proving the work is on the working branch.
 

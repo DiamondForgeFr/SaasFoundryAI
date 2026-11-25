@@ -8,7 +8,8 @@ import { promisify } from 'util'
 const execFileP = promisify(execFile)
 
 const REPO_ROOT = path.resolve(__dirname, '../../../..')
-const CLI = path.resolve(REPO_ROOT, '.claude/skills/sf-workflow/workflow-cli.sh')
+// SF_WORKFLOW_CLI_UNDER_TEST runs the spec against another copy of the script (an older one, to see it fail)
+const CLI = process.env.SF_WORKFLOW_CLI_UNDER_TEST ?? path.resolve(REPO_ROOT, '.claude/skills/sf-workflow/workflow-cli.sh')
 const BASH = '/bin/bash'
 const releaseMergeOid = 'c'.repeat(40)
 const releaseHeadOid = 'd'.repeat(40)
@@ -60,6 +61,7 @@ async function buildSandbox(
     syncPrListPayload?: string
     syncCommitApiPayload?: string
     syncStatus?: string
+    commits?: Record<string, string>
     branchNaming?: { feature: string; fix: string; release: string }
     prTargetBranch?: string
   } = {}
@@ -158,6 +160,9 @@ esac
     options.syncCommitApiPayload ?? JSON.stringify({ message: 'chore: synchronize release', tree: { sha: releaseTreeOid }, parents: [{ sha: 'b'.repeat(40) }, { sha: releaseMergeOid }] })
   ).replace(/'/g, "'\\''")
   const syncStatus = options.syncStatus ?? 'ahead'
+  const extraCommits = Object.entries(options.commits ?? {})
+    .map(([oid, payload]) => `    */git/commits/${oid}) printf '%s' '${payload}';;`)
+    .join('\n')
   const ghShim = `#!/bin/bash
 printf '%s\\n' "$*" >> '${ghLogPath}'
 if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
@@ -187,6 +192,7 @@ if [ "$1" = "api" ]; then
     */git/commits/${releaseMergeOid}) printf '%s' '${mergeCommitApiPayload}';;
     */git/commits/${releaseHeadOid}) printf '%s' '${rcCommitApiPayload}';;
     */git/commits/${syncMergeOid}) printf '%s' '${syncCommitApiPayload}';;
+${extraCommits}
     */compare/*) printf '%s' '${syncStatus}';;
     *) exit 1;;
   esac
@@ -610,6 +616,108 @@ describe('sf-workflow CLI — PR-merged guard', () => {
     const res = await runCli(['update-status', '42', 'Done'], sandbox)
     expect(res.code).toBe(2)
     expect(res.stderr).toContain('two-parent merge commit')
+  })
+
+  // #1321 — a sync PR merged by rebase or squash when the trees are the same adds nothing: GitHub records the previous
+  // head of develop as its merge commit. It is not a second candidate; anything that merges the release commit is.
+  describe('several merged synchronization PRs of one release (#1321)', () => {
+    const previousHeadOid = '1'.repeat(40)
+    const secondMergeOid = '2'.repeat(40)
+    const syncPr = (number: number, oid: unknown = syncMergeOid, changes: Record<string, unknown> = {}) => ({
+      number,
+      headRefName: 'master',
+      headRefOid: releaseMergeOid,
+      baseRefName: 'develop',
+      mergedAt: '2026-09-27T21:00:00Z',
+      mergeCommit: { oid },
+      body: 'Technical release synchronization\n\nPart of #42',
+      closingIssuesReferences: [],
+      isCrossRepository: false,
+      ...changes
+    })
+    const commit = (...parents: string[]) => JSON.stringify({ message: 'chore: something', tree: { sha: releaseTreeOid }, parents: parents.map((sha) => ({ sha })) })
+    const realMerge = commit('b'.repeat(40), releaseMergeOid)
+
+    const run = async (syncPrs: unknown[], commits: Record<string, string>) => {
+      sandbox = await buildSandbox('[]', { mergedPrListPayload: releasePrList(releasePrFixture()), syncPrListPayload: JSON.stringify(syncPrs), commits })
+      return runCli(['update-status', '42', 'Done'], sandbox)
+    }
+    const moves = () => readLog(sandbox.toolLogPath).filter((line) => line.startsWith('update-status'))
+
+    it.each([
+      ['an ordinary commit', commit('a'.repeat(40))],
+      ['a merge of another branch', commit('a'.repeat(40), '9'.repeat(40))]
+    ])('ignores the no-op ones, whose merge commit is the previous head of develop: %s', async (_label, previousHead) => {
+      const res = await run([syncPr(820), syncPr(819, previousHeadOid), syncPr(818, previousHeadOid)], { [previousHeadOid]: previousHead })
+      expect(res.stderr).toContain('Ignored synchronization PR #819, #818')
+      expect(res.code).toBe(0)
+      expect(moves()).toHaveLength(1)
+    })
+
+    it('refuses when only no-op ones were merged, and names the merge command', async () => {
+      const res = await run([syncPr(819, previousHeadOid), syncPr(818, previousHeadOid)], { [previousHeadOid]: commit('a'.repeat(40)) })
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('two-parent merge commit')
+      expect(res.stderr).toContain('#819, #818')
+      expect(res.stderr).toContain('gh pr merge <N> --merge')
+      expect(moves()).toEqual([])
+    })
+
+    it.each([
+      ['two merge commits', secondMergeOid],
+      ['the same merge commit', syncMergeOid]
+    ])('refuses as ambiguous two that merged the release commit: %s', async (_label, oid) => {
+      const res = await run([syncPr(821, oid), syncPr(820)], { [secondMergeOid]: realMerge })
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('No unique clean master')
+      expect(res.stderr).toContain('2 of them merged it')
+      expect(moves()).toEqual([])
+    })
+
+    it('does not ignore a two-parent merge that carries the release commit as its first parent', async () => {
+      const reversed = commit(releaseMergeOid, 'b'.repeat(40))
+      const alone = await run([syncPr(821, secondMergeOid)], { [secondMergeOid]: reversed })
+      expect(alone.code).toBe(2)
+      expect(alone.stderr).toContain('whose second parent is the release commit')
+      await sandbox.cleanup()
+      const both = await run([syncPr(821, secondMergeOid), syncPr(820)], { [secondMergeOid]: reversed })
+      expect(both.code).toBe(2)
+      expect(both.stderr).toContain('2 of them merged it')
+      expect(moves()).toEqual([])
+    })
+
+    it('fails closed when the merge commit of any of them cannot be read', async () => {
+      const res = await run([syncPr(820), syncPr(819, previousHeadOid)], {})
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('unable to verify the immutable release synchronization merge commit')
+      expect(moves()).toEqual([])
+    })
+
+    it.each(['{}', '[]', 'not json', '{"message":"x","parents":[{}]}', '{"message":"x"}'])('fails closed when the merge commit of one of them is malformed: %s', async (payload) => {
+      const res = await run([syncPr(820), syncPr(819, previousHeadOid)], { [previousHeadOid]: payload })
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('synchronization PR #819 is malformed')
+      expect(moves()).toEqual([])
+    })
+
+    it('still requires the merge to be on develop when a no-op one is ignored', async () => {
+      sandbox = await buildSandbox('[]', {
+        mergedPrListPayload: releasePrList(releasePrFixture()),
+        syncPrListPayload: JSON.stringify([syncPr(820), syncPr(819, previousHeadOid)]),
+        commits: { [previousHeadOid]: commit('a'.repeat(40)) },
+        syncStatus: 'diverged'
+      })
+      const res = await runCli(['update-status', '42', 'Done'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('not an ancestor')
+    })
+
+    it('does not read a malformed list of synchronization PRs as an empty one', async () => {
+      sandbox = await buildSandbox('[]', { mergedPrListPayload: releasePrList(releasePrFixture()), syncPrListPayload: '{"message":"error"}' })
+      const res = await runCli(['update-status', '42', 'Done'], sandbox)
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('No unique clean master')
+    })
   })
 
   it.each(['Closes #42', 'Release sync fixes: #42', 'Resolves #42, resolves #43', 'Fixes FakeOrg/FakeRepo#42'])(

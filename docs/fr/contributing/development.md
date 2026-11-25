@@ -194,7 +194,8 @@ synchronisez les dépôts locaux attendus et vérifiez le drift guard.
 
 Les releases partent de `master`. Les hooks RC valident l'état mais ne créent ni commit ni tag :
 
-1. Depuis `develop`, créez `rc-X.Y.Z`.
+1. Depuis `develop`, créez `rc-X.Y.Z`. Passez le ticket de release en **In progress** à ce moment, en **AI testing** une fois la branche poussée et en **In review** une fois sa PR prête, le tout avant
+   que la fusion ne supprime la branche (voir [Un ticket de release](/fr/workflow/github-integration#un-ticket-de-release)).
 2. Avant le premier push, exécutez `npm version X.Y.Z --no-git-tag-version`, mettez à jour le changelog et committez avec le ticket de release.
 3. Poussez la branche RC et ouvrez sa PR vers `master`. La version et le nom de branche doivent correspondre, et la matrice Docker complète doit réussir.
 4. Fusionnez avec un merge commit, synchronisez `master`, vérifiez le commit et le contenu du package, puis créez le tag annoté `vX.Y.Z`.
@@ -207,7 +208,8 @@ Les releases partent de `master`. Les hooks RC valident l'état mais ne créent 
 
    Une exécution en échec se relance avec `gh workflow run publish-stable.yml --ref vX.Y.Z -f tag=vX.Y.Z`.
 
-6. Resynchronisez le commit de release vers `develop` et vérifiez une installation globale propre.
+6. Resynchronisez le commit de release vers `develop` par une PR `master` → `develop`, fusionnée avec `gh pr merge <N> --merge` : nommez la méthode, car le bouton GitHub garde la dernière utilisée, et
+   un rebase ou un squash ne fusionne rien ici. Passez ensuite le ticket de release en **Done**, et vérifiez une installation globale propre.
 
 npm authentifie le workflow par la [publication de confiance](https://docs.npmjs.com/trusted-publishers) : OIDC de GitHub Actions, avec provenance. Aucun token n'est stocké ni renouvelé. Configuration
 unique sur npmjs.com, à faire une fois pour le paquet :

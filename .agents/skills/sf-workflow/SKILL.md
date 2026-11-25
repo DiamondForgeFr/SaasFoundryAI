@@ -520,6 +520,15 @@ is the ticket's pull request for `ai-status`, `ready-pr`, `draft-pr`, `local-ci-
 the release branch. Several open pull requests for one ticket are refused as ambiguous, `ai-status` included. The PR-merged guard still asks for a merge into the delivery branch, where the work has to
 arrive, and a pull request that only resolves the ticket from another ticket's branch still has to target it.
 
+**A release ticket.** Its work is the RC branch (`workflow.branchNaming.release`) and that branch's pull request into the release branch: the title names the ticket (`chore(#<ticket>): …`) and the
+body has one line that reads exactly `Closes #<ticket>`. Move the ticket while both exist, whatever tool runs the release: **In progress** when the RC branch is cut, **AI testing** once it is pushed,
+**In review** when its pull request is ready (the review listener makes that move when the ticket is already in AI testing). After the merge, with a merge commit, synchronize the release branch back
+into the working branch with a pull request that closes no ticket, merged by the developer with `gh pr merge <N> --merge`: name the method, because the GitHub button keeps the last one used, and a
+rebase or squash of identical trees merges nothing. Then **Done**, whose guard ignores a synchronization pull request that did not merge the release commit and requires exactly one that did. A ticket
+that did not move in time still reaches Done: the RC branch is deleted by then, so the guards of AI testing and In review accept, instead, its RC pull request verified merged into the release branch
+(merge commit, RC head and tree, ticket in the merge title, no open pull request of the ticket). Anything GitHub does not answer, and any ambiguity, still refuses. Human testing keeps asking for an
+open draft: on a workflow that has it, a late release ticket takes the `nature:internal` route, and that label is the developer's.
+
 With the updated CI policy, draft PRs skip test/build CI. When adopting these skills in an existing project, inspect its checked-in workflows and hooks: refreshing instructions alone does not update
 external CI configuration or remove custom push hooks. Readiness and subsequent ready-PR pushes run full CI; returning to draft cancels obsolete runs. Quick commit checks remain enabled; heavy local
 validation belongs to AI Testing instead of every push.

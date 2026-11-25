@@ -128,6 +128,26 @@ Two things stay refused: a pull request from another repository, and a delivery 
 (`ai-status` included, which publishes on the head of the ticket's one pull request). The PR-merged guard still asks for a merge into the PR target, where the work has to arrive, and a pull request
 that only resolves the ticket from another ticket's branch (see above) still has to target the PR target.
 
+### A release ticket
+
+A release ticket is delivered by its RC branch (`workflow.branchNaming.release`, `rc-{version}` by default) and by that branch's pull request into the release branch. The pull request's title names
+the ticket (`chore(#42): release v1.0.0`) and its body has one line that reads exactly `Closes #42`. Move the ticket while the branch and the pull request exist:
+
+| Move            | When                                                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **In progress** | The RC branch is cut                                                                                                          |
+| **AI testing**  | The RC branch is pushed                                                                                                       |
+| **In review**   | The RC pull request is ready; `sync-pr-review` makes the move when the ticket is in AI testing with no Human testing to go by |
+| **Done**        | The RC is merged with a merge commit, and the release branch is merged back into the working branch with another              |
+
+Merge the synchronization pull request with `gh pr merge <N> --merge`. Name the method: the GitHub button keeps the last one used, and a rebase or a squash of identical trees merges nothing, although
+GitHub shows the pull request as merged. The Done guard ignores such a pull request, and requires exactly one whose merge commit has two parents and carries the release commit.
+
+When the ticket did not move in time, the RC branch is already deleted: there is nothing left to push, and no pull request can be open. The guards of AI testing and In review then accept its RC pull
+request **verified merged into the release branch**: a pull request of this repository whose merge commit has two parents, keeps the RC head and its tree, names the ticket and is on the release
+branch, with no pull request of the ticket still open. A checkout that holds other work, a GitHub answer that fails or is malformed, and any ambiguity refuse as before. Human testing keeps asking for
+an open draft, so on the Team route a late release ticket needs the `nature:internal` label, which is yours to add.
+
 ### The local CI gate
 
 A pull request opened for review (`create-pr` without `--draft`), marked ready (`ready-pr`) and a ticket moved to **Human testing** need the project's local CI statuses green on the exact head commit
