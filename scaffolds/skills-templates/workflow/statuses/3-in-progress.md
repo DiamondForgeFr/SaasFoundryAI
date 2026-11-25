@@ -29,6 +29,7 @@ Active development — subtask creation, iterative commits, final validation.
 
 - **Epic** (`sf-epic` issue type): optional grouping ticket; no branch, commit, or PR. Only create and coordinate delivery-parent children. Epic status is **derived** from those children.
 - **Story / Task / Issue**: full flow below.
+- **Release ticket**: enters here when its RC branch is cut, and goes to AI testing once that branch is pushed, before it is merged and deleted (SKILL.md → "A release ticket").
 - **Child ticket**: always a native GitHub sub-issue created with `create-subtask`. A normal child owns its branch and PR; a `nature:bundled-pr` child contributes one atomic commit on this parent's
   branch and has no own PR.
 

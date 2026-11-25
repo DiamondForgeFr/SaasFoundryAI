@@ -31,6 +31,8 @@ the change warrants it. The AI's job is to make that review effortless (clear PR
 - **Epic** — never enters In Review and never produces a PR. It stays `In progress` until every delivery-parent child is `Done`; a Story, Task, or Issue delivery parent owns any bundled PR.
 - **Story / Task / Issue with its own PR** — full flow below, one PR per ticket.
 - **`nature:bundled-pr` child** — **never enters `In Review`**. Goes AI Testing → Done directly. The CLI rejects `update-status <ticket> "In review"` for these tickets.
+- **Release ticket** — enters In Review when its RC pull request is ready. Late, once the RC is merged and its branch deleted, the guard accepts the verified merge in place of an open PR (SKILL.md →
+  "A release ticket").
 
 ## Action checklist
 

@@ -29,6 +29,9 @@ Finalization and cleanup after merge.
 - **Epic** — `Done` is **derived** only when every delivery-parent child is already `Done`. Close the Epic issue once the last child reaches `Done`.
 - **Story / Task / Issue with its own PR** — full cleanup flow below; merge happens at the ticket level.
 - **`nature:bundled-pr` child** — no individual PR. Move directly to `Done` after AI Testing. Branch cleanup is owned by the delivery parent (the shared parent branch is deleted when its PR merges).
+- **Release ticket** — needs two merge commits: its RC pull request into the release branch, then one release → working branch synchronization pull request that closes no ticket. The developer merges
+  that one with `gh pr merge <N> --merge`, never a rebase or a squash (the GitHub button keeps the last method used). The guard ignores a synchronization pull request that did not merge the release
+  commit, and refuses two that did (SKILL.md → "A release ticket").
 
 ## Action checklist
 

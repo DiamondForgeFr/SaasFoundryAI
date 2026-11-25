@@ -188,7 +188,8 @@ These flows are documented in dedicated reference docs because they have their o
 
 Releases run from `master`. RC Git hooks validate state but never mutate commits or create tags:
 
-1. From `develop`, branch `rc-X.Y.Z` (e.g. `rc-2.0.0`).
+1. From `develop`, branch `rc-X.Y.Z` (e.g. `rc-2.0.0`). Move the release ticket to **In progress** here, to **AI testing** once the branch is pushed and to **In review** once its PR is ready, all
+   before the merge deletes the branch (see [A release ticket](/workflow/github-integration#a-release-ticket)).
 2. Before the first push, run `npm version X.Y.Z --no-git-tag-version`, update the changelog, and commit both with the release ticket scope.
 3. Push the RC branch and open its PR to `master`. The branch version must match `X.Y.Z`, and the full Docker matrix must pass.
 4. Merge with a merge commit, update the local `master`, verify its exact commit and package contents, then create and push the annotated `vX.Y.Z` tag.
@@ -201,7 +202,8 @@ Releases run from `master`. RC Git hooks validate state but never mutate commits
 
    A failed run can be retried with `gh workflow run publish-stable.yml --ref vX.Y.Z -f tag=vX.Y.Z`.
 
-6. Synchronize the release commit back to `develop` and verify a clean global install.
+6. Synchronize the release commit back to `develop` with a `master` → `develop` PR, merged with `gh pr merge <N> --merge`: name the method, because the GitHub button keeps the last one used and a
+   rebase or a squash merges nothing here. Then move the release ticket to **Done**, and verify a clean global install.
 
 npm authenticates the workflow through [trusted publishing](https://docs.npmjs.com/trusted-publishers): GitHub Actions OIDC, with provenance. No token is stored or renewed. One-time setup on
 npmjs.com, done once for the package:
