@@ -781,6 +781,70 @@ describe('write-srs — refuses what the existing feature already holds', () => 
     expect(adapter.createdEpics).toHaveLength(1)
     expect(adapter.createdFrs).toHaveLength(1)
   })
+
+  // #991 — the feature tables missed ids its FR pages held, and the batch reusing them was written
+  describe('ids no feature table lists', () => {
+    class FeatureWithFrPageIds extends FeatureWithHistory {
+      async fetchPage(pageId: string): Promise<RawContent> {
+        if (pageId !== 'fr-page') return super.fetchPage(pageId)
+        return {
+          pageId,
+          title: 'FR-LIVE-007 — Topic notes',
+          url: '',
+          blocks: [
+            { kind: 'heading', text: 'Summary' },
+            {
+              kind: 'table',
+              text: '',
+              rows: [
+                ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS', 'Related TC'],
+                ['FR-LIVE-007', 'Topic notes', 'P1', 'UR-LIVE-001', 'DS-LIVE-002', 'TC-LIVE-003']
+              ]
+            },
+            { kind: 'heading', text: 'Added Design Item — DS-LIVE-009' },
+            { kind: 'list', text: 'DS-LIVE-009: Revised, on top of DS-BOOK-021.' }
+          ]
+        }
+      }
+    }
+    const bringing = (items: Pick<FrSpec, 'urs' | 'dsItems' | 'tcItems'>, id = 'FR-LIVE-008'): DraftCandidate => ({
+      kind: 'fr',
+      confidence: 'high',
+      fr: { parentEpicId: 'NEW', fr: { id, title: 'Consolidation', dsRefs: ['DS-BOOK-021'] }, ...items },
+      source: { kind: 'notion-pages' }
+    })
+
+    it('refuses those an FR page cites or a section appended to it carries, and names that page', async () => {
+      const adapter = new FeatureWithFrPageIds()
+      const reusing = bringing({
+        urs: [{ id: 'UR-LIVE-001', narrative: 'again' }],
+        dsItems: [{ id: 'DS-LIVE-009', title: 'again' }],
+        tcItems: [{ id: 'TC-LIVE-003', title: 'again' }]
+      })
+      await expect(run(adapter, [version('v2 — Live topics', [{ id: 'FR-LIVE-008', title: 'Consolidation' }]), reusing])).resolves.toBe(2)
+      expect(adapter.createdEpics).toEqual([])
+      expect(adapter.createdFrs).toEqual([])
+      const message = stderr.join('')
+      const where = '(no row of its own, found on "FR-LIVE-007 — Topic notes")'
+      expect(message).toContain(`already holds UR-LIVE-001 ${where}, DS-LIVE-009 ${where}, TC-LIVE-003 ${where}`)
+      expect(message).toContain('DS-LIVE-010')
+      expect(message).toContain('TC-LIVE-004')
+      expect(message).toContain('add it with `sf srs apply-update`')
+    })
+
+    it('refuses to declare an id the feature cites from another feature, offers no number in that area, and lets an FR cite it', async () => {
+      const adapter = new FeatureWithFrPageIds()
+      await expect(run(adapter, [version('v2 — Live topics'), bringing({ dsItems: [{ id: 'DS-BOOK-021', title: 'taken elsewhere' }] })])).resolves.toBe(2)
+      expect(adapter.createdFrs).toEqual([])
+      const message = stderr.join('')
+      expect(message).toContain('already holds DS-BOOK-021 (no row of its own, found on "FR-LIVE-007 — Topic notes")')
+      expect(message).not.toContain('DS-BOOK-022')
+
+      // `bringing` cites DS-BOOK-021 in its dsRefs: citing is not declaring
+      await expect(run(adapter, [version('v2 — Live topics'), bringing({ dsItems: [{ id: 'DS-LIVE-010', title: 'new' }] })])).resolves.toBe(0)
+      expect(adapter.createdFrs).toHaveLength(1)
+    })
+  })
 })
 
 // #917 — an FR joining a version keeps the version and its feature consistent
@@ -867,6 +931,35 @@ describe('write-srs — FRs joining a version', () => {
     await expect(run(adapter, [attached({ fr: { id: 'FR-LIVE-001', title: 'Again' } })])).resolves.toBe(2)
     expect(adapter.createdFrs).toEqual([])
     expect(stderr.join('')).toContain('FR-LIVE-002')
+  })
+
+  // #991 — a batch that stopped halfway left the version listing an FR whose page was never written
+  describe('with an FR the version lists and no page carries', () => {
+    class StoppedHalfway extends VersionedFeature {
+      async listChildren(parentPageId?: string): Promise<PageRef[]> {
+        if (parentPageId === 'feature') return [...(await super.listChildren('feature')), { id: 'version-2', url: '', title: 'v2 — Search' }]
+        return super.listChildren(parentPageId)
+      }
+      async fetchPage(pageId: string): Promise<RawContent> {
+        if (pageId !== 'version-1') return super.fetchPage(pageId)
+        const rows = [
+          ['ID', 'Requirement', 'Priority'],
+          ['FR-LIVE-001', 'Notes', 'P1'],
+          ['FR-LIVE-002', 'Consolidation', 'P1']
+        ]
+        return { pageId, title: 'v1 — Topics', url: '', blocks: [{ kind: 'table', text: '', rows }] }
+      }
+    }
+
+    it('lets that FR join the version that lists it, and refuses its id on another version', async () => {
+      const adapter = new StoppedHalfway()
+      await expect(run(adapter, [attached({ parentEpicPageId: 'version-2', fr: { id: 'FR-LIVE-002', title: 'Other' } })])).resolves.toBe(2)
+      await expect(run(adapter, [attached({ fr: { id: 'FR-LIVE-001', title: 'Again' } })])).resolves.toBe(2)
+      expect(adapter.createdFrs).toEqual([])
+
+      await expect(run(adapter, [attached({ fr: { id: 'FR-LIVE-002', title: 'Consolidation' } })])).resolves.toBe(0)
+      expect(adapter.createdFrs.map((fr) => fr.fr.id)).toEqual(['FR-LIVE-002'])
+    })
   })
 
   it('writes an FR under a page that is not a version, and says no table lists it', async () => {

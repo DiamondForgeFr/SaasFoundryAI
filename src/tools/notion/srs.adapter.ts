@@ -9,6 +9,7 @@ import {
   FrSpec,
   PageContent,
   PageRef,
+  PageScan,
   RawContent,
   ResolvedParent,
   SectionAddition,
@@ -119,10 +120,41 @@ export class NotionSrsAdapter implements SrsAdapter {
       // A table's content lives in its row blocks: an FR page keeps its description,
       // acceptance criteria and references there, and a table read as empty is how every
       // spawned Story body said "No acceptance criteria yet." (#837). One call per table.
-      if (raw.kind === 'table' && 'id' in block) raw.rows = (await this.listAllChildren(block.id)).filter(isTableRowBlock).map((row) => row.table_row.cells.map(extractRichText))
+      if (raw.kind === 'table' && 'id' in block) raw.rows = await this.readTableRows(block.id)
       blocks.push(raw)
     }
     return { pageId, title, url, blocks }
+  }
+
+  /**
+   * One request per page (its title is not read), one per table and one per block that holds
+   * others. The pages under it come from the same blocks, with no request of their own.
+   */
+  async scanPage(pageId: string): Promise<PageScan> {
+    const scan: PageScan = { blocks: [], childPages: [] }
+    await this.scanBlocks(pageId, scan)
+    return scan
+  }
+
+  private async scanBlocks(parentId: string, scan: PageScan): Promise<void> {
+    for (const block of await this.listAllChildren(parentId)) {
+      if (isChildPageBlock(block)) {
+        scan.childPages.push(pageRefOf(block))
+        continue
+      }
+      const raw = mapBlockToRaw(block)
+      scan.blocks.push(raw)
+      if (raw.kind === 'table') raw.rows = await this.readTableRows(block.id)
+      else {
+        if (raw.kind === 'other') raw.text = textOf(block)
+        // A database holds its rows as pages of its own, which no block lists
+        if ('type' in block && block.has_children && block.type !== 'child_database') await this.scanBlocks(block.id, scan)
+      }
+    }
+  }
+
+  private async readTableRows(tableId: string): Promise<string[][]> {
+    return (await this.listAllChildren(tableId)).filter(isTableRowBlock).map((row) => row.table_row.cells.map(extractRichText))
   }
 
   async listChildren(parentPageId: string): Promise<PageRef[]> {
@@ -130,7 +162,7 @@ export class NotionSrsAdapter implements SrsAdapter {
     const refs: PageRef[] = []
     for (const block of allBlocks) {
       if (!isChildPageBlock(block)) continue
-      refs.push({ id: block.id, url: notionPageUrl(block.id), title: block.child_page.title })
+      refs.push(pageRefOf(block))
     }
     return refs
   }
@@ -396,6 +428,17 @@ function isTableRowBlock(block: BlockResult): block is BlockResult & { type: 'ta
 
 function isChildPageBlock(block: BlockResult): block is BlockResult & { type: 'child_page'; child_page: { title: string } } {
   return 'type' in block && block.type === 'child_page'
+}
+
+function pageRefOf(block: { id: string; child_page: { title: string } }): PageRef {
+  return { id: block.id, url: notionPageUrl(block.id), title: block.child_page.title }
+}
+
+/** The text of a block of any type that writes some: its rich text and its caption. */
+function textOf(block: BlockResult): string {
+  if (!('type' in block)) return ''
+  const payload = (block as unknown as Record<string, { rich_text?: RichTextResult[]; caption?: RichTextResult[] } | undefined>)[block.type]
+  return [payload?.rich_text, payload?.caption].flatMap((rich) => (Array.isArray(rich) ? [extractRichText(rich)] : [])).join(' ')
 }
 
 function headingText(block: BlockResult): string | undefined {

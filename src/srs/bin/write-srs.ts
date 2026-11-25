@@ -20,7 +20,7 @@ import {
   VersionFrItem,
   VersionItems
 } from '../../builders/srs/types'
-import { describeNextIds, readFeatureRegister, RequirementCategory } from '../feature-register'
+import { describeHeldIds, describeNextIds, readFeatureRegister, RequirementCategory } from '../feature-register'
 import { createSrsAdapter, SrsConfigError, SrsManifestSubset } from '../index'
 import { locatePage, PageLocation, placeFrInExistingVersion, readSrsTree } from '../version-extension'
 import { rejectUnknownOption, runFromCommandLine } from './args'
@@ -263,37 +263,45 @@ export async function findExistingFeatureClashes(adapter: SrsAdapter, candidates
       if (existingTitles.has(version.title.trim().toLowerCase())) clashes.push(`version "${version.title}"`)
       else if (label && existingLabels.has(label)) clashes.push(`version number ${label} ("${version.title}")`)
     }
-    for (const id of [...new Set(declared.filter(([category, id]) => id && register.ids[category].has(id.toUpperCase())).map(([, id]) => id))]) clashes.push(id)
+    const held = describeHeldIds(register, declared)
+    clashes.push(...held.clashes)
     if (clashes.length > 0) {
       errors.push(
         `write-srs: the feature "${reference}" already holds ${clashes.join(', ')}. Nothing was written: another session may have extended it since you read it. ` +
-          `Re-read it (\`sf srs next-ids --feature ${reference}\`) and renumber — ${describeNextIds(register)}.`
+          `Re-read it (\`sf srs next-ids --feature ${reference}\`) and renumber — ${describeNextIds(register)}.${held.note}`
       )
     }
   }
   return errors
 }
 
-/** The same refusal for FRs attached by page id to a version written earlier (#917, #919). */
+/**
+ * The same refusal for FRs attached by page id to a version written earlier (#917, #919). An FR
+ * its version already lists while no page carries it is the one a stopped batch left to write:
+ * attaching it there completes that row, so its own id is no clash.
+ */
 async function findAttachedFrClashes(adapter: SrsAdapter, attached: { location: PageLocation; fr: FrSpec }[]): Promise<string[]> {
   const errors: string[] = []
-  const byFeature = new Map<string, { location: PageLocation; frs: FrSpec[] }>()
+  const byFeature = new Map<string, { title: string; frs: { versionPageId?: string; fr: FrSpec }[] }>()
   for (const { location, fr } of attached) {
     if (location.level !== 'version') continue
-    const group = byFeature.get(location.featurePageId) ?? { location, frs: [] }
-    group.frs.push(fr)
+    const group = byFeature.get(location.featurePageId) ?? { title: location.featureTitle, frs: [] }
+    group.frs.push({ versionPageId: location.versionPageId, fr })
     byFeature.set(location.featurePageId, group)
   }
-  for (const [featurePageId, { location, frs }] of byFeature) {
+  for (const [featurePageId, { title, frs }] of byFeature) {
     const register = await readFeatureRegister(adapter, featurePageId)
-    const declared: [RequirementCategory, string][] = frs.flatMap((fr) => [
-      ['FR', fr.fr.id] as [RequirementCategory, string],
-      ...(fr.urs ?? []).map((item): [RequirementCategory, string] => ['UR', item.id]),
-      ...(fr.dsItems ?? []).map((item): [RequirementCategory, string] => ['DS', item.id]),
-      ...(fr.tcItems ?? []).map((item): [RequirementCategory, string] => ['TC', item.id])
-    ])
-    const clashes = [...new Set(declared.filter(([category, id]) => id && register.ids[category].has(id.toUpperCase())).map(([, id]) => id))]
-    if (clashes.length > 0) errors.push(`write-srs: the feature "${location.featureTitle}" already holds ${clashes.join(', ')}. Nothing was written. Renumber — ${describeNextIds(register)}.`)
+    const declared: [RequirementCategory, string][] = frs.flatMap(({ versionPageId, fr }) => {
+      const announced = versionPageId !== undefined && register.announcedFrs.get(versionPageId)?.has(fr.fr.id.trim().toUpperCase())
+      return [
+        ...(announced ? [] : [['FR', fr.fr.id] as [RequirementCategory, string]]),
+        ...(fr.urs ?? []).map((item): [RequirementCategory, string] => ['UR', item.id]),
+        ...(fr.dsItems ?? []).map((item): [RequirementCategory, string] => ['DS', item.id]),
+        ...(fr.tcItems ?? []).map((item): [RequirementCategory, string] => ['TC', item.id])
+      ]
+    })
+    const held = describeHeldIds(register, declared)
+    if (held.clashes.length > 0) errors.push(`write-srs: the feature "${title}" already holds ${held.clashes.join(', ')}. Nothing was written. Renumber — ${describeNextIds(register)}.${held.note}`)
   }
   return errors
 }
