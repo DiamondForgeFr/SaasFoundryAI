@@ -8,6 +8,11 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 /**
+ * Dependencies
+ */
+import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
+
+/**
  * Components
  */
 import { ThemeToggleButton } from '@/components/theme/theme-toggle-button'
@@ -49,6 +54,7 @@ export function SignUp() {
     resolver: zodResolver(schemas.payload),
     defaultValues: { email: '', password: '' }
   })
+  useFormLanguageSync(form)
 
   const onSubmit = (values: SignUpPayloadDto) => {
     setAuthError(null)

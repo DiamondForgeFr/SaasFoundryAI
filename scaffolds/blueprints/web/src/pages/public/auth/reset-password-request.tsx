@@ -8,6 +8,11 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 /**
+ * Dependencies
+ */
+import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
+
+/**
  * Components
  */
 import { ThemeToggleButton } from '@/components/theme/theme-toggle-button'
@@ -44,6 +49,7 @@ export function ResetPasswordRequest() {
     resolver: zodResolver(schemas.payload),
     defaultValues: { email: '' }
   })
+  useFormLanguageSync(form)
 
   const onSubmit = (values: RequestPasswordResetPayloadDto) => {
     setUserEmail(values.email)

@@ -88,6 +88,7 @@ export function SignupForm() {
   })
 
   const form = useForm<SignupPayload>({ resolver: zodResolver(schema) })
+  useFormLanguageSync(form) // '@/hooks/ui/useFormLanguageSync': displayed errors follow the current language
   return <form onSubmit={form.handleSubmit(console.log)}>{/* … */}</form>
 }
 ```

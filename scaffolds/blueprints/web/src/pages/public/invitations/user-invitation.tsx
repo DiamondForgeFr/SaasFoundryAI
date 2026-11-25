@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom'
  * Dependencies
  */
 import { decodeJwtPayload } from '@/hooks/auth/useTokenDecoder'
+import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
 import { readTokenFromUrl, removeTokenFromUrl } from '@/utils/tokenExtractor'
 
 /**
@@ -65,6 +66,7 @@ export function UserInvitation() {
       lastname: tokenData?.lastname || ''
     }
   })
+  useFormLanguageSync(form)
 
   useEffect(() => {
     if (!invitationToken) {

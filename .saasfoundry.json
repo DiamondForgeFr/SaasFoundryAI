@@ -123,7 +123,7 @@
   "fileHashes": {
     "GEMINI.md": "bc151271e752fb7d81079960549699344f07dc69c33508d296d888987a34b8f9",
     ".agents/skills/sf-integration-rules/backend.md": "65dad96f9e53683b2a36f18e11f270a9da841258d8910b704bc7ac5131df718d",
-    ".agents/skills/sf-integration-rules/frontend.md": "6a07fcdb592f4fcddddef37a44796a477364f6bdea72a55ff0ada343c11f2112",
+    ".agents/skills/sf-integration-rules/frontend.md": "a4906c5a9149411c2d888859e4d093dd77367bb03e47b3240724d94694f98446",
     ".agents/skills/sf-integration-rules/SKILL.md": "5d319a0aa7b9b395ecdd57d2cc23b5b56cd15eb4345f899a450c20023f46de53",
     ".agents/skills/sf-integration-rules/topology.md": "6963e6bfae2de4febd56027cc456de1ebe604515da868cb857828245a54282ca",
     ".agents/skills/sf-srs/data/clustering-rules.json": "3110294b18bf3229a320ea70f5878d18c1e874b8bbc511e61ee0c948dcf0bfee",

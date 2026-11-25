@@ -178,6 +178,7 @@ export function SignIn() {
     resolver: zodResolver(schemas.payload),
     defaultValues: { email: '', password: '' }
   })
+  useFormLanguageSync(form)
 
   const onSubmit = (values: SignInPayloadDto) => {
     signInMutation.submit(values, { onError: () => setAuthError(...) })
@@ -188,6 +189,9 @@ export function SignIn() {
 
 The `useSignInSchema()` hook is co-located with the API hook — it reads i18n keys, calls `buildSigninPayloadSchema({ emailRequired: tCommon('user.tk_email-required_'), … })`, and returns
 `{ payload, response }`.
+
+**Call `useFormLanguageSync(form)`** (`@/hooks/ui/useFormLanguageSync`) after every `useForm` whose resolver carries translated messages: a displayed error keeps the language it was produced in until
+the field is validated again, and the user's locale is applied after the page mounts. Pass the messages the form sets itself with `form.setError`, keyed by their error `type`, as its second argument.
 
 **Field rendering uses the ShadCN `Form` primitives** — `FormField` plumbs RHF into `FormControl` / `FormMessage` so validation errors appear automatically:
 

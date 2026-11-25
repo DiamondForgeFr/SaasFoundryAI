@@ -19,6 +19,7 @@ import { useAllAccounts } from '@/hooks/api/accounts/queries/useAllAccounts'
 import { useSystemRoles } from '@/hooks/api/accounts/queries/useSystemRoles'
 import { useInvitedUsers } from '@/hooks/api/invitations/queries/useInvitedUsers'
 import { useModuleAccess } from '@/hooks/auth/useModuleAccess'
+import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
 
 /**
  * Components
@@ -151,6 +152,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
       accountIds: []
     }
   })
+  useFormLanguageSync(form, { 'already-active': tAccount('dialogs.inviteUser.tk_already-active_') })
 
   // Entity-admin path: invitations are scoped to the entity they're CURRENTLY contextualised
   // on (the one in the scope switcher), not every entity they manage. Falls back to all managed
@@ -220,7 +222,7 @@ export function InviteUserDialog({ isOpen, onOpenChange }: InviteUserDialogProps
       // on the email field and keep the dialog open, instead of letting the inviter believe it went out.
       const refusal = invitationRefusalOf(error)
       if (refusal.kind === 'already-active') {
-        form.setError('email', { type: 'server', message: tAccount('dialogs.inviteUser.tk_already-active_') })
+        form.setError('email', { type: 'already-active', message: tAccount('dialogs.inviteUser.tk_already-active_') })
         return
       }
       console.error('Failed to invite user:', error)

@@ -13,6 +13,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useIsSessionActive } from '@/hooks/auth/useIsSession'
 import { useModuleAccess } from '@/hooks/auth/useModuleAccess'
 import { decodeJwtPayload } from '@/hooks/auth/useTokenDecoder'
+import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
 import { readTokenFromUrl, removeTokenFromUrl } from '@/utils/tokenExtractor'
 
 /**
@@ -102,6 +103,7 @@ export function SignIn() {
       accountName: ''
     }
   })
+  useFormLanguageSync(form)
 
   // Auto-suggest the account name based on the user's identity, but only on the first-login
   // step (where the new account is provisioned). Skipped during platform bootstrap — the first

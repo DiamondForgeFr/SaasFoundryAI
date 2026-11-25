@@ -17,6 +17,7 @@ import { useEntityCreate, useEntityCreateSchema } from '@/hooks/api/entities/mut
 import { useOrganizationLogoUpload } from '@/hooks/api/organizations/mutations/useOrganizationLogoUpload'
 import { useAdminScope } from '@/hooks/auth/useAdminScope'
 import { useModuleAccess } from '@/hooks/auth/useModuleAccess'
+import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
 
 /**
  * Components
@@ -95,6 +96,7 @@ export function CreateEntityDialog({ isOpen, onOpenChange, onCreated }: CreateEn
       }
     }
   })
+  useFormLanguageSync(form)
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
