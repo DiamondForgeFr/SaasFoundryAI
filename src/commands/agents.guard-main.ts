@@ -1,7 +1,8 @@
 import { isAbsolute } from 'path'
 
 import { agentsWith } from '../harness/agent-registry'
-import { readShellShapeMode } from '../harness/shell-guard-mode'
+import { checkoutKind } from '../harness/checkout-kind'
+import { readGuardSettings } from '../harness/shell-guard-mode'
 import { SHELLS } from '../harness/shell-shape'
 import { evaluateToolCall, GUARDED_TOOLS, guardHookOutput, type GuardHost } from '../harness/tool-call-guard'
 
@@ -98,12 +99,16 @@ export async function agentsGuard(options: AgentsGuardOptions): Promise<void> {
     project = cwd
     const toolName = typeof event.tool_name === 'string' ? event.tool_name : ''
     if (!GUARDED_TOOLS[host].includes(toolName)) return
+    // What to do with a line that is not one plain command comes from the manifest of the project (#1251): refuse when
+    // it says nothing. The working branch is the one the primary checkout stays on (#1332).
+    const settings = readGuardSettings(cwd)
     const decision = evaluateToolCall({
       host,
       toolName,
       command: commandOf(event.tool_input),
-      // What to do with a line that is not one plain command comes from the manifest of the project (#1251): refuse when it says nothing.
-      shellShape: readShellShapeMode(cwd),
+      shellShape: settings.shellShape,
+      ...(settings.workingBranch ? { workingBranch: settings.workingBranch } : {}),
+      checkoutOf: checkoutKind,
       ...(cwd ? { cwd } : {}),
       ...(typeof event.agent_id === 'string' && event.agent_id ? { agentId: event.agent_id } : {})
     })

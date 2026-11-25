@@ -33,16 +33,23 @@ Who builds a ticket, and the consent behind it, follow "Session orchestration an
 
 ## Parallel implementation and Git worktrees
 
-Open a worktree per ticket when the recorded delegation is `allowed`, or when the developer
-asks for parallel work, and only for independent writing streams that can be delivered
-concurrently. Read-only exploration and review may use parallel agents without separate
-worktrees. Work with sequential dependencies, overlapping file ownership or unclear boundaries
-must use one feature worktree and sequential execution.
+Every ticket is built in a worktree of its own, whoever builds it, a trivial change included.
+Several run at once (the recorded delegation `allowed`, or the developer asking for parallel
+work) only for independent writing streams that can be delivered concurrently.
+Read-only exploration and review may use parallel agents without separate worktrees. Work with
+sequential dependencies, overlapping file ownership or unclear boundaries must use one feature
+worktree and sequential execution.
 
 Before opening a worktree, read `.saasfoundry.json` and use
-`workflow.workingBranch`; never hardcode a branch name. Keep the primary checkout on that
-configured working branch. Do not let feature workers write in the primary checkout while
-parallel worktrees are active.
+`workflow.workingBranch`; never hardcode a branch name. A host with native worktrees opens it
+for its delegate; any other runs `git fetch origin`, then
+`git worktree add <path> -b <branch> origin/<workingBranch>`, and hands the delegate its path.
+
+The primary checkout is shared: agents of several hosts and the developer may work in one folder.
+Never change its branch, which stays on the working branch, and never stash, restore or discard
+uncommitted changes there that are not yours. Where the harness installs its guard hook, it
+refuses `git checkout <branch>`, `git switch` and `git stash` there and names the worktree
+command to use instead.
 
 For each independent writing stream, define one ticket, branch and worktree path, plus its owned
 files and dependency boundary. Start from a synchronized configured working branch. Each worker

@@ -307,7 +307,8 @@ The conversational session is the developer's interlocutor: it drafts the SRS, c
 triages tickets, plans, coordinates the work in flight, answers questions and reviews the result
 (on a complex ticket, the Examine phase). While delegation is allowed it builds a ticket itself
 only when the change is trivial: one known file, about 20 lines or fewer (a typo, a
-configuration value, a documentation line). Everything else is delegated.
+configuration value, a documentation line), and in a worktree of its own (see below).
+Everything else is delegated.
 
 Read the `delegation:` line of `sf status --agent-friendly --no-network` (or run
 `sf agents delegation status`) before the first ticket of a session. The shared answer is the
@@ -333,9 +334,8 @@ team's default; a clone may override it locally, and the line reports the effect
 - `declined`, or the current agent cannot delegate or run in the background: deliver the tickets
   in the session, one after the other, and say so explicitly.
 - `allowed`, but the current agent's profile has no worktree support (`sf agents catalog --json`
-  says `worktrees: none`, as for Kimi Code): it cannot open a worktree for a delegate, so it
-  delivers the tickets in the session, one after the other, and delegates sub-tasks only, in the
-  current worktree.
+  says `worktrees: none`): it delivers the tickets in the session, one after the other, each in a
+  worktree it opens with git, and delegates sub-tasks only.
 
 A delegated agent runs the tests the change affects while it works, and the full suites once, at the end of AI Testing, not after every iteration. After a rebase it reruns the affected tests, and the full suites only when the rebase brought changes to shared files. The ready pull request's CI stays the final check. The brief does not restate this rule: the workflow status documents hold it.
 
@@ -352,16 +352,23 @@ it prints in the brief, and follow "Measured delegations" in the workflow skill;
 
 ## Parallel implementation and Git worktrees
 
-Open a worktree per ticket when the recorded delegation is `allowed`, or when the developer
-asks for parallel work, and only for independent writing streams that can be delivered
-concurrently. Read-only exploration and review may use parallel agents without separate
-worktrees. Work with sequential dependencies, overlapping file ownership or unclear boundaries
-must use one feature worktree and sequential execution.
+Every ticket is built in a worktree of its own, whoever builds it, a trivial change included.
+Several run at once (the recorded delegation `allowed`, or the developer asking for parallel
+work) only for independent writing streams that can be delivered concurrently.
+Read-only exploration and review may use parallel agents without separate worktrees. Work with
+sequential dependencies, overlapping file ownership or unclear boundaries must use one feature
+worktree and sequential execution.
 
 Before opening a worktree, read `.saasfoundry.json` and use
-`workflow.workingBranch`; never hardcode a branch name. Keep the primary checkout on that
-configured working branch. Do not let feature workers write in the primary checkout while
-parallel worktrees are active.
+`workflow.workingBranch`; never hardcode a branch name. A host with native worktrees opens it
+for its delegate; any other runs `git fetch origin`, then
+`git worktree add <path> -b <branch> origin/<workingBranch>`, and hands the delegate its path.
+
+The primary checkout is shared: agents of several hosts and the developer may work in one folder.
+Never change its branch, which stays on the working branch, and never stash, restore or discard
+uncommitted changes there that are not yours. Where the harness installs its guard hook, it
+refuses `git checkout <branch>`, `git switch` and `git stash` there and names the worktree
+command to use instead.
 
 For each independent writing stream, define one ticket, branch and worktree path, plus its owned
 files and dependency boundary. Start from a synchronized configured working branch. Each worker

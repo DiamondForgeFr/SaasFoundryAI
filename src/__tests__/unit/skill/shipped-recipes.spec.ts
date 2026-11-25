@@ -106,7 +106,7 @@ describe('the recipes the harness ships (skills, status documents, rules)', () =
   it('finds the recipes to check', () => {
     expect(files.length).toBeGreaterThan(30)
     expect(recipes.length).toBeGreaterThan(150)
-    expect(recipes.some((recipe) => recipe.file === 'workflow/statuses-solo/2-in-progress.md' && recipe.text.startsWith('git checkout <workingBranch>'))).toBe(true)
+    expect(recipes.some((recipe) => recipe.file === 'workflow/statuses-solo/2-in-progress.md' && recipe.text.startsWith('git worktree add <path>'))).toBe(true)
   })
 
   it('has none that chains commands, substitutes one into another, loops, runs an inline script or writes a file through a heredoc', () => {

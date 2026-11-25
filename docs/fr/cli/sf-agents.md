@@ -397,17 +397,17 @@ sont `moonshot/kimi/<modèle>/<effort>` :
   encore déclaré reçoit les tables `[secondary_model]` et `[secondary_model.models]` en entier, avec un espace réservé pour le `default_model`, qui doit être l'une de ses clés. Une configuration
   illisible (pas un fichier, pas du texte UTF-8, plus de 1 Mio) est `unknown` : la route nomme quand même l'alias, et l'extrait s'imprime comme si rien n'était déclaré. Si
   `[secondary_model].default_effort` est défini, il l'emporte sur l'effort de chaque alias, et le CLI le dit. Avec un pool d'une seule entrée, Kimi Code n'annonce pas du tout le paramètre `model`.
-- **Une ligne de sous-tâche, pas une ligne de ticket entier.** Le profil dit `worktrees: none` : chaque agent de palier Kimi porte donc « Sub-tasks only » à la place de la ligne de livraison de ticket
-  entier de ceux de Claude Code et de Codex. Il travaille sur la sous-tâche que le brief lui confie, dans le worktree courant, et s'arrête en le disant si on lui confie un ticket entier. C'est décidé
-  à partir des données du profil, sans branche pour Kimi Code dans le moteur de rendu. La session livre le ticket elle-même et ne délègue que des sous-tâches.
+- **Des worktrees ouverts avec git, comme Codex.** Le profil dit `worktrees: manual` : une session Kimi Code dont la délégation est `allowed` ouvre un worktree par ticket avec git (`git fetch origin`,
+  puis `git worktree add <chemin> -b <branche> origin/<workingBranch>`) et y confie le ticket à son agent `sf-<palier>` ; chaque agent de palier Kimi porte donc la même ligne de livraison de ticket
+  entier que ceux de Claude Code et de Codex. C'est décidé à partir des données du profil, sans branche pour Kimi Code dans le moteur de rendu. Jusqu'à #1332, le profil disait `worktrees: none` et une
+  session Kimi construisait les tickets dans le checkout courant, ce qui changeait la branche d'un checkout qu'une autre session partageait.
 - **Non vérifié dans une vraie session.** Le profil garde `runtime: not-checked` : que Kimi Code résolve `subagent_type: "sf-<palier>"` et respecte l'alias d'un appel est déclaré d'après sa
   documentation, non vérifié ici.
 - **Pas de hook.** Kimi Code lit ses hooks dans la configuration de l'utilisateur seulement, jamais dans le projet : le harness n'installe donc ni garde ni hook de capture. `sf status` dit
   `kimi guard unavailable (…)` et `kimi capture unavailable (… ; record its delegations with sf agents outcome record)`. Les gardes propres au CLI refusent toujours une échappatoire ; rien n'empêche
   un agent d'en poser une avant d'y arriver.
-- **Sous-tâches du worktree courant seulement.** Kimi Code n'a pas d'outil de worktree que le harness utilise (`worktrees: none`) : une délégation à Kimi se limite donc à des sous-tâches du worktree
-  courant, tant qu'une exécution de ticket entier dans un worktree n'est pas vérifiée. Une route refusée ou en échec n'envoie jamais la session vers le CLI d'un autre hôte (voir
-  [Livraison déléguée des tickets](#livraison-deleguee-des-tickets-sf-agents-delegation)).
+- **Pas de worktree natif.** Kimi Code n'a pas d'outil de worktree que le harness utilise : la session ouvre donc le worktree elle-même et donne son chemin au délégué (`limitations.worktrees`). Une
+  route refusée ou en échec n'envoie jamais la session vers le CLI d'un autre hôte (voir [Livraison déléguée des tickets](#livraison-deleguee-des-tickets-sf-agents-delegation)).
 - **Enregistrement à la main.** Une délégation à Kimi s'enregistre avec `sf agents outcome record --provider kimi …` (hôte `manual` : évaluée dans le rapport, elle ne déplace jamais le routage), et
   ses modèles ne sont pas valorisés tant que le projet ne déclare pas de prix dans `modules.harness.routing.adjust.prices`.
 - **Identité.** L'agent est `kimi`, déclaré explicitement (`sf agents enable kimi`). Aucun chemin ne l'infère d'un nom de modèle, et `kimi-code`, `moonshot` ou `k3` sont refusés comme non enregistrés.
@@ -498,15 +498,16 @@ Les instructions générées indiquent ensuite à chaque agent quoi faire de la 
   worktree, sur le palier que `sf agents route` indique pour le type de tâche du travail. L'agent qui reçoit un ticket le construit lui-même et ne le confie jamais à un autre. La session continue de
   dialoguer avec le développeur et ne bascule jamais vers le codage d'un ticket en cours de livraison. Une demande qui arrive entre-temps et ne fait pas partie du ticket en cours devient un ticket à
   part, confié à son propre agent. Un changement trivial reste dans la session : un seul fichier connu, environ 20 lignes au plus (une coquille, une valeur de configuration, une ligne de
-  documentation). Il ne justifie ni un worktree ni une installation de dépendances.
+  documentation), dans un worktree à lui. Il ne justifie ni une délégation ni une installation de dépendances.
 - `declined`, ou un agent qui ne peut ni déléguer ni travailler en arrière-plan : la session construit les tickets l'un après l'autre et le dit explicitement.
 
 L'accord couvre la livraison des tickets, et rien d'autre. Tout autre flux d'écriture parallèle est d'abord proposé au développeur, dont la réponse précède le démarrage des rédacteurs.
 
-Un agent de code dont le profil n'a pas de worktree (`worktrees: none`, Kimi Code aujourd'hui) ne peut pas exécuter un ticket entier dans un worktree à lui. Pour lui, la délégation se limite aux
-sous-tâches du worktree courant, dans la session qui le détient, tant qu'une exécution de ticket entier dans un worktree n'est pas vérifiée ; le profil le dit (`limitations.worktrees`). Les
-instructions générées disent la même chose, de façon statique, quels que soient les agents que déclare le projet : un tel hôte livre les tickets dans la session, l'un après l'autre, et ne délègue que
-des sous-tâches, par son propre outil natif de sous-agents.
+Chaque ticket se construit dans un worktree à lui, quel que soit celui qui le construit et même pour un changement trivial, et le checkout principal reste sur la branche de travail : aucune session
+n'en change la branche ni n'y déplace les changements non commités d'un autre (voir [Le checkout principal](#le-checkout-principal)). Un hôte `native` (Claude Code) ouvre le worktree pour son délégué
+; un hôte `manual` (Codex, Kimi Code, Gemini CLI, Qwen Code, generic) l'ouvre avec git et donne son chemin au délégué. Un profil sans worktree (`worktrees: none` ; aucun profil enregistré ne le
+déclare aujourd'hui) livre les tickets dans la session, l'un après l'autre, chacun dans un worktree qu'il ouvre avec git, et ne délègue que des sous-tâches ; les instructions générées le disent de
+façon statique, quels que soient les agents que déclare le projet.
 
 Une route refusée ou en échec n'est jamais contournée. Quand `sf agents route` refuse un agent, ou qu'une délégation ne peut pas démarrer, l'étape s'exécute dans la session ; la session ne lance
 jamais le CLI d'un autre agent de code (`claude`, `codex` ou tout autre), ni une session en arrière-plan d'un autre hôte, pour déléguer malgré tout : une telle session n'est ni routée, ni enregistrée,
@@ -901,6 +902,26 @@ travail, le `cd` ou la cible de `git -C` est sous `.claude/worktrees/` ou `.code
 
 Les mêmes appels depuis le checkout principal sont permis : la session et le développeur les lancent. La commande est lue comme un shell la lit : guillemets, `;` `&&` `|` et sauts de ligne,
 `bash -c '…'`, `eval`, `env`, heredocs et here-strings sont examinés, sur trois niveaux. Elle ne développe ni `$(…)` dans une chaîne, ni une variable.
+
+### Le checkout principal
+
+Des agents de plusieurs hôtes et le développeur peuvent travailler dans un même dossier, comme plusieurs développeurs sur un même dépôt : chaque ticket se construit dans un worktree à lui, et le
+checkout principal reste sur `workflow.workingBranch`. Quand une session a mis de côté (stash) le changement du développeur puis basculé le checkout partagé sur sa branche de ticket, le travail de
+l'autre session a changé de branche sous elle (#1332). Pour tout le monde, donc, et **dans le checkout principal seulement** (un worktree lié n'est pas concerné), le hook refuse :
+
+| Appel          | Refusé                                                                                                                                                            | Permis                                                                                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `git switch`   | toute branche autre que la branche de travail ; `-c`, `-C`, `--orphan`, `--detach`, `-`                                                                           | `git switch <workingBranch>`, `--help`                                                                                                                     |
+| `git checkout` | `-b`, `-B`, `--orphan`, `--detach`, `-`, et un opérande qui peut nommer une branche ou un commit (`fix/12-x`, `HEAD~1`) autre que la branche de travail et `HEAD` | tout ce qui suit `--`, `-p`, `<tree-ish> <chemin>…`, un opérande qui ne peut pas être un nom de branche (`.`, `./x`, `.env`, `src/*.ts`, un chemin absolu) |
+| `git stash`    | tout ce qui déplace des changements ou supprime un stash : seul, `push`, `save`, `pop`, `apply`, `drop`, `clear`, `branch`                                        | `list`, `show`, `create`, `store`                                                                                                                          |
+
+`git checkout README` est ambigu (une branche ou un fichier) et il est refusé : le refus dit d'écrire `git checkout -- README` ou `git restore README`. Le refus nomme la commande de worktree à
+utiliser à la place, une commande par appel : `git fetch origin`, puis `git worktree add <chemin> -b <branche du ticket> origin/<workingBranch>`.
+
+Le hook distingue les deux par l'entrée `.git` la plus proche du dossier où la commande s'exécute (son dossier de travail, un `cd` ou `git -C`) : un dossier est le checkout principal, un fichier dont
+le `gitdir:` pointe dans `<common-dir>/worktrees/<nom>` est un worktree lié. Aucun processus `git` ne tourne. Tout le reste (un sous-module, `--git-dir`, `--work-tree`, `cd ~`, pas de checkout) n'est
+pas deviné : l'appel passe. La branche de travail est lue dans le `.saasfoundry.json` le plus proche ; sans elle, tout changement de branche est refusé. La ligne du hook laisse atteindre le CLI à une
+charge qui mentionne `checkout`, `switch` ou `stash` ; celle qu'écrivait la v1.3.0 ne le faisait pas, et un rafraîchissement la remplace.
 
 ### Une ligne de shell qui n'est pas une commande simple
 

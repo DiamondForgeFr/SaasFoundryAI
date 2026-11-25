@@ -158,8 +158,8 @@ agent type:
 3. **No routing.** When the route fails (a coding agent without routing candidates) or the agent cannot delegate, run
    the step in the session, sequentially, and report that a self-review is not an independent review. A refused or
    failed route is never worked around by starting another coding agent's CLI (`claude`, `codex`, or any other) or a
-   background session of another host. A host with no worktree support (`worktrees: none` in `sf agents catalog --json`,
-   Kimi Code today) delegates sub-tasks only, in the current worktree, through its own native sub-agent tool.
+   background session of another host. A host with no worktree support (`worktrees: none` in `sf agents catalog --json`)
+   delegates sub-tasks only, through its own native sub-agent tool.
 
 ### Delegated ticket delivery
 
@@ -176,7 +176,14 @@ reports the effective value.
 - `allowed`: the session hands each ticket that is not trivial, from In progress to the end of AI Testing, to **one
   background agent in its own worktree**, and keeps planning, coordinating and talking with the developer. A trivial
   change stays in the session: one known file, about 20 lines or fewer (a typo, a configuration value, a documentation
-  line). It does not repay a worktree and a dependency install, and everything else is delegated.
+  line). It does not repay a delegation and a dependency install, and everything else is delegated.
+- **Every ticket in a worktree, never the primary checkout.** Whoever builds it, a trivial change included, a ticket is
+  built in a worktree of its own. A `native` host opens it for its delegate (Claude Code's `isolation: "worktree"`); a
+  `manual` one (`sf agents catalog --json`) runs `git fetch origin`, then
+  `git worktree add <path> -b <branch> origin/<workingBranch>`, and hands the delegate its path. The primary checkout is
+  shared by every host and the developer: its branch stays `workingBranch`, and nobody stashes, restores or discards
+  uncommitted changes there that are not theirs. The guard hook refuses `git checkout <branch>`, `git switch` and
+  `git stash` in it (Claude Code and Codex).
 
 The delivery task kind is sized to the work. The ticket's complexity profile declares it (`steps.execute.taskKind`):
 
@@ -213,9 +220,9 @@ The delivery task kind is sized to the work. The ticket's complexity profile dec
    follow-ups), goes back to the same ticket's agent in the same worktree, which returns the ticket to AI Testing when
    the change calls for retesting.
 5. **Declined or unable.** With `declined`, or an agent that cannot delegate or run in the background, the session
-   delivers the tickets itself, one after the other, and says so explicitly. So does a session whose host has no
-   worktree support (`worktrees: none`, Kimi Code today): it cannot open a worktree for a delegate, so it delegates
-   sub-tasks only, in the current worktree, and never starts another host's CLI to get a worktree.
+   delivers the tickets itself, one after the other, each in a worktree it opens with git, and says so explicitly. So
+   does a session whose host has no worktree support (`worktrees: none`): it delegates sub-tasks only, and never starts
+   another host's CLI to get a delegate.
 6. **Measured delegations.** Every routed delegation is recorded in the clone's ledger, and the routing adjusts itself
    from it (`sf agents routing report` shows what it did). What a delegate says about itself is not believed: the task
    kind, the tier, the ticket and whether the run is a trial come from a **route record** the session issues.

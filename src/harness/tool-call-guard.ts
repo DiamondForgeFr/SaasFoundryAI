@@ -16,6 +16,7 @@
 import { posix } from 'path'
 
 import { getSkillDirectory, type HookProvider } from './agent-registry'
+import type { CheckoutKind } from './checkout-kind'
 import { analyzeShellShape, SHELLS, squash, WRAPPERS, type ShapeAnalysis, type ShapeFinding, type ShapeKind } from './shell-shape'
 
 /** The hosts whose hooks the harness installs: the agents whose profile declares `capabilities.hooks`. */
@@ -29,6 +30,7 @@ export type GuardRule =
   | 'ready-pr'
   | 'merge'
   | 'nature-at-creation'
+  | 'primary-checkout'
   | 'shell-substitution'
   | 'shell-compound'
   | 'shell-chain'
@@ -52,6 +54,10 @@ export interface ToolCall {
   agentId?: string
   /** What to do with a line that chains, substitutes, loops or runs an inline script. Absent means `refuse`. */
   shellShape?: ShellShapeMode
+  /** The branch the primary checkout stays on (`workflow.workingBranch`), when the manifest names one (#1332). */
+  workingBranch?: string
+  /** Whether a directory lies in the primary checkout or in a linked worktree (#1332). Without it, or without `cwd`, the primary checkout rule does not apply. */
+  checkoutOf?: (dir: string) => CheckoutKind | undefined
 }
 
 export interface GuardDecision {
@@ -379,7 +385,7 @@ function writesNatureThroughApi(gh: GhCall, command: SimpleCommand): boolean {
 // ───────────────────────────────────────────────────────────────────────────
 
 /** The rules of the escape hatches (R1 to R7); the shell shape rules have their own reasons. */
-type HatchRule = Exclude<GuardRule, `shell-${string}`>
+type HatchRule = Exclude<GuardRule, `shell-${string}` | 'primary-checkout'>
 
 interface Finding {
   rule: HatchRule
@@ -491,6 +497,142 @@ function reasonFor(finding: Finding, host: GuardHost): string {
     case 'nature-at-creation':
       return `${HEAD} a delegated agent never decides the nature of a ticket (--nature internal or bundled-pr skips Human Testing): that is the developer's call, made in the coordinating session. Create the ticket without it and report.`
   }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// The primary checkout (#1332)
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * The primary checkout is shared: agents of several hosts and the developer may work in one folder, so its branch stays
+ * on the working branch and nobody moves another's uncommitted changes there. Two leads in one folder broke a project
+ * when one of them stashed the developer's change and switched the checkout to its ticket branch under the other.
+ *
+ * The rule refuses, in the primary checkout only (never in a linked worktree), three things and nothing else:
+ *
+ * - `git switch`, to any branch but the working branch (`-c`, `-C`, `--orphan`, `--detach` and `-` always);
+ * - `git checkout` that changes branch: `-b`, `-B`, `--orphan`, `--detach`, `-`, or one operand that can name a branch
+ *   or a commit and is not the working branch. A file restore is left alone: anything after `--`, `-p`, two operands or
+ *   more (`<tree-ish> <path>`), and one operand that cannot be a ref name (`.`, `./x`, `.env`, `src/*.ts`, an absolute
+ *   path). `git checkout <file>` with a plain name is ambiguous and is refused: the reason says to write `--`;
+ * - `git stash`, except what only reads or records it (`list`, `show`, `create`, `store`).
+ */
+type CheckoutMove = 'switch' | 'stash'
+
+/** The options git takes before its subcommand whose value is the next word. */
+const GIT_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--super-prefix', '--config-env'])
+const STASH_KEEPS_CHANGES = new Set(['list', 'show', 'create', 'store'])
+/** A revision suffix: `HEAD~1`, `main^`, `@{-1}` name a commit, never a file. */
+const REVISION_SYNTAX = /[~^]|@\{/
+
+interface GitCall {
+  subcommand?: string
+  args: string[]
+  /** The `-C` directories, in order. */
+  directories: string[]
+  /** `--git-dir` or `--work-tree`: the repository is not the directory's, and the rule does not guess. */
+  elsewhere: boolean
+}
+
+function gitCall(command: SimpleCommand): GitCall | undefined {
+  const found = programOf(command.words)
+  if (found?.program !== 'git') return undefined
+  const directories: string[] = []
+  let elsewhere = false
+  let i = 0
+  for (; i < found.args.length && found.args[i].startsWith('-'); i++) {
+    const word = found.args[i]
+    if (/^--(git-dir|work-tree)(=|$)/.test(word)) elsewhere = true
+    if (!GIT_VALUE_OPTIONS.has(word)) continue
+    if (word === '-C' && found.args[i + 1] !== undefined) directories.push(found.args[i + 1])
+    i++
+  }
+  return { subcommand: found.args[i], args: found.args.slice(i + 1), directories, elsewhere }
+}
+
+const asksForHelp = (args: string[]): boolean => args.some((word) => word === '-h' || word === '--help')
+
+/** A word git cannot read as a branch name (`git check-ref-format`), so `git checkout <word>` restores a path. */
+function onlyAPath(word: string): boolean {
+  if (REVISION_SYNTAX.test(word)) return false
+  return word === '.' || word.endsWith('/') || /[:*?[\\\s]/.test(word) || word.split('/').some((part) => part === '' || part.startsWith('.') || part.endsWith('.lock'))
+}
+
+/** `git switch …`: whether it leaves the working branch. */
+function switchLeaves(args: string[], workingBranch: string | undefined): boolean {
+  if (asksForHelp(args)) return false
+  if (args.includes('-') || args.some((word) => /^(-c|-C|--create|--force-create|--orphan|--detach|-d)(=|$)/.test(word) || /^-[cC]./.test(word))) return true
+  const target = args.find((word) => !word.startsWith('-'))
+  return target !== undefined && target !== workingBranch
+}
+
+/** `git checkout …`: whether it changes branch rather than restore files. */
+function checkoutLeaves(args: string[], workingBranch: string | undefined): boolean {
+  if (asksForHelp(args)) return false
+  const separator = args.indexOf('--')
+  const options = separator === -1 ? args : args.slice(0, separator)
+  if (options.some((word) => /^(-b|-B|--orphan)(=|$)/.test(word) || /^-[bB]./.test(word) || word === '--detach')) return true
+  if (separator !== -1) return false
+  if (options.some((word) => word === '-p' || word === '--patch' || word.startsWith('--pathspec-from-file'))) return false
+  if (options.includes('-')) return true
+  const operands = options.filter((word) => !word.startsWith('-'))
+  if (operands.length !== 1) return false
+  const [target] = operands
+  return target !== workingBranch && target !== 'HEAD' && !onlyAPath(target)
+}
+
+/** `git stash …`: whether it moves changes in or out of the working tree, or drops a stash. */
+function stashMoves(args: string[]): boolean {
+  if (asksForHelp(args)) return false
+  const action = args[0]
+  return action === undefined || action.startsWith('-') || !STASH_KEEPS_CHANGES.has(action)
+}
+
+function checkoutMove(git: GitCall, workingBranch: string | undefined): CheckoutMove | undefined {
+  if (git.subcommand === 'switch') return switchLeaves(git.args, workingBranch) ? 'switch' : undefined
+  if (git.subcommand === 'checkout') return checkoutLeaves(git.args, workingBranch) ? 'switch' : undefined
+  if (git.subcommand === 'stash') return stashMoves(git.args) ? 'stash' : undefined
+  return undefined
+}
+
+/** A directory a `cd` or a `-C` leads to from `from`; `undefined` when it cannot be known without a shell (`~`, `$HOME`, `cd` alone). */
+function moveTo(from: string | undefined, to: string | undefined): string | undefined {
+  if (from === undefined || to === undefined || /^[~$]/.test(to)) return undefined
+  return posix.resolve(from, to.replace(/\\/g, '/'))
+}
+
+function primaryCheckoutReason(move: CheckoutMove, dir: string, workingBranch: string | undefined): string {
+  const branch = workingBranch ?? '<workingBranch>'
+  const what =
+    move === 'switch'
+      ? `this command changes the branch of the primary checkout (${dir}). It stays on the working branch \`${branch}\`: the developer and agents of any host work in this folder, and a branch change moves their work under them.`
+      : `this command moves uncommitted changes of the primary checkout (${dir}) through the stash. They may be the developer's or another agent's: they are not yours to set aside, reapply or drop.`
+  const restore = move === 'switch' ? ' To restore a file instead, name it after `--` (`git checkout -- <path>`) or run `git restore <path>`.' : ''
+  return `${HEAD} ${what} Build the ticket in a worktree of its own, a trivial change included, one command per call: \`git fetch origin\`, then \`git worktree add <path> -b <ticket branch> origin/${branch}\` (a path outside this checkout, for example \`../<repo>-<ticket>\`), then work in that path.${restore}`
+}
+
+/** The decision of the primary checkout rule: the first git command of the line that switches or stashes in the primary checkout. */
+function primaryCheckoutDecision(call: ToolCall, commands: SimpleCommand[]): GuardDecision | undefined {
+  if (!call.checkoutOf || !call.cwd) return undefined
+  let dir: string | undefined = posix.normalize(call.cwd.replace(/\\/g, '/'))
+  for (const command of commands) {
+    const found = programOf(command.words)
+    if (found?.program === 'cd' || found?.program === 'pushd') {
+      dir = moveTo(
+        dir,
+        found.args.find((word) => !word.startsWith('-'))
+      )
+      continue
+    }
+    const git = gitCall(command)
+    if (!git || git.elsewhere) continue
+    const move = checkoutMove(git, call.workingBranch)
+    if (!move) continue
+    const target = git.directories.reduce<string | undefined>((from, to) => moveTo(from, to), dir)
+    if (target === undefined || call.checkoutOf(target) !== 'primary') continue
+    return { decision: 'deny', rule: 'primary-checkout', reason: primaryCheckoutReason(move, target, call.workingBranch) }
+  }
+  return undefined
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -616,6 +758,10 @@ function shellShapeDecision(call: ToolCall, mode: 'refuse' | 'warn'): GuardDecis
  * `agentId`, or that runs in a worktree of `.claude/worktrees/` or `.codex/worktrees/`, by its working directory or
  * by a `cd`/`git -C` in the command. From the primary checkout, the session and the developer run them.
  *
+ * The primary checkout rule comes next (#1332), for every caller: a `git switch`, a `git checkout` that changes branch
+ * or a `git stash` that moves changes, run in the primary checkout of the clone rather than a linked worktree, is
+ * refused with the worktree command to use instead (`primaryCheckoutDecision`).
+ *
  * The shape rule comes last (#1251): when none of the rules above fires, a line that chains commands, substitutes
  * one into another, loops or runs an inline script is refused (or, in `warn` mode, flagged) with the split to make
  * instead. It reads the Bash-like tools only: a PowerShell line has other quoting, and the bash lexer would misread it.
@@ -635,6 +781,8 @@ export function evaluateToolCall(call: ToolCall): GuardDecision | undefined {
       }
     }
   }
+  const checkout = primaryCheckoutDecision(call, commands)
+  if (checkout) return checkout
   const mode = call.shellShape ?? 'refuse'
   return mode === 'off' || call.toolName === 'PowerShell' ? undefined : shellShapeDecision(call, mode)
 }

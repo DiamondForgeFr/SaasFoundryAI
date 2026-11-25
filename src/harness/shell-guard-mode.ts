@@ -80,10 +80,28 @@ export function shellShapeNotice(mode: ShellShapeMode): string {
  * that reaches Node.
  */
 export function readShellShapeMode(cwd?: string, projectDir: string | undefined = process.env.CLAUDE_PROJECT_DIR): ShellShapeMode {
+  return readGuardSettings(cwd, projectDir).shellShape
+}
+
+/** `workflow.workingBranch` of a manifest, when it records a plain branch name. */
+export function recordedWorkingBranch(manifest: unknown): string | undefined {
+  const workflow = isObject(manifest) ? manifest.workflow : undefined
+  const branch = isObject(workflow) ? workflow.workingBranch : undefined
+  return typeof branch === 'string' && /^[A-Za-z0-9][A-Za-z0-9._/-]{0,200}$/.test(branch) ? branch : undefined
+}
+
+/**
+ * What a hook call reads from the manifest, parsed once: the shell shape mode (`readShellShapeMode`) and the working
+ * branch the primary checkout stays on (#1332), `undefined` when the manifest names none.
+ */
+export function readGuardSettings(cwd?: string, projectDir: string | undefined = process.env.CLAUDE_PROJECT_DIR): { shellShape: ShellShapeMode; workingBranch?: string } {
   for (const start of [cwd, projectDir]) {
     if (start === undefined || start === '' || !isAbsolute(start)) continue
     const manifest = nearestManifest(start)
-    if (manifest !== undefined) return recordedShellShape(manifest) ?? DEFAULT_SHELL_SHAPE
+    if (manifest !== undefined) {
+      const workingBranch = recordedWorkingBranch(manifest)
+      return { shellShape: recordedShellShape(manifest) ?? DEFAULT_SHELL_SHAPE, ...(workingBranch ? { workingBranch } : {}) }
+    }
   }
-  return DEFAULT_SHELL_SHAPE
+  return { shellShape: DEFAULT_SHELL_SHAPE }
 }

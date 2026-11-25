@@ -361,9 +361,22 @@ describe('shared agent instructions', () => {
       )
       expect(instructions).toMatch(/a host\s+with no worktree support delegates sub-tasks only, through its own native sub-agent tool/)
     }
+    // #1332: even a host with no worktree support builds each ticket in a worktree it opens with git, never in the current checkout
     expect(GENERATED_INSTRUCTIONS).toMatch(
-      /`sf agents catalog --json`\s+says `worktrees: none`, as for Kimi Code\): it cannot open a worktree for a delegate, so it\s+delivers the tickets in the session, one after the other, and delegates sub-tasks only, in the\s+current worktree/
+      /`sf agents catalog --json`\s+says `worktrees: none`\): it delivers the tickets in the session, one after the other, each in a\s+worktree it opens with git, and delegates sub-tasks only\./
     )
+    expect(GENERATED_INSTRUCTIONS).not.toMatch(/as for Kimi Code|in the\s+current worktree/)
+  })
+
+  // #1332: several hosts in one folder work like several developers on one repository
+  it('keeps the shared primary checkout on the working branch, for every host, and every ticket in a worktree', () => {
+    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
+      expect(instructions).toMatch(/Every ticket is built in a worktree of its own, whoever builds it, a trivial change included\./)
+      expect(instructions).toMatch(/The primary checkout is shared: agents of several hosts and the developer may work in one folder\./)
+      expect(instructions).toMatch(/Never change its branch, which stays on the working branch, and never stash, restore or discard\s+uncommitted changes there that are not yours\./)
+      expect(instructions).toMatch(/`git worktree add <path> -b <branch> origin\/<workingBranch>`/)
+      expect(instructions).toMatch(/refuses `git checkout <branch>`, `git switch` and `git stash` there/)
+    }
   })
 
   it('states both rules statically, whatever coding agents the project declares', async () => {
@@ -375,7 +388,8 @@ describe('shared agent instructions', () => {
         const text = await readFile(join(project, 'AGENTS.md'), 'utf8')
         expect(text).toContain('The one exception is a route that prints `alias <name>`')
         expect(text).toContain("a refused or failed route is never worked around by starting another coding\nagent's CLI")
-        expect(text).toContain('`worktrees: none`, as for Kimi Code')
+        expect(text).toContain('says `worktrees: none`): it delivers the tickets in the session')
+        expect(text).toContain('The primary checkout is shared')
       } finally {
         await rm(project, { recursive: true, force: true })
       }
@@ -387,7 +401,7 @@ describe('shared agent instructions', () => {
     const shared = await get('.agents/skills/sf-git-commit/SKILL.md')
     expect(shared).toContain('The one exception is a route that prints `alias <name>`')
     expect(shared).toContain('a refused or failed route is never worked around')
-    expect(shared).not.toContain('`worktrees: none`, as for Kimi Code')
+    expect(shared).not.toContain('says `worktrees: none`): it delivers the tickets in the session')
   })
 
   it('teaches every shared instruction surface to preview additive full-profile transitions', () => {

@@ -81,7 +81,10 @@ const SHELL_SHAPE_PATTERNS: readonly (readonly string[])[] = [
   ['| php']
 ]
 
-const GUARD_PATTERNS = [...ESCAPE_HATCH_PATTERNS, ...SHELL_SHAPE_PATTERNS.map((pieces) => `*${pieces.map((piece) => `'${piece}'`).join('*')}*`)].join('|')
+/** What the primary checkout rule needs it to mention (#1332): a branch switch or a stash of the shared checkout. */
+const PRIMARY_CHECKOUT_PATTERNS = ['*checkout*', '*switch*', '*stash*']
+
+const GUARD_PATTERNS = [...ESCAPE_HATCH_PATTERNS, ...PRIMARY_CHECKOUT_PATTERNS, ...SHELL_SHAPE_PATTERNS.map((pieces) => `*${pieces.map((piece) => `'${piece}'`).join('*')}*`)].join('|')
 
 const GUARD_SCRIPT = [
   'p=$(cat)',
@@ -112,8 +115,18 @@ export const V1_2_0_GUARD_COMMANDS: readonly string[] = [
   'p=$(cat); case "$p" in *SF_WORKFLOW_BYPASS_*|*skip-local-ci*|*[Nn][Aa][Tt][Uu][Rr][Ee]*|*addLabels*|*delegation*|*ready*|*merge*) ;; *) exit 0;; esac; d="${CLAUDE_PROJECT_DIR:-.}"; run() { printf %s "$p" | "$@" agents guard --host codex 2>/dev/null; exit 0; }; [ -x "$d/node_modules/.bin/saasfoundryai" ] && run "$d/node_modules/.bin/saasfoundryai"; [ -f "$d/bin/sf.js" ] && grep -q \'"name": "saasfoundryai-cli"\' "$d/package.json" 2>/dev/null && [ -f "$d/dist/index.js" ] && run node "$d/bin/sf.js"; command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai; exit 0'
 ]
 
+/**
+ * The guard commands v1.3.0 shipped, as written then: their filter did not let a `git checkout`, `git switch` or
+ * `git stash` through to the primary checkout rule (#1332). Literals for the same reason as `V1_2_0_GUARD_COMMANDS`;
+ * the golden spec reads them from `src/__tests__/fixtures/harness/v1.3.0`, copied from the v1.3.0 tag.
+ */
+export const V1_3_0_GUARD_COMMANDS: readonly string[] = [
+  'p=$(cat); case "$p" in *SF_WORKFLOW_BYPASS_*|*skip-local-ci*|*[Nn][Aa][Tt][Uu][Rr][Ee]*|*addLabels*|*delegation*|*ready*|*merge*|*\';\'*|*\'&&\'*|*\'||\'*|*\'$(\'*|*\'`\'*|*\'<<\'*|*\'<(\'*|*\'>(\'*|*\'\\n\'*|*\'& \'*|*\'&"\'*|*\'":"(\'*|*\'","-\'*|*\'node -\'*|*\'bun -\'*|*\'python\'*\' -\'*|*\'ruby -\'*|*\'perl -\'*|*\'php -\'*|*\'lua -\'*|*\'osascript\'*|*\'Rscript\'*|*\'deno eval\'*|*\'sh -\'*|*\'eval \'*|*\'| sh\'*|*\'| bash\'*|*\'| zsh\'*|*\'| python\'*|*\'| node\'*|*\'| ruby\'*|*\'| perl\'*|*\'| php\'*) ;; *) exit 0;; esac; d="${CLAUDE_PROJECT_DIR:-.}"; note() { echo "saasfoundryai: $1 cannot run agents guard (exit $2): upgrade saasfoundryai-cli" >&2; g=$(git -C "$d" rev-parse --git-common-dir 2>/dev/null) || return 0; case "$g" in /*) ;; *) g="$d/$g";; esac; f="$g/saasfoundry/capture-errors.jsonl"; mkdir -p "$g/saasfoundry" 2>/dev/null || return 0; [ -f "$f" ] && [ "$(wc -c <"$f")" -gt 65536 ] && return 0; printf \'{"v":1,"at":"%s","host":"claude-code","event":"PreToolUse","stage":"cli","message":"%s cannot run agents guard (exit %s): upgrade saasfoundryai-cli in the project or on the PATH"}\\n\' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$(printf %s "$1" | tr -d \'"\\\\\')" "$2" >>"$f" 2>/dev/null; return 0; }; run() { printf %s "$p" | "$@" agents guard --host claude-code 2>/dev/null || note "$*" $?; exit 0; }; [ -x "$d/node_modules/.bin/saasfoundryai" ] && run "$d/node_modules/.bin/saasfoundryai"; [ -f "$d/bin/sf.js" ] && grep -q \'"name": "saasfoundryai-cli"\' "$d/package.json" 2>/dev/null && [ -f "$d/dist/index.js" ] && run node "$d/bin/sf.js"; command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai; exit 0',
+  'p=$(cat); case "$p" in *SF_WORKFLOW_BYPASS_*|*skip-local-ci*|*[Nn][Aa][Tt][Uu][Rr][Ee]*|*addLabels*|*delegation*|*ready*|*merge*|*\';\'*|*\'&&\'*|*\'||\'*|*\'$(\'*|*\'`\'*|*\'<<\'*|*\'<(\'*|*\'>(\'*|*\'\\n\'*|*\'& \'*|*\'&"\'*|*\'":"(\'*|*\'","-\'*|*\'node -\'*|*\'bun -\'*|*\'python\'*\' -\'*|*\'ruby -\'*|*\'perl -\'*|*\'php -\'*|*\'lua -\'*|*\'osascript\'*|*\'Rscript\'*|*\'deno eval\'*|*\'sh -\'*|*\'eval \'*|*\'| sh\'*|*\'| bash\'*|*\'| zsh\'*|*\'| python\'*|*\'| node\'*|*\'| ruby\'*|*\'| perl\'*|*\'| php\'*) ;; *) exit 0;; esac; d="${CLAUDE_PROJECT_DIR:-.}"; note() { echo "saasfoundryai: $1 cannot run agents guard (exit $2): upgrade saasfoundryai-cli" >&2; g=$(git -C "$d" rev-parse --git-common-dir 2>/dev/null) || return 0; case "$g" in /*) ;; *) g="$d/$g";; esac; f="$g/saasfoundry/capture-errors.jsonl"; mkdir -p "$g/saasfoundry" 2>/dev/null || return 0; [ -f "$f" ] && [ "$(wc -c <"$f")" -gt 65536 ] && return 0; printf \'{"v":1,"at":"%s","host":"codex","event":"PreToolUse","stage":"cli","message":"%s cannot run agents guard (exit %s): upgrade saasfoundryai-cli in the project or on the PATH"}\\n\' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$(printf %s "$1" | tr -d \'"\\\\\')" "$2" >>"$f" 2>/dev/null; return 0; }; run() { printf %s "$p" | "$@" agents guard --host codex 2>/dev/null || note "$*" $?; exit 0; }; [ -x "$d/node_modules/.bin/saasfoundryai" ] && run "$d/node_modules/.bin/saasfoundryai"; [ -f "$d/bin/sf.js" ] && grep -q \'"name": "saasfoundryai-cli"\' "$d/package.json" 2>/dev/null && [ -f "$d/dist/index.js" ] && run node "$d/bin/sf.js"; command -v saasfoundryai >/dev/null 2>&1 && run saasfoundryai; exit 0'
+]
+
 /** A guard command an earlier release wrote and a refresh replaces. A hand-edited copy is the project's own and is left. */
-export const isLegacyGuardCommand = (command: unknown): boolean => typeof command === 'string' && V1_2_0_GUARD_COMMANDS.includes(command)
+export const isLegacyGuardCommand = (command: unknown): boolean => typeof command === 'string' && (V1_2_0_GUARD_COMMANDS.includes(command) || V1_3_0_GUARD_COMMANDS.includes(command))
 
 /** The line only checks a command: a host that waits longer than this has a problem the guard cannot fix. */
 const GUARD_TIMEOUT_SECONDS = 10
