@@ -279,6 +279,17 @@ export interface RawContent {
   children?: RawContent[]
 }
 
+/**
+ * Everything a page writes, for a search through it: the blocks nested in others (a toggle, a
+ * callout, a sub-list, a column) follow their parent, flat, and a block of kind `other` carries
+ * its text. `RawContent` keeps to the page's top level, which its section parsers rely on.
+ */
+export interface PageScan {
+  blocks: RawContent['blocks']
+  /** The pages directly under this one, whether or not a block holds them. */
+  childPages: PageRef[]
+}
+
 export interface DraftCandidateSource {
   kind: 'notion-pages' | 'codebase'
   pageIds?: string[]
@@ -388,6 +399,12 @@ export interface SrsAdapter {
   fetchPage(pageId: string): Promise<RawContent>
 
   listChildren(parentPageId: string): Promise<PageRef[]>
+
+  /**
+   * Reads everything a page writes and the pages under it, in one walk of its blocks. Optional:
+   * without it a search reads `fetchPage` and `listChildren`, which stop at the page's top level.
+   */
+  scanPage?(pageId: string): Promise<PageScan>
 
   /**
    * Reparents an existing page.

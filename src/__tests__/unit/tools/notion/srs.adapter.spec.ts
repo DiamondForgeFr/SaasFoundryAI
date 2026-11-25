@@ -473,6 +473,75 @@ describe('NotionSrsAdapter', () => {
     })
   })
 
+  // #991 — ids written inside a toggle, a callout or a sub-list were read by nobody
+  describe('scanPage', () => {
+    const rich = (content: string) => [{ type: 'text', text: { content }, plain_text: content }]
+    const block = (id: string, type: string, payload: object, hasChildren = false) => ({ id, type, has_children: hasChildren, [type]: payload })
+    const scanOf = async (tree: Record<string, object[]>) => {
+      const { client, calls } = buildMockClient({
+        blocksListImpl: async (args) => ({ next_cursor: null, has_more: false, results: tree[(args as { block_id: string }).block_id] ?? [] })
+      })
+      const scan = await new NotionSrsAdapter({ apiToken: 'tk', client }).scanPage('page')
+      return { scan, calls, listed: calls.blocksListCalls.map((call) => (call as { block_id: string }).block_id) }
+    }
+
+    it('reads the text of toggles, callouts, quotes, to-dos and captions, and what is nested in them', async () => {
+      const { scan } = await scanOf({
+        page: [
+          block('t', 'toggle', { rich_text: rich('Late returns: DS-LOAN-001') }, true),
+          block('c', 'callout', { rich_text: rich('Changed: DS-LOAN-002') }, true),
+          block('q', 'quote', { rich_text: rich('UR-LOAN-001') }),
+          block('d', 'to_do', { rich_text: rich('TC-LOAN-001') }),
+          block('i', 'image', { caption: rich('The desk of UR-LOAN-002') }),
+          block('l', 'bulleted_list_item', { rich_text: rich('Outer') }, true),
+          block('cols', 'column_list', {}, true),
+          block('h', 'divider', {})
+        ],
+        t: [block('t1', 'paragraph', { rich_text: rich('DS-LOAN-003') })],
+        c: [block('c1', 'bulleted_list_item', { rich_text: rich('DS-LOAN-004') })],
+        l: [block('l1', 'bulleted_list_item', { rich_text: rich('Inner') }, true)],
+        l1: [block('l2', 'numbered_list_item', { rich_text: rich('DS-LOAN-005') })],
+        cols: [block('col', 'column', {}, true)],
+        col: [block('p', 'paragraph', { rich_text: rich('DS-LOAN-006') })]
+      })
+      expect(scan.blocks.filter((raw) => raw.text !== '')).toEqual([
+        { kind: 'other', text: 'Late returns: DS-LOAN-001' },
+        { kind: 'paragraph', text: 'DS-LOAN-003' },
+        { kind: 'other', text: 'Changed: DS-LOAN-002' },
+        { kind: 'list', text: 'DS-LOAN-004' },
+        { kind: 'other', text: 'UR-LOAN-001' },
+        { kind: 'other', text: 'TC-LOAN-001' },
+        { kind: 'other', text: 'The desk of UR-LOAN-002' },
+        { kind: 'list', text: 'Outer' },
+        { kind: 'list', text: 'Inner' },
+        { kind: 'list', text: 'DS-LOAN-005' },
+        { kind: 'paragraph', text: 'DS-LOAN-006' }
+      ])
+    })
+
+    it('finds the pages under it, one in a column included, without reading them or a title', async () => {
+      const { scan, calls, listed } = await scanOf({
+        page: [block('fr-1', 'child_page', { title: 'FR-LOAN-001 — Borrow a book' }, true), block('db', 'child_database', { title: 'Shelves' }, true), block('cols', 'column_list', {}, true)],
+        cols: [block('fr-2', 'child_page', { title: 'FR-LOAN-002 — Return a book' }, true)]
+      })
+      expect(scan.childPages.map((page) => page.title)).toEqual(['FR-LOAN-001 — Borrow a book', 'FR-LOAN-002 — Return a book'])
+      expect(listed).toEqual(['page', 'cols'])
+      expect(calls.pagesRetrieveCalls).toEqual([])
+    })
+
+    it('reads a table once, nested or not', async () => {
+      const row = (id: string, text: string) => block(id, 'table_row', { cells: [rich(text)] })
+      const { scan, listed } = await scanOf({
+        page: [block('tb', 'table', { table_width: 1 }, true), block('t', 'toggle', { rich_text: [] }, true)],
+        tb: [row('r1', 'ID'), row('r2', 'DS-LOAN-007')],
+        t: [block('tb2', 'table', { table_width: 1 }, true)],
+        tb2: [row('r3', 'ID'), row('r4', 'DS-LOAN-008')]
+      })
+      expect(scan.blocks.flatMap((raw) => raw.rows ?? [])).toEqual([['ID'], ['DS-LOAN-007'], ['ID'], ['DS-LOAN-008']])
+      expect(listed).toEqual(['page', 'tb', 't', 'tb2'])
+    })
+  })
+
   describe('listChildren', () => {
     it('returns only child_page blocks as PageRefs', async () => {
       const { client } = buildMockClient({

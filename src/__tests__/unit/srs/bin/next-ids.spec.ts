@@ -26,6 +26,19 @@ describe('sf srs next-ids', () => {
       title: 'Réunion live',
       url: '',
       blocks: [
+        // #991 — an id only the FR page holds, in a Related cell, still counts
+        ...(pageId === 'fr'
+          ? [
+              {
+                kind: 'table' as const,
+                text: '',
+                rows: [
+                  ['ID', 'Requirement', 'Priority', 'Related UR', 'Related DS', 'Related TC'],
+                  ['FR-LIVE-009', 'Late', 'P1', '—', '—', 'TC-LIVE-012']
+                ]
+              }
+            ]
+          : []),
         {
           kind: 'table',
           text: '',
@@ -69,6 +82,6 @@ describe('sf srs next-ids', () => {
     expect(code).toBe(0)
     const result = JSON.parse(out.join(''))
     expect(result.nextVersion).toBe('v3')
-    expect(result.next).toEqual({ UR: ['UR-LIVE-005'], FR: ['FR-LIVE-010'], DS: ['DS-LIVE-011'], TC: [], NFR: ['NFR-LIVE-004'] })
+    expect(result.next).toEqual({ UR: ['UR-LIVE-005'], FR: ['FR-LIVE-010'], DS: ['DS-LIVE-011'], TC: ['TC-LIVE-013'], NFR: ['NFR-LIVE-004'] })
   })
 })
