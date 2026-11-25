@@ -209,7 +209,7 @@ commit, les contrôles rapides avant commit et la gate plus lourde avant push.
 ```
 
 Chaque hook source d'abord `project-node.sh` : quand le Node en tête du `PATH` est plus ancien que celui de `.nvmrc`, comme dans un client graphique ou le shell non interactif d'un agent de code, il
-lance le hook avec la version que nvm a installée pour `.nvmrc`, ou indique le Node utilisé et comment installer le bon.
+lance le hook avec la version que nvm a installée pour `.nvmrc`, ou s'arrête en indiquant le Node utilisé et comment installer le bon.
 
 `prepare-commit-msg` et `pre-push` n'agissent que sur les branches de release candidate (`rc-*`). Sur une HEAD détachée, comme à chaque étape d'un rebase, ils sortent sans rien vérifier : un rebase
 arrêté sur un conflit reprend avec `git rebase --continue`. Husky lance les hooks avec `sh`, ils sont donc écrits en shell POSIX : les vérifications `rc-*` s'exécutent aussi là où `sh` est dash, comme

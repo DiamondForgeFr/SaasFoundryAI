@@ -5,7 +5,7 @@
 # names, and npm then refuses the project's devEngines (EBADDEVENGINES) without saying why.
 # When the Node on PATH is older than the major version .nvmrc names, the hook puts the version
 # nvm has installed for it first on PATH. When nvm has none, it says which Node it runs under and
-# what to do, and lets the command run: npm still decides whether that Node is acceptable.
+# what to do, and stops the hook: nothing continues under a Node older than the project's.
 # POSIX sh only, safe under `sh -e`: husky 9 runs hooks with sh, which is dash on most Linux hosts.
 
 # Git runs hooks from the top of the working tree, where .nvmrc lives.
@@ -42,6 +42,7 @@ if [ -f "$sf_nvmrc" ]; then
         else
           sf_node_path=$(command -v node 2>/dev/null || echo 'no node on PATH')
           echo "husky - this hook runs under Node ${sf_node_have:-none} ($sf_node_path) but .nvmrc asks for $sf_node_want, and nvm has no Node $sf_node_want_major installed: run \`nvm install\` in $PWD, or put Node $sf_node_want first on PATH, then retry." >&2
+          exit 1
         fi
       fi
       ;;

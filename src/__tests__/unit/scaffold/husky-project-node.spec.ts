@@ -27,9 +27,8 @@ function cleanEnv(): NodeJS.ProcessEnv {
 function nodeBin(dir: string, version: string): string {
   mkdirSync(dir, { recursive: true })
   writeFileSync(path.join(dir, 'node'), `#!/bin/sh\necho v${version}\n`)
-  writeFileSync(path.join(dir, 'npx'), `#!/bin/sh\necho "npx of node ${version}: $*"\n`)
-  chmodSync(path.join(dir, 'node'), 0o755)
-  chmodSync(path.join(dir, 'npx'), 0o755)
+  for (const tool of ['npm', 'npx']) writeFileSync(path.join(dir, tool), `#!/bin/sh\necho "${tool} of node ${version}: $*"\n`)
+  for (const tool of ['node', 'npm', 'npx']) chmodSync(path.join(dir, tool), 0o755)
   return dir
 }
 
@@ -103,8 +102,39 @@ describe.each(SHELLS.flatMap((shell) => HOOK_DIRS.map((dir) => [shell, dir] as c
     expect(run.stderr).toBe(
       `husky - this hook runs under Node 22.15.0 (${path.join(old, 'node')}) but .nvmrc asks for 24.19.0, and nvm has no Node 24 installed: run \`nvm install\` in ${repo}, or put Node 24.19.0 first on PATH, then retry.\n`
     )
-    // npm, not the hook, decides whether that Node is acceptable: the command still runs.
-    expect(run.stdout).toBe('npx of node 22.15.0: --no -- commitlint --edit MSG\n')
+    // Fails before npx: nothing continues under a Node older than .nvmrc.
+    expect(run.status).toBe(1)
+    expect(run.stdout).toBe('')
+  })
+
+  it('gates a real git commit: refused without a matching Node, accepted once nvm has it', () => {
+    const old = nodeBin(path.join(fixture, 'old'), '22.15.0')
+    const env = { ...cleanEnv(), HOME: fixture, NVM_DIR: nvmDir, PATH: pathWith(old) }
+    const git = (...args: string[]): SpawnSyncReturns<string> =>
+      spawnSync('git', ['-c', 'user.email=tests@example.com', '-c', 'user.name=Tests', '-c', 'commit.gpgsign=false', ...args], { cwd: repo, encoding: 'utf8', env })
+    expect(git('init', '-q', '-b', 'main').status).toBe(0)
+
+    // Git runs the project's own hook files with `sh -e`, as husky 9's dispatcher does.
+    const hooks = path.join(fixture, 'hooks')
+    mkdirSync(hooks)
+    for (const hook of ['pre-commit', 'commit-msg']) {
+      writeFileSync(path.join(hooks, hook), `#!/bin/sh\nexec ${shell} -e "${path.join(ROOT, hookDir, hook)}" "$@"\n`)
+      chmodSync(path.join(hooks, hook), 0o755)
+    }
+    const commit = (): SpawnSyncReturns<string> => git('-c', `core.hooksPath=${hooks}`, 'commit', '--allow-empty', '-m', 'fix(#1): change')
+
+    const refused = commit()
+    expect(refused.status).not.toBe(0)
+    expect(refused.stderr).toContain('this hook runs under Node 22.15.0')
+    expect(refused.stderr).not.toContain('of node 22.15.0:')
+    expect(git('rev-parse', '--verify', '-q', 'HEAD').status).not.toBe(0)
+
+    nodeBin(path.join(nvmDir, 'versions/node/v24.19.0/bin'), '24.19.0')
+    const accepted = commit()
+    expect(accepted.status).toBe(0)
+    const output = accepted.stdout + accepted.stderr
+    expect(output).toContain('npm of node 24.19.0: run test:staged')
+    expect(output).toContain('npx of node 24.19.0: --no -- commitlint --edit')
   })
 
   it('keeps a Node of the same or a newer major', () => {
