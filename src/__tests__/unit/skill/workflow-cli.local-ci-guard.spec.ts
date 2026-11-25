@@ -120,6 +120,15 @@ describe('sf-workflow CLI — local CI guard (→ Human testing)', () => {
     expect(readLog(sandbox.toolLogPath).findIndex((l) => l.startsWith('local-ci-gate'))).toBeLessThan(readLog(sandbox.toolLogPath).findIndex((l) => l.startsWith('update-status')))
   })
 
+  // #1280 — the pull request is found by its head branch, whatever it targets: a stacked one is gated too
+  it('checks the local CI on a pull request stacked on another ticket branch', async () => {
+    sandbox = await buildSandbox('[{"number":556,"isDraft":true,"isCrossRepository":false,"headRefName":"feature/42-add-stuff","baseRefName":"feature/41-parent"}]')
+    const res = await runCli(['update-status', '42', 'Human testing'], sandbox, { GATE_EXIT: '0' })
+    expect(res.code).toBe(0)
+    expect(gateCalls()).toEqual(['local-ci-gate 42 --pr 556'])
+    expect(statusCalls()).toEqual(['update-status 42 Human testing'])
+  })
+
   it('refuses with exit 2 when the gate is not green, moves nothing and sends the agent to the developer', async () => {
     sandbox = await buildSandbox(DRAFT_PR)
     const res = await runCli(['update-status', '42', 'Human testing'], sandbox, { GATE_EXIT: '1' })

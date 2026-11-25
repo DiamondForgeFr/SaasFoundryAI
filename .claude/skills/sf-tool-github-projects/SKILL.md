@@ -86,6 +86,9 @@ Several candidates are refused and listed, so pick one with `--pr`. The pull req
 primary checkout: never enter the agent's worktree to change a pull request's draft state. A ticket with no pull request of its own uses the one that resolves it from another ticket's branch: a body
 line that reads exactly `Resolves #<ticket>`, or GitHub's closing reference to it (one pull request that delivers several tickets, #1093).
 
+The ticket's own pull request is found by its head branch, whatever it targets (#1280): one stacked on another ticket's branch, or into a work stream, is accepted by `create-pr` (which reuses it),
+`ready-pr`, `draft-pr` and `local-ci-gate`. It must come from this repository and must not target the release branch; a release pull request still targets the release branch only.
+
 Every project gates review on its local CI: `create-pr` without `--draft`, `ready-pr` and `local-ci-gate` refuse a head commit on which a required status is missing or not green, and say which, where
 the required list comes from and the command that produces the statuses. A draft still opens early. `--skip-local-ci "<reason>"` bypasses the gate explicitly and records the reason on the pull
 request: it is the developer's to apply, never an agent's (the guard hook refuses the call, see the escape hatches catalogue of the workflow skill). The required statuses come from one of three

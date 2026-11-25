@@ -392,6 +392,67 @@ esac
       expect(calls()).not.toContain('pr ready')
     })
 
+    // #1280 — a pull request stacked on another ticket's branch (or into a work stream) is found by its head branch
+    describe('a pull request stacked on another branch (#1280)', () => {
+      it.each(['feature/41-parent', 'stream/billing'])('ready-pr finds the pull request that targets %s and marks it ready', async (baseRefName) => {
+        const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([prAt('feature/42-work', { baseRefName })]) })
+        expect(result.code).toBe(0)
+        expect(result.stdout).toContain("using origin/feature/42-work, the head of ticket #42's open pull request #123")
+        expect(calls()).toContain('pr ready 123')
+      })
+
+      it('draft-pr and --pr reach it the same way', async () => {
+        const stacked = prAt('feature/42-work', { baseRefName: 'feature/41-parent', isDraft: false })
+        expect((await run(['draft-pr', '42'], { PRS: JSON.stringify([stacked]) })).code).toBe(0)
+        expect(calls()).toContain('pr ready 123 --undo')
+        expect((await run(['ready-pr', '42', '--pr', '123'], { PRS: JSON.stringify([{ ...stacked, isDraft: true }]) })).code).toBe(0)
+      })
+
+      it('local-ci-gate reads its head commit from the primary checkout', async () => {
+        await writeFile(
+          path.join(work, '.saasfoundry.json'),
+          JSON.stringify({
+            workflow: {
+              workingBranch: 'develop',
+              prTargetBranch: 'develop',
+              releaseBranch: 'master',
+              branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}', release: 'rc-{version}' },
+              localCi: { requiredStatuses: ['local-check', 'local-e2e'] }
+            }
+          })
+        )
+        const env = { PRS: JSON.stringify([prAt('feature/42-work', { baseRefName: 'feature/41-parent' })]), GH_REPO: 'FakeOrg/FakeRepo', STATUS_SHA: agentCommit }
+        const red = await run(['local-ci-gate', '42'], { ...env, STATUSES: statuses('pending') })
+        expect(red.code).not.toBe(0)
+        expect(red.stderr).toContain('local-check: pending')
+        expect(calls()).toContain(`api repos/FakeOrg/FakeRepo/commits/${agentCommit}/status`)
+        const green = await run(['local-ci-gate', '42'], { ...env, STATUSES: statuses('success') })
+        expect(green.code).toBe(0)
+        expect(green.stdout).toContain(`Local CI green on ${agentCommit.slice(0, 8)}`)
+      })
+
+      it('still refuses two pull requests of the ticket, stacked or not, and one into the release branch', async () => {
+        pushTo('fix/42-repair')
+        const prs = JSON.stringify([prAt('feature/42-work', { baseRefName: 'feature/41-parent' }), prAt('fix/42-repair', { number: 124, headRefOid: head() })])
+        const refused = await run(['ready-pr', '42'], { PRS: prs })
+        expect(refused.code).not.toBe(0)
+        expect(refused.stderr).toContain('several open pull requests match ticket #42: #123 (feature/42-work), #124 (fix/42-repair)')
+        const release = await run(['ready-pr', '42'], { PRS: JSON.stringify([prAt('feature/42-work', { baseRefName: 'master' })]) })
+        expect(release.code).not.toBe(0)
+        expect(release.stderr).toContain('delivery PR must come from this repository')
+        expect(calls()).not.toContain('pr ready')
+      })
+
+      it("never takes another ticket's stacked pull request", async () => {
+        pushTo('feature/43-other')
+        const other = prAt('feature/43-other', { number: 130, baseRefName: 'feature/41-parent', body: 'Resolves #43', closingIssuesReferences: [] })
+        const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([other]) })
+        expect(result.code).not.toBe(0)
+        expect(result.stderr).toContain("no open pull request of this repository has a head branch that follows ticket #42's configured branch naming")
+        expect(calls()).not.toContain('pr ready')
+      })
+    })
+
     // #1093 — DiamondForge PR 178 delivered five stories: ready-pr of any of them finds it.
     describe('a pull request of another ticket branch that resolves the ticket (#1093)', () => {
       const bundle = (overrides: Record<string, unknown> = {}) =>

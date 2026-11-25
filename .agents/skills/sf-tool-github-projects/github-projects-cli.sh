@@ -100,6 +100,7 @@ load_config() {
   PROJECT_URL=$(jq -r '.workflow.projectUrl // empty' .saasfoundry.json)
   WORKING_BRANCH=$(jq -r '.workflow.workingBranch // "develop"' .saasfoundry.json)
   DELIVERY_TARGET_BRANCH=$(jq -r '.workflow.prTargetBranch // .workflow.workingBranch // "develop"' .saasfoundry.json)
+  RELEASE_BRANCH=$(jq -r '.workflow.releaseBranch // .mainBranch // "master"' .saasfoundry.json)
 
   # Parse owner + project number from PROJECT_URL in one pass. Supported shapes:
   #   https://github.com/orgs/{owner}/projects/{number}
@@ -1997,8 +1998,9 @@ resolve_remote_ticket_branch() {
 # delivery, the session takes a ticket's draft pull request out of draft from the primary checkout,
 # on the working branch: the ticket branch lives in the agent's worktree, and the local HEAD says
 # nothing about it. The pull request is looked up on GitHub instead: the one open pull request of
-# this repository whose head branch follows the ticket's delivery naming (feature, fix), or the
-# one --head names (release convention allowed) or --pr picks. Several candidates are refused and
+# this repository whose head branch follows the ticket's delivery naming (feature, fix), whatever
+# branch it targets (#1280: a pull request stacked on another ticket's branch is the ticket's own),
+# or the one --head names (release convention allowed) or --pr picks. Several candidates are refused and
 # listed. verify_pr_head_on_origin then checks its head commit against origin, and the local CI
 # gate reads that commit. Another ticket's pull request is accepted only when it resolves this ticket
 # (#1093): one pull request into the delivery branch that delivers several tickets, with one body line
@@ -2186,20 +2188,27 @@ read_branch_pr() {
       then . else error("Incomplete PR state") end') || {
     echo "Error: ambiguous or incomplete PR state for ${CURRENT_BRANCH}." >&2; return 1;
   }
+  # A release PR targets the release branch and closes exactly the ticket. A delivery PR comes from this
+  # repository and targets the delivery branch or whatever branch it is stacked on, another ticket's or a
+  # work stream's (#1280): the base is not hardcoded, and only the release branch is refused, which a
+  # delivery branch never goes to directly.
   if ! echo "$BRANCH_PRS" | jq -e \
-      --arg base "$PR_TARGET_BRANCH" --arg ticket "$PR_TICKET" --arg kind "$PR_CONTEXT_KIND" '
+      --arg base "$PR_TARGET_BRANCH" --arg ticket "$PR_TICKET" --arg kind "$PR_CONTEXT_KIND" --arg release "$RELEASE_BRANCH" '
         length == 0
         or (length == 1
-          and .[0].baseRefName == $base
           and .[0].isCrossRepository == false
-          and ($kind != "release"
-            or ((.[0].title | test("^\\[#" + $ticket + "\\](?:\\s|$)|^[[:alnum:]_.-]+\\(#" + $ticket + "\\)(?:!)?:"))
-              and [.[] | .body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$ticket])))
+          and (if $kind == "release"
+            then .[0].baseRefName == $base
+              and (.[0].title | test("^\\[#" + $ticket + "\\](?:\\s|$)|^[[:alnum:]_.-]+\\(#" + $ticket + "\\)(?:!)?:"))
+              and [.[] | .body | scan("(?im)^\\s*closes\\s+#([1-9][0-9]*)\\s*$") | .[0]] == [$ticket]
+            else .[0].baseRefName == $base
+              or ((.[0].baseRefName | type) == "string" and (.[0].baseRefName | length) > 0 and .[0].baseRefName != $release)
+            end))
       ' >/dev/null 2>&1; then
     if [[ "$PR_CONTEXT_KIND" == release ]]; then
       echo "Error: release PR must target ${PR_TARGET_BRANCH}, use a [#${PR_TICKET}] or type(#${PR_TICKET}): title, and contain exactly 'Closes #${PR_TICKET}'." >&2
     else
-      echo "Error: delivery PR must target ${PR_TARGET_BRANCH} in the same repository." >&2
+      echo "Error: delivery PR must come from this repository and target ${PR_TARGET_BRANCH} or the branch it is stacked on, never the release branch ${RELEASE_BRANCH}." >&2
     fi
     return 1
   fi

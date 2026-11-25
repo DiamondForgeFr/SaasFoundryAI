@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -17,38 +17,43 @@ describe('workflow ai-status', () => {
   let dir: string
   let comments: string
   let statuses: string
+  let prList: string
+  // The one open pull request of ticket #42 (and, through its second Resolves line, of #43)
+  const pr = {
+    number: 885,
+    title: '[#42] Batch',
+    headRefName: 'fix/42-batch',
+    headRefOid: head,
+    headRepository: { name: 'Repo' },
+    headRepositoryOwner: { login: 'Org' },
+    isCrossRepository: false,
+    baseRefName: 'develop',
+    // #1093 — the PR delivers #42 from its branch and #43 through its second Resolves line
+    body: 'Resolves #42\nResolves #43',
+    closingIssuesReferences: [],
+    mergedAt: null,
+    mergeCommit: null
+  }
+  const setPrs = (...prs: object[]) => writeFileSync(prList, JSON.stringify(prs))
 
   beforeEach(async () => {
     dir = mkdtempSync(path.join(tmpdir(), 'sf-ai-status-'))
     comments = path.join(dir, 'comments.json')
     statuses = path.join(dir, 'statuses.log')
+    prList = path.join(dir, 'prs.json')
     writeFileSync(comments, '[]')
+    setPrs(pr)
     await mkdir(path.join(dir, 'bin'))
     await mkdir(path.join(dir, '.claude/skills/sf-tool-github-projects'), { recursive: true })
     writeFileSync(
       path.join(dir, '.saasfoundry.json'),
       JSON.stringify({ workflow: { tool: 'github-projects', workingBranch: 'develop', branchNaming: { feature: 'feature/{N}-{description}', fix: 'fix/{N}-{description}' } } })
     )
-    const pr = {
-      number: 885,
-      title: '[#42] Batch',
-      headRefName: 'fix/42-batch',
-      headRefOid: head,
-      headRepository: { name: 'Repo' },
-      headRepositoryOwner: { login: 'Org' },
-      isCrossRepository: false,
-      baseRefName: 'develop',
-      // #1093 — the PR delivers #42 from its branch and #43 through its second Resolves line
-      body: 'Resolves #42\nResolves #43',
-      closingIssuesReferences: [],
-      mergedAt: null,
-      mergeCommit: null
-    }
     const gh = `#!/bin/bash
 filter=""; args=("$@"); for ((i=0; i<\${#args[@]}; i++)); do [ "\${args[$i]}" = "--jq" ] && filter="\${args[$((i+1))]}"; done
 body_file=""; for a in "$@"; do case "$a" in body=@*) body_file="\${a#body=@}";; esac; done
 case "$1 $2" in
-  'pr list') printf '%s' '${JSON.stringify([pr])}';;
+  'pr list') cat '${prList}';;
   'pr view') printf '%s' '${head}';;
   'repo view') printf 'Org/Repo';;
   'api repos/Org/Repo/issues/885/comments') jq -r "$filter" '${comments}';;
@@ -121,6 +126,61 @@ esac
     const result = await aiStatus('44', 'Local CI', 'success', 'green')
     expect(result.code).toBe(2)
     expect(result.stderr).toContain('ticket #44 has no open pull request')
+  })
+
+  // #1280 — a pull request stacked on another ticket's branch targets that branch, not the delivery branch:
+  // the ticket is found by its head branch, whatever the base is.
+  describe('a pull request stacked on another branch (#1280)', () => {
+    const stacked = (overrides: Record<string, unknown> = {}) => ({ ...pr, body: '', baseRefName: 'feature/41-parent', ...overrides })
+
+    it.each([
+      ['another ticket branch', 'feature/41-parent'],
+      ['a work stream', 'stream/billing'],
+      ['a fix branch of another ticket', 'fix/41-parent']
+    ])('publishes on the pull request of the ticket that targets %s (%s)', async (_label, base) => {
+      setPrs(stacked({ baseRefName: base }))
+      const result = await aiStatus('42', 'Local CI', 'success', 'molten ci run: green')
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('(PR #885)')
+      expect(readFileSync(statuses, 'utf8')).toContain(`statuses/${head}`)
+      expect(readFileSync(statuses, 'utf8')).toContain('context=AI testing / Local CI')
+    })
+
+    it.each([
+      ['comes from a fork', { isCrossRepository: true }],
+      ['targets the release branch', { baseRefName: 'master' }],
+      ['is the branch of another ticket', { headRefName: 'fix/43-other' }],
+      ['is the branch of a ticket whose number starts with this one', { headRefName: 'fix/420-other' }]
+    ])('does not take a stacked pull request that %s', async (_label, overrides) => {
+      setPrs(stacked(overrides))
+      const result = await aiStatus('42', 'Local CI', 'success', 'green')
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('ticket #42 has no open pull request')
+      expect(existsSync(statuses)).toBe(false)
+    })
+
+    it('does not take a pull request stacked on another branch that only resolves the ticket from another ticket branch', async () => {
+      setPrs({ ...pr, headRefName: 'feature/41-parent-work', baseRefName: 'feature/40-grand-parent', body: 'Resolves #41\nResolves #42' })
+      const result = await aiStatus('42', 'Local CI', 'success', 'green')
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('ticket #42 has no open pull request')
+    })
+
+    it('refuses several open pull requests for the ticket, and publishes nothing', async () => {
+      setPrs(stacked(), { ...pr, number: 886, headRefName: 'feature/42-other-try', baseRefName: 'develop' })
+      const result = await aiStatus('42', 'Local CI', 'success', 'green')
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('several open pull requests match ticket #42: #885, #886')
+      expect(existsSync(statuses)).toBe(false)
+      expect(progress()).toEqual([])
+    })
+
+    it('prefers the ticket own stacked pull request over one that only resolves it', async () => {
+      setPrs({ ...pr, number: 900, headRefName: 'feature/43-bundle', baseRefName: 'develop', body: 'Resolves #43\nResolves #42' }, stacked())
+      const result = await aiStatus('42', 'Local CI', 'success', 'green')
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('(PR #885)')
+    })
   })
 
   it('keeps table syntax safe when the description contains a pipe', async () => {

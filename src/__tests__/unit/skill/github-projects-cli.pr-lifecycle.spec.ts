@@ -232,6 +232,61 @@ esac
     expect(result.code).not.toBe(0)
     expect(calls()).not.toContain('pr ready')
   })
+  // #1280 — a pull request stacked on another ticket's branch (or into a work stream) targets that branch, not the
+  // delivery branch. It is still the ticket's pull request: only a fork's and one into the release branch are not.
+  describe('a pull request stacked on another branch (#1280)', () => {
+    const stacked = (changes: Record<string, unknown> = {}) => ({ ...pr, baseRefName: 'feature/41-parent', ...changes })
+
+    it.each(['feature/41-parent', 'fix/41-parent', 'stream/billing'])('ready-pr promotes the pull request that targets %s', async (baseRefName) => {
+      expect((await run(['ready-pr', '42'], { PRS: JSON.stringify([stacked({ baseRefName })]) })).code).toBe(0)
+      expect(calls()).toContain('pr ready 123')
+    })
+    it('draft-pr returns it to draft', async () => {
+      expect((await run(['draft-pr', '42'], { PRS: JSON.stringify([stacked({ isDraft: false })]) })).code).toBe(0)
+      expect(calls()).toContain('pr ready 123 --undo')
+    })
+    it('create-pr reuses it, keeps its draft state and opens no second one', async () => {
+      const result = await run(['create-pr', '42', '--draft'], { PRS: JSON.stringify([stacked({ isDraft: false })]) })
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('Pull request already exists')
+      expect(calls()).not.toContain('pr create')
+      expect(calls()).not.toContain('pr ready')
+    })
+    it('local-ci-gate reads its head commit', async () => {
+      const result = await run(['local-ci-gate', '42'], { PRS: JSON.stringify([stacked()]) })
+      expect(result.code).toBe(0)
+      expect(result.stdout).toContain('Local CI green on abc123')
+    })
+    it('local-ci-gate refuses it, naming the status, while the local CI is not green on that head', async () => {
+      const result = await run(['local-ci-gate', '42'], { PRS: JSON.stringify([stacked()]), STATUSES: '[]' })
+      expect(result.code).not.toBe(0)
+      expect(result.stderr).toContain('AI testing / Local CI: missing')
+      expect(result.stderr).toContain('Pull request #123 has not passed the local CI gate')
+    })
+    it('does not hardcode a base: it follows the configured PR target and still accepts a stacked pull request', async () => {
+      await writeFile(path.join(dir, '.saasfoundry.json'), JSON.stringify({ workflow: { workingBranch: 'develop', prTargetBranch: 'integration', releaseBranch: 'master', branchNaming: {} } }))
+      expect((await run(['ready-pr', '42'], { PRS: JSON.stringify([stacked({ baseRefName: 'integration' })]) })).code).toBe(0)
+      expect((await run(['ready-pr', '42'], { PRS: JSON.stringify([stacked({ baseRefName: 'stream/billing' })]) })).code).toBe(0)
+    })
+    it.each([
+      ['comes from a fork', { isCrossRepository: true }],
+      ['has no repository information', { isCrossRepository: undefined }],
+      ['targets the release branch', { baseRefName: 'master' }],
+      ['has no base', { baseRefName: '' }]
+    ])('still refuses one that %s', async (_label, changes) => {
+      const result = await run(['ready-pr', '42'], { PRS: JSON.stringify([stacked(changes)]) })
+      expect(result.code).not.toBe(0)
+      expect(result.stderr).toContain('delivery PR must come from this repository')
+      expect(calls()).not.toContain('pr ready')
+    })
+    it('keeps the release PR rule: it must target the release branch', async () => {
+      const result = await run(['ready-pr', '42'], { BRANCH: 'rc-1.0.0', PRS: JSON.stringify([{ ...releasePr, baseRefName: 'feature/41-parent' }]) })
+      expect(result.code).not.toBe(0)
+      expect(result.stderr).toContain('release PR must target master')
+      expect(calls()).not.toContain('pr ready')
+    })
+  })
+
   it('returns a ready PR to draft explicitly and verifies it', async () => {
     expect((await run(['draft-pr', '42'], { PRS: JSON.stringify([{ ...pr, isDraft: false }]) })).code).toBe(0)
     expect(calls()).toContain('pr ready 123 --undo')

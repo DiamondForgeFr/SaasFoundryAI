@@ -112,6 +112,16 @@ ambiguës.
 toute autre cible. Quand il ne peut pas faire avancer l'un d'eux, il fait quand même avancer les autres et termine par une ligne par ticket qui en donne la cause ; la vérification échoue alors. Le
 même ticket sur deux lignes `Resolves` est refusé.
 
+### Une pull request empilée sur une autre branche
+
+La pull request propre d'un ticket se retrouve par sa branche de tête (`feature/{N}-…` ou `fix/{N}-…`), **quelle que soit la branche qu'elle vise**. Une pull request empilée sur la branche d'un autre
+ticket, ou vers un flux de travail, vise cette branche plutôt que la cible des PR, et reste l'unique pull request du ticket : `ai-status`, `ready-pr`, `draft-pr`, `local-ci-gate`, `create-pr` (qui la
+réutilise au lieu d'en ouvrir une seconde), le garde-fou d'état de PR de Human testing et d'In review, et la vérification de PR ouverte du garde-fou de Done la trouvent toutes.
+
+Deux choses restent refusées : une pull request d'un autre dépôt, et la pull request d'une branche de livraison vers la branche de release. Plusieurs pull requests ouvertes pour un même ticket sont
+refusées comme ambiguës (`ai-status` compris, qui publie sur la tête de l'unique pull request du ticket). Le garde-fou de PR fusionnée exige toujours une fusion dans la cible des PR, là où le travail
+doit arriver, et une pull request qui ne fait que résoudre le ticket depuis la branche d'un autre ticket (voir plus haut) doit toujours viser la cible des PR.
+
 ### La porte de CI locale
 
 Une pull request ouverte pour la revue (`create-pr` sans `--draft`), rendue prête (`ready-pr`) et un ticket passé en **Human testing** exigent que les statuts de CI locale du projet soient verts sur
