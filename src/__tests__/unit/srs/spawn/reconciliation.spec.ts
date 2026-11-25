@@ -134,6 +134,51 @@ describe('SRS spawn reconciliation', () => {
     expect(() => reconcileRequirements(requirements, plan(), [ticket({ srsLinks: ['https://example.test/a-different-page'] })], '645')).toThrow(/matches the id but not the canonical SRS page/)
   })
 
+  // #1117 — Stories of one feature cite each other's FR ids in their bodies (scope, dependencies)
+  describe('an FR id the body of another Story only mentions', () => {
+    const citing = ticket({
+      number: '1325',
+      title: 'FR-MAH-009: Guide users',
+      body: '## Scope\n\n- **FR-MAH-009**\n- **FR-MAH-010** — Provision workflows',
+      frIds: ['FR-MAH-009', 'FR-MAH-010']
+    })
+
+    it('does not block the cited FR, which is created', () => {
+      const result = reconcileRequirements(requirements, plan(), [citing], '645')
+      expect(result.map((item) => [item.requirement.frId, item.action, item.ticket?.number])).toEqual([
+        ['FR-MAH-009', 'reuse', '1325'],
+        ['FR-MAH-010', 'create', undefined],
+        ['FR-MAH-011', 'skip', undefined]
+      ])
+    })
+
+    it('does not block two Stories that cite each other', () => {
+      const other = ticket({
+        number: '1327',
+        title: 'FR-MAH-010: Provision workflows',
+        body: 'Depends on FR-MAH-009 and FR-MAH-011',
+        frIds: ['FR-MAH-009', 'FR-MAH-010', 'FR-MAH-011'],
+        srsLinks: [requirements[1].frPageUrl]
+      })
+      const result = reconcileRequirements(requirements, plan(), [citing, other], '645')
+      expect(result.map((item) => [item.requirement.frId, item.action, item.ticket?.number])).toEqual([
+        ['FR-MAH-009', 'reuse', '1325'],
+        ['FR-MAH-010', 'reuse', '1327'],
+        ['FR-MAH-011', 'skip', undefined]
+      ])
+    })
+
+    it('still blocks a ticket whose title claims the id under another page', () => {
+      const claim = ticket({ number: '1400', title: 'FR-MAH-010: Provision workflows', srsLinks: ['https://example.test/a-different-page'], frIds: ['FR-MAH-010'] })
+      expect(() => reconcileRequirements(requirements, plan(), [citing, claim], '645')).toThrow(/FR-MAH-010 is ambiguous: ticket #1400 matches the id but not the canonical SRS page/)
+    })
+
+    it('does not read an id out of a link in the title', () => {
+      const linked = ticket({ number: '1401', title: 'Guide users (https://example.test/FR-MAH-010-page)', srsLinks: [], frIds: [] })
+      expect(reconcileRequirements(requirements, plan(), [linked], '645')[1]).toMatchObject({ action: 'create' })
+    })
+  })
+
   it('prefers one canonical page match over unrelated textual references to the same FR id', () => {
     const referenceOnly = ticket({ number: '101', srsLinks: ['https://example.test/a-different-page'], parentNumber: null })
     const result = reconcileRequirements(requirements, plan(), [ticket(), referenceOnly], '645')
@@ -207,6 +252,14 @@ describe('matching existing tickets without a plan', () => {
 
   it('blocks an id-only collision with a contradictory canonical page', () => {
     expect(matchOf('FR-MAH-009', [ticket({ srsLinks: ['https://example.test/a-different-page'] })]).blocked).toMatch(/matches the id but not the canonical SRS page/)
+  })
+
+  // #1117
+  it('leaves an FR that another Story only cites in its body to be created', () => {
+    const citing = ticket({ number: '1325', body: 'Scope: FR-MAH-009, FR-MAH-010', frIds: ['FR-MAH-009', 'FR-MAH-010'] })
+    const match = matchOf('FR-MAH-010', [citing])
+    expect(match.blocked).toBeUndefined()
+    expect(match.ticket).toBeUndefined()
   })
 
   it('ignores an aggregate Epic that catalogues the same canonical page', () => {

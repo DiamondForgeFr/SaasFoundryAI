@@ -129,9 +129,10 @@ Before creating anything, `spawn` searches the repository for tickets that alrea
 `spawn` waits 60 seconds and retries, up to three times. Set `SF_SEARCH_RATE_LIMIT_WAIT` (seconds) to change the wait.
 
 `spawn` reuses the ticket that already carries an FR's canonical page, with or without `--reconciliation-plan`. A closed ticket is reused as it is and never reopened, a ticket closed as not planned
-(how a duplicate is closed) is ignored, and an FR with no ticket is created. Two candidates for one FR, or a candidate that belongs to another parent, stop the run with exit `10` before anything is
-written. Without `--ticket`, the open version Epic that a previous run created is adopted instead of created again: `spawn` recognises it by the version page link it wrote in the Epic body, then by
-its `<feature> - <version>` title, so a version page renamed between two runs keeps its Epic. When the Stories hang under an Epic `spawn` cannot recognise, such as one made by hand, the run stops and
+(how a duplicate is closed) is ignored, and an FR with no ticket is created. Two candidates for one FR, a ticket whose title names the FR id but links another page, or a candidate that belongs to
+another parent, stop the run with exit `10` before anything is written. An FR id that a Story only cites in its body, such as a related FR of the same version, makes it no candidate. Without
+`--ticket`, the open version Epic that a previous run created is adopted instead of created again: `spawn` recognises it by the version page link it wrote in the Epic body, then by its
+`<feature> - <version>` title, so a version page renamed between two runs keeps its Epic. When the Stories hang under an Epic `spawn` cannot recognise, such as one made by hand, the run stops and
 names that Epic: pass `--ticket <n>` if it is the version's Epic.
 
 #### Re-running spawn after adding an FR

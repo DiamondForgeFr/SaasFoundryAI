@@ -262,8 +262,8 @@ open or closed, native children of the target Epic or without a parent:
 - a match is **reused**, never created again. A closed one is reused as it is and is not reopened;
 - a ticket closed as **not planned** is ignored: that is how a duplicate is closed, and it keeps the FR page link it was spawned with;
 - an FR with no match is created;
-- two matches for one page, a ticket that names the FR id without owning its page, or a match under another parent stop the run with exit 10, before the milestone or any ticket is touched. Nothing is
-  reparented implicitly.
+- two matches for one page, a ticket whose title names the FR id without owning its page, or a match under another parent stop the run with exit 10, before the milestone or any ticket is touched.
+  Nothing is reparented implicitly. An FR id a Story only cites in its body (a related FR of the same version) is a cross-reference, not a match.
 
 Without `--ticket`, the open `sf-epic` that a previous run created is adopted rather than created again. Spawn recognises it by the version page link it wrote in the Epic body, then by its
 `<feature> - <version>` title, so renaming the version page between two runs does not lose it. When the Stories hang under an Epic spawn cannot recognise (one made by hand), the run blocks and names
