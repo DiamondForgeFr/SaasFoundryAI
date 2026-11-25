@@ -14,6 +14,7 @@ import {
   isLegacyGuardCommand,
   resolveGuardCli,
   V1_2_0_GUARD_COMMANDS,
+  V1_3_0_GUARD_COMMANDS,
   withCodexGuard
 } from '../../../harness/guard-hook'
 
@@ -35,6 +36,11 @@ describe('guardCommand', () => {
     // the nature label is matched whatever its case
     expect(CLAUDE_GUARD_COMMAND).toContain('*[Nn][Aa][Tt][Uu][Rr][Ee]*')
     expect(CLAUDE_GUARD_COMMAND).toContain('*) exit 0;; esac')
+  })
+
+  // #1332 — a plain `git checkout <branch>` or `git stash` holds none of the characters above: the filter names them
+  it('lets through a payload that mentions a branch switch or a stash, for the primary checkout rule', () => {
+    for (const word of ['checkout', 'switch', 'stash']) expect(CLAUDE_GUARD_COMMAND).toContain(`*${word}*`)
   })
 
   // #1251 — a line that is not one plain command has to reach the guard: the filter lets through a superset of the
@@ -128,6 +134,35 @@ describe('the guard commands v1.2.0 shipped', () => {
 
   it('is replaced in a Codex hooks file, which has to be trusted again', () => {
     const result = withCodexGuard(JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: V1_2_0_GUARD_COMMANDS[1], timeout: 10 }] }] } }))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.added).toBe(true)
+    expect(commands(JSON.parse(result.content), 'PreToolUse')).toEqual([CODEX_GUARD_COMMAND])
+  })
+})
+
+describe('the guard commands v1.3.0 shipped (#1332)', () => {
+  const V130 = join(__dirname, '../../fixtures/harness/v1.3.0')
+  const commands = (config: { hooks: Record<string, { hooks: { command: string }[] }[]> }, event: string) =>
+    config.hooks[event].flatMap((group) => group.hooks.map((hook) => hook.command)).filter((command) => command.includes('agents guard'))
+
+  it('are the golden bytes of the tag, and are not today command', async () => {
+    const claude = JSON.parse(await readFile(join(V130, 'claude-settings.json'), 'utf8'))
+    const codex = JSON.parse(await readFile(join(V130, 'codex-hooks.json'), 'utf8'))
+    expect(commands(claude, 'PreToolUse')).toEqual([V1_3_0_GUARD_COMMANDS[0]])
+    expect(commands(codex, 'PreToolUse')).toEqual([V1_3_0_GUARD_COMMANDS[1]])
+    expect(V1_3_0_GUARD_COMMANDS).not.toContain(CLAUDE_GUARD_COMMAND)
+    expect(V1_3_0_GUARD_COMMANDS).not.toContain(CODEX_GUARD_COMMAND)
+  })
+
+  it('are legacy commands a merge replaces, in a Claude settings file and in a Codex hooks file', () => {
+    for (const command of V1_3_0_GUARD_COMMANDS) {
+      expect(isLegacyGuardCommand(command)).toBe(true)
+      expect(HARNESS_SUPERSEDED_HOOKS.supersedes(command)).toBe(true)
+    }
+    const rendered = renderHarnessSettings(JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: V1_3_0_GUARD_COMMANDS[0], timeout: 10 }] }] } }))
+    if ('error' in rendered) throw new Error(rendered.error)
+    expect(commands(JSON.parse(rendered.content), 'PreToolUse')).toEqual([CLAUDE_GUARD_COMMAND])
+    const result = withCodexGuard(JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: V1_3_0_GUARD_COMMANDS[1], timeout: 10 }] }] } }))
     if ('error' in result) throw new Error(result.error)
     expect(result.added).toBe(true)
     expect(commands(JSON.parse(result.content), 'PreToolUse')).toEqual([CODEX_GUARD_COMMAND])

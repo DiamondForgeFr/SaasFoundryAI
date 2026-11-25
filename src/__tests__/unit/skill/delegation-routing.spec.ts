@@ -137,7 +137,11 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
       // one command per call (#1251): the guard hook refuses a `&&` chain, so the two steps are said in order, not chained
       expect({ name, worktreeForm: text.includes('`git fetch origin`, then `git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>`') }).toEqual({ name, worktreeForm: true })
       expect(text).toContain('the agent creates the branch, and the primary checkout stays on `<workingBranch>`')
-      expect(text).toContain('Built in the primary checkout, one command per call: `git checkout <workingBranch>`, then `git pull --rebase`, then `git checkout -b feature/<N>-<description>`')
+      // #1332: a ticket built in the session gets a worktree too; the primary checkout never changes branch
+      expect(text).toContain('in a worktree of its own, never in the primary checkout, whose branch stays `<workingBranch>`')
+      expect(text).toContain('`git fetch origin`, then `git worktree add <path> -b feature/<N>-<description> origin/<workingBranch>`')
+      expect(text).not.toContain('Built in the primary checkout')
+      expect(text).not.toContain('`git checkout -b feature/<N>-<description>`')
       expect(text).not.toContain('git fetch origin &&')
       expect(text).not.toContain('git pull --rebase && git checkout')
     }
@@ -180,20 +184,25 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
   })
 
   // FR-MAH-022: the skill and the Kimi Code tier agent prompt agree on what a host without worktrees delegates, and on the alias
-  it('agrees with the Kimi Code tier agent prompt: sub-tasks only without a worktree, the alias a route prints, no other host CLI (FR-MAH-022)', () => {
+  it('agrees with the Kimi Code tier agent prompt: a whole ticket in a worktree opened with git, the alias a route prints, no other host CLI (FR-MAH-022, #1332)', () => {
     const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
     expect(skill).toContain(
       'The one exception is a route that prints `alias <name>` (Kimi Code binds no model in an agent file): pass that alias, copied from the route and never composed, as the `model` of the delegation call'
     )
     expect(skill).toContain('never name a model (the alias a route prints excepted)')
     expect(skill).toContain("A refused or failed route is never worked around by starting another coding agent's CLI (`claude`, `codex`, or any other) or a background session of another host")
-    expect(skill).toContain(
-      'A host with no worktree support (`worktrees: none` in `sf agents catalog --json`, Kimi Code today) delegates sub-tasks only, in the current worktree, through its own native sub-agent tool'
-    )
-    expect(skill).toContain("it cannot open a worktree for a delegate, so it delegates sub-tasks only, in the current worktree, and never starts another host's CLI to get a worktree")
-    // the prompt a Kimi tier agent runs on says the same: a sub-task in the current worktree, never a whole ticket
-    expect(SUBTASK_ONLY_LINE).toContain('you work on the sub-task the brief hands you, in the current worktree, and never on a whole ticket')
-    for (const file of renderTierAgents(['kimi'])) expect(file.content).toContain(SUBTASK_ONLY_LINE)
+    expect(skill).toContain('A host with no worktree support (`worktrees: none` in `sf agents catalog --json`) delegates sub-tasks only, through its own native sub-agent tool')
+    expect(skill).toContain("it delegates sub-tasks only, and never starts another host's CLI to get a delegate")
+    expect(skill).not.toContain('Kimi Code today')
+    // #1332: every ticket in a worktree, and the shared primary checkout never switched, for every host
+    expect(skill).toContain('**Every ticket in a worktree, never the primary checkout.**')
+    expect(skill).toContain('`git worktree add <path> -b <branch> origin/<workingBranch>`')
+    expect(skill).toContain('The guard hook refuses `git checkout <branch>`, `git switch` and `git stash` in it')
+    // the prompt a Kimi tier agent runs on says the same: a Kimi lead opens the worktree, so its delegate takes a whole ticket
+    for (const file of renderTierAgents(['kimi'])) {
+      expect(file.content).toContain(WHOLE_TICKET_LINE)
+      expect(file.content).not.toContain(SUBTASK_ONLY_LINE)
+    }
   })
 
   // The routing learns from the delegations it routes (#1035): the brief asks for the line, and the session marks what it reworked.

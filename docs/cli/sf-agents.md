@@ -374,16 +374,17 @@ Kimi Code is routed by its profile and the grid (`routing: { vendor: "moonshot",
   `[secondary_model.models]` tables whole, with a placeholder for the `default_model` that must be one of its keys. A config that cannot be read (not a file, not UTF-8 text, larger than 1 MiB) is
   `unknown`: the route still names the alias, and the snippet is printed as if nothing were declared. If `[secondary_model].default_effort` is set it outranks the effort of every alias, and the CLI
   says so. With a single-entry pool Kimi Code does not advertise the `model` parameter at all.
-- **A sub-task line, not a whole-ticket line.** The profile says `worktrees: none`, so each Kimi tier agent carries "Sub-tasks only" in place of the whole-ticket delivery line the Claude Code and
-  Codex ones have: it works on the sub-task the brief hands it, in the current worktree, and stops and says so if it is handed a whole ticket. This is decided from the profile data, with no branch for
-  Kimi Code in the renderer. The session delivers the ticket itself and delegates sub-tasks only.
+- **Worktrees opened with git, like Codex.** The profile says `worktrees: manual`: a Kimi Code lead with delegation `allowed` opens one worktree per ticket with git (`git fetch origin`, then
+  `git worktree add <path> -b <branch> origin/<workingBranch>`) and delegates the ticket to its `sf-<tier>` agent there, so each Kimi tier agent carries the same whole-ticket delivery line as the
+  Claude Code and Codex ones. This is decided from the profile data, with no branch for Kimi Code in the renderer. Until #1332 the profile said `worktrees: none` and a Kimi lead built tickets in the
+  current checkout, which switched a checkout another lead shared.
 - **Not checked in a real session.** The profile keeps `runtime: not-checked`: that Kimi Code resolves `subagent_type: "sf-<tier>"` and honours the alias on a call is declared from its documentation,
   not verified here.
 - **No hook.** Kimi Code reads its hooks from the user's own configuration only, never from the project, so the harness installs no guard and no capture hook. `sf status` says
   `kimi guard unavailable (…)` and `kimi capture unavailable (…; record its delegations with sf agents outcome record)`. The CLI's own guards still refuse an escape hatch; nothing stops an agent from
   setting one before it reaches them.
-- **Sub-tasks in the current worktree only.** Kimi Code has no worktree tool the harness uses (`worktrees: none`), so a delegation to Kimi is limited to sub-tasks of the current worktree until a
-  whole-ticket worktree run is verified. A refused or failed route never sends the session to another host's CLI (see [Delegated ticket delivery](#delegated-ticket-delivery-sf-agents-delegation)).
+- **No host-native worktree.** Kimi Code has no worktree tool the harness uses, so the session opens the worktree itself and hands the delegate its path (`limitations.worktrees`). A refused or failed
+  route never sends the session to another host's CLI (see [Delegated ticket delivery](#delegated-ticket-delivery-sf-agents-delegation)).
 - **Recording by hand.** A delegation to Kimi is recorded with `sf agents outcome record --provider kimi …` (host `manual`: rated for the report, never moves the routing), and its models are unpriced
   until the project declares a price in `modules.harness.routing.adjust.prices`.
 - **Identity.** The agent is `kimi`, declared explicitly (`sf agents enable kimi`). No path infers it from a model name, and `kimi-code`, `moonshot` or `k3` are refused as unregistered. `kimi-code`
@@ -467,14 +468,15 @@ The generated instructions then tell every agent what to do with the effective a
 - `allowed`: each ticket that is not trivial, from In progress to the end of AI Testing (test plan, tests, report and draft pull request), runs in a background agent in its own worktree, on the tier
   `sf agents route` names for the task kind of the work. The agent that receives a ticket builds it itself and never hands it on again. The session keeps talking with the developer and never switches
   to coding a ticket mid-delivery. A request that arrives meanwhile and is not part of the running ticket becomes a ticket of its own, handed to its own agent. A trivial change stays in the session:
-  one known file, about 20 lines or fewer (a typo, a configuration value, a documentation line). It does not repay a worktree and a dependency install.
+  one known file, about 20 lines or fewer (a typo, a configuration value, a documentation line), in a worktree of its own. It does not repay a delegation and a dependency install.
 - `declined`, or an agent that cannot delegate or run in the background: the session builds the tickets one after the other and says so explicitly.
 
 The consent covers ticket delivery only. Any other parallel writing stream is proposed to the developer first, and the answer comes before writers start.
 
-A coding agent whose profile has no worktree support (`worktrees: none`, Kimi Code today) cannot run a whole ticket in a worktree of its own. For it, delegation is limited to sub-tasks of the current
-worktree, in the session that holds it, until a whole-ticket worktree run is verified; the profile says so (`limitations.worktrees`). The generated instructions say the same, statically, whatever
-agents the project declares: such a host delivers the tickets in the session, one after the other, and delegates sub-tasks only, through its own native sub-agent tool.
+Every ticket is built in a worktree of its own, whoever builds it and a trivial change included, and the primary checkout stays on the working branch: no lead switches its branch or moves another's
+uncommitted changes there (see [The primary checkout](#the-primary-checkout)). A `native` host (Claude Code) opens the worktree for its delegate; a `manual` one (Codex, Kimi Code, Gemini CLI, Qwen
+Code, generic) opens it with git and hands the delegate its path. A profile with no worktree support (`worktrees: none`; no registered profile declares it today) delivers the tickets in the session,
+one after the other, each in a worktree it opens with git, and delegates sub-tasks only; the generated instructions say so statically, whatever agents the project declares.
 
 A refused or failed route is never worked around. When `sf agents route` refuses an agent, or a delegation cannot start, the step runs in the session; the session never starts another coding agent's
 CLI (`claude`, `codex`, or any other) or a background session of another host to delegate anyway, since such a session is one the harness does not route, record or guard. The generated instructions
@@ -850,6 +852,26 @@ under `.claude/worktrees/` or `.codex/worktrees/`:
 
 The same calls from the primary checkout are allowed: the session and the developer run them. The command is read the way a shell reads it: quotes, `;` `&&` `|` and newlines, `bash -c '…'`, `eval`,
 `env`, heredocs and here-strings are looked into, to three levels. It does not expand `$(…)` in a string or a variable.
+
+### The primary checkout
+
+Agents of several hosts and the developer may work in one folder, like several developers on one repository: each ticket is built in a worktree of its own, and the primary checkout stays on
+`workflow.workingBranch`. When one lead stashed the developer's change and switched the shared checkout to its ticket branch, the other lead's work changed branch under it (#1332). So, for everyone
+and **in the primary checkout only** (a linked worktree is left alone), the hook refuses:
+
+| Call           | Refused                                                                                                                                                     | Allowed                                                                                                                                      |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `git switch`   | any branch but the working branch; `-c`, `-C`, `--orphan`, `--detach`, `-`                                                                                  | `git switch <workingBranch>`, `--help`                                                                                                       |
+| `git checkout` | `-b`, `-B`, `--orphan`, `--detach`, `-`, and one operand that can name a branch or a commit (`fix/12-x`, `HEAD~1`) other than the working branch and `HEAD` | anything after `--`, `-p`, `<tree-ish> <path>…`, one operand that cannot be a branch name (`.`, `./x`, `.env`, `src/*.ts`, an absolute path) |
+| `git stash`    | everything that moves changes or drops a stash: bare, `push`, `save`, `pop`, `apply`, `drop`, `clear`, `branch`                                             | `list`, `show`, `create`, `store`                                                                                                            |
+
+`git checkout README` is ambiguous (a branch or a file) and is refused: the refusal says to write `git checkout -- README` or `git restore README`. The refusal names the worktree command to use
+instead, one command per call: `git fetch origin`, then `git worktree add <path> -b <ticket branch> origin/<workingBranch>`.
+
+The hook tells the two apart from the `.git` entry nearest to the directory the command runs in (its working directory, a `cd`, or `git -C`): a directory is the primary checkout, a file whose
+`gitdir:` points into `<common-dir>/worktrees/<name>` is a linked worktree. No `git` process runs. Anything else (a submodule, `--git-dir`, `--work-tree`, `cd ~`, no checkout) is not guessed: the call
+goes through. The working branch is read from the nearest `.saasfoundry.json`; without one, every switch is refused. The hook line lets a payload that mentions `checkout`, `switch` or `stash` reach
+the CLI; the line v1.3.0 wrote did not, and a refresh replaces it.
 
 ### A shell line that is not one plain command
 

@@ -216,14 +216,14 @@ describe('Kimi Code tier agents (FR-MAH-022)', () => {
     }
   })
 
-  // the host opens no worktree for a delegate: its profile says `worktrees: none`, and the prompt is decided from that data
-  it('hands a Kimi delegate sub-tasks only, and the other hosts a whole ticket', () => {
+  // #1332: the Kimi lead opens the worktree with git (`worktrees: manual`, like Codex), so its delegate is handed a
+  // whole ticket like the others; the prompt is still decided from the profile data, and `none` keeps the sub-task line
+  it('hands a Kimi delegate a whole ticket, like the other hosts', () => {
     for (const file of files) {
       const body = kimiBody(file.content)
-      expect(body).toContain(SUBTASK_ONLY_LINE)
-      expect(body).not.toContain(WHOLE_TICKET_LINE)
-      expect(body).toContain('Do not change ticket, board or pull-request state: the coordinating agent owns the workflow.')
-      expect(body).not.toContain('unless the brief hands you a whole ticket')
+      expect(body).toContain(WHOLE_TICKET_LINE)
+      expect(body).not.toContain(SUBTASK_ONLY_LINE)
+      expect(body).toContain('unless the brief hands you a whole ticket')
     }
     for (const host of ['claude-code', 'codex'] as const) {
       for (const file of renderTierAgents([host])) {

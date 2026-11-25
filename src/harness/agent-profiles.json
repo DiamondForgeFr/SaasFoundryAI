@@ -72,10 +72,10 @@
         "routing": { "vendor": "moonshot", "efforts": ["low", "high", "max"] },
         "tierAgents": { "dir": ".kimi-code/agents", "format": "kimi-md", "modelBinding": "call-alias" },
         "hooks": null,
-        "worktrees": "none",
+        "worktrees": "manual",
         "limitations": {
           "hooks": "Kimi Code reads its hooks from the user's own configuration only, never from the project, so the harness installs no guard or capture hook for it; the CLI's own guards still refuse an escape hatch.",
-          "worktrees": "The harness uses no Kimi Code worktree tool: delegation is limited to sub-tasks in the current worktree until a whole-ticket worktree run is verified."
+          "worktrees": "The harness declares no host-native worktree isolation for Kimi Code: the session opens the worktree with git and hands the delegate its path."
         }
       }
     },

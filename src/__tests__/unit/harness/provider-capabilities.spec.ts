@@ -159,12 +159,16 @@ describe('a missing capability always says why (AC-3)', () => {
 describe('Kimi Code is routed by its profile and the grid, and writes tier agents by its profile (FR-MAH-021, FR-MAH-022)', () => {
   const kimi = getAgentProfile('kimi')
 
-  it('declares routing and tier agents, and states why it has no hook and no worktree tool', () => {
+  // #1332: a Kimi lead opens its worktrees with git, like Codex, instead of building in a checkout it may share
+  it('declares routing and tier agents, and states why it has no hook and no native worktree tool', () => {
     expect(kimi.capabilities.routing).toEqual({ vendor: 'moonshot', efforts: ['low', 'high', 'max'] })
-    expect(kimi.capabilities).toMatchObject({ tierAgents: { dir: '.kimi-code/agents', format: 'kimi-md', modelBinding: 'call-alias' }, hooks: null, worktrees: 'none' })
+    expect(kimi.capabilities).toMatchObject({ tierAgents: { dir: '.kimi-code/agents', format: 'kimi-md', modelBinding: 'call-alias' }, hooks: null, worktrees: 'manual' })
     expect(Object.keys(kimi.capabilities.limitations).sort()).toEqual(['hooks', 'worktrees'])
     expect(kimi.capabilities.limitations.hooks).toContain("user's own configuration")
-    expect(kimi.capabilities.limitations.worktrees).toContain('sub-tasks in the current worktree')
+    expect(kimi.capabilities.limitations.worktrees).toBe(
+      'The harness declares no host-native worktree isolation for Kimi Code: the session opens the worktree with git and hands the delegate its path.'
+    )
+    expect(kimi.capabilities.limitations.worktrees).not.toContain('sub-tasks in the current worktree')
   })
 
   it('says in its profile limitations that sf writes no ~/.kimi-code and that the alias pool is the developer', () => {
