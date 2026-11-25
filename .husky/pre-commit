@@ -1,3 +1,9 @@
+# node and npm are the ones .nvmrc names, even when the committing shell has an older Node first on PATH (#1317).
+sf_project_node="$(dirname "$0")/project-node.sh"
+if [ -f "$sf_project_node" ]; then
+  . "$sf_project_node"
+fi
+
 # The commit lands on a branch the workflow names after its ticket, a long-lived branch, a host-named
 # agent branch or a detached HEAD (#1232): see workflow-branch-guard.mjs. Checked first, before the tests,
 # and while the hook's repository bindings still name this repository.

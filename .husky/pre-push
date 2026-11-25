@@ -1,3 +1,9 @@
+# node and npm are the ones .nvmrc names, even when the pushing shell has an older Node first on PATH (#1317).
+sf_project_node="$(dirname "$0")/project-node.sh"
+if [ -f "$sf_project_node" ]; then
+  . "$sf_project_node"
+fi
+
 # Every branch the push updates is one the workflow names (#1232), whatever the local branch is:
 # a host-named agent branch or a detached HEAD pushes with HEAD:<ticket branch>, and that name is checked.
 sf_branch_guard="$(dirname "$0")/workflow-branch-guard.mjs"

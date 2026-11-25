@@ -1,1 +1,7 @@
+# npx is the one .nvmrc names, even when the committing shell has an older Node first on PATH (#1317).
+sf_project_node="$(dirname "$0")/project-node.sh"
+if [ -f "$sf_project_node" ]; then
+  . "$sf_project_node"
+fi
+
 npx --no -- commitlint --edit ${1}
