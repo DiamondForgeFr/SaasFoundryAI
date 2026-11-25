@@ -14,6 +14,7 @@ import { z } from 'zod'
 import { useInviteUser, useInviteUserSchema } from '@/hooks/api/accounts/mutations/useInviteUserCreate'
 import { useInvitedUsers } from '@/hooks/api/invitations/queries/useInvitedUsers'
 import { useFormLanguageSync } from '@/hooks/ui/useFormLanguageSync'
+import { suggestAccountName } from '@/utils/account-name'
 import { invitationRefusalOf } from '@/utils/invitation-refusal'
 
 /**
@@ -29,29 +30,6 @@ import type { InviteUserPayloadDto } from '@/hooks/api/accounts/mutations/useInv
 type InviteAccountOwnerDialogProps = {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
-}
-
-function capitalize(s: string) {
-  if (!s) return s
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
-
-/**
- * Generate a sensible default account name from what we know about the invitee.
- * Falls back through firstname+lastname → firstname → email user-part → "Main account".
- */
-function suggestAccountName(firstname?: string, lastname?: string, email?: string): string {
-  const fn = firstname?.trim()
-  const ln = lastname?.trim()
-  if (fn && ln) return `${capitalize(fn)} ${capitalize(ln)}'s account`
-  if (fn) return `${capitalize(fn)}'s account`
-  const e = email?.trim()
-  if (e && e.includes('@')) {
-    const userPart = e.split('@')[0].split('+')[0]
-    const firstToken = userPart.split(/[._-]/)[0]
-    if (firstToken) return `${capitalize(firstToken)}'s account`
-  }
-  return 'Main account'
 }
 
 /**
@@ -93,9 +71,9 @@ export function InviteAccountOwnerDialog({ isOpen, onOpenChange }: InviteAccount
   const watchedEmail = form.watch('email')
   useEffect(() => {
     if (form.formState.dirtyFields.accountName) return
-    const suggested = suggestAccountName(watchedFirstname, watchedLastname, watchedEmail)
+    const suggested = suggestAccountName(tCommon, { firstname: watchedFirstname, lastname: watchedLastname, email: watchedEmail })
     form.setValue('accountName', suggested, { shouldDirty: false })
-  }, [watchedFirstname, watchedLastname, watchedEmail, form])
+  }, [watchedFirstname, watchedLastname, watchedEmail, form, tCommon])
 
   const handleSubmit = async (data: FormValues) => {
     const payload: InviteUserPayloadDto = {

@@ -53,7 +53,7 @@ export const buildSigninPayloadSchema = (messages: SigninPayloadMessages = {}) =
       firstname: z.string().optional(),
       lastname: z.string().optional(),
       // Optional account name set by the user during the first-activation step (when
-      // confirmAccountToken is present). Falls back to "Main account" when omitted.
+      // confirmAccountToken is present). Falls back to a default name in the user's locale when omitted.
       accountName: z.string().max(100).optional(),
       locale: buildOptionalLocaleSchema(messages)
     })

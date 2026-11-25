@@ -799,7 +799,7 @@ export class AuthService {
         let defaultAccountId: string | undefined = undefined
         if (!awaitsPlatformAdmin && createDefaultAccount && accountIds.length === 0 && entityIds.length === 0) {
           const defaultAccount = await tx.account.create({
-            data: accountName?.trim() ? { name: accountName.trim() } : {}
+            data: { name: accountName?.trim() || UserDefaults.accountName[locale || UserDefaults.preferences.locale] }
           })
           defaultAccountId = defaultAccount.id
         }

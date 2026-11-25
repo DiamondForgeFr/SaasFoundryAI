@@ -21,5 +21,10 @@ export const UserDefaults = {
   },
   preferences: {
     locale: Locale.EN
+  },
+  // Name of the account created for a user who gave none, in that user's locale
+  accountName: {
+    [Locale.EN]: 'Main account',
+    [Locale.FR]: 'Compte principal'
   }
 } as const

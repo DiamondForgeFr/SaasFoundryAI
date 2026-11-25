@@ -6,6 +6,11 @@ user:
   tk_email_: Email
   tk_emailPlaceholder_: bill.matt@billmate.com
 
+# Account name suggested to its owner; add a `tk_owned-by__vowel` variant in a language that elides before a vowel
+account:
+  tk_main_: Main account
+  tk_owned-by_: "{{ name }}'s account"
+
 loading:
   tk_loadingCreate_: 'Creating...'
   tk_loadingSignin_: 'Signing in...'

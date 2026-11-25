@@ -4,6 +4,7 @@
 
 import { NotFoundException, Provider, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
+import { Locale } from '@/generated/prisma/client'
 import * as bcrypt from 'bcrypt'
 import { Response } from 'express'
 
@@ -288,6 +289,20 @@ class AuthServiceTest extends ServiceTestBase<AuthService> {
               })
             )
             expect(prismaServiceAny.account.create).toHaveBeenCalled()
+          })
+        })
+
+        it.each([
+          ['the name the user gave', { accountName: ' Acme ', locale: Locale.FR }, 'Acme'],
+          ['a French default for a French user', { locale: Locale.FR }, 'Compte principal'],
+          ['an English default for an English user', { locale: Locale.EN }, 'Main account'],
+          ['the default of the default locale', { accountName: '  ' }, 'Main account']
+        ])('should name the created account with %s', async (_case, choice, expectedName) => {
+          await confirmationScenario.execute(async () => {
+            await this.service.signIn({ ...signInWithTokenDto, ...choice })
+
+            const prismaServiceAny = this.prismaService as any // eslint-disable-line @typescript-eslint/no-explicit-any
+            expect(prismaServiceAny.account.create).toHaveBeenCalledWith({ data: { name: expectedName } })
           })
         })
       })
