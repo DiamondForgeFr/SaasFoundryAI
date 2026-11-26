@@ -31,8 +31,6 @@ const COUNTER_EXAMPLES: Record<string, string[]> = {
   'workflow/escape-hatches.md': ['*'],
   // names the constructs the hook refuses, and the one form of the commit idiom it leaves alone on Claude Code
   'harness/claude-code.md': ['python3 - <<EOF', 'node -e', 'python3 -c', 'bash -c', 'eval', `git commit -m "$(cat <<'EOF' … EOF)"`],
-  // the `eval` subcommand of `sf srs`, named in two tables
-  'sf-srs/SKILL.md': ['eval'],
   // a line of the script the profiles are read by, shown to explain which keys it reads: a listing, not a command to run
   'workflow/complexity/README.md': ['ANALYZE_ENABLED=$(step_value "$CONFIG_FILE" analyze enabled)'],
   // the usage synopsis of the SRS script: `write|draft|spawn|validate|eval` is a list of actions

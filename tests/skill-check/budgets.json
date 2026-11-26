@@ -65,10 +65,11 @@
     },
     "sf-srs": {
       "template": {
-        "entry": 55296,
-        "total": 93184,
+        "entry": 15360,
+        "total": 70656,
         "files": {
-          "SKILL.md": 55296,
+          "SKILL.md": 15360,
+          "reference/spawning.md": 5120,
           "templates/examples/example-epic.md": 12288,
           "templates/pages/README.md": 5120,
           "templates/tickets/README.md": 7168,
@@ -76,10 +77,11 @@
         }
       },
       "repo": {
-        "entry": 55296,
-        "total": 93184,
+        "entry": 15360,
+        "total": 70656,
         "files": {
-          "SKILL.md": 55296,
+          "SKILL.md": 15360,
+          "reference/spawning.md": 5120,
           "templates/examples/example-epic.md": 12288,
           "templates/pages/README.md": 5120,
           "templates/tickets/README.md": 7168,
@@ -87,10 +89,11 @@
         }
       },
       "agents": {
-        "entry": 60416,
-        "total": 98304,
+        "entry": 20480,
+        "total": 74752,
         "files": {
-          "SKILL.md": 60416,
+          "SKILL.md": 20480,
+          "reference/spawning.md": 5120,
           "templates/examples/example-epic.md": 12288,
           "templates/pages/README.md": 5120,
           "templates/tickets/README.md": 7168,
