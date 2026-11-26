@@ -228,7 +228,7 @@ sf update --non-interactive \
 
 What the installer does :
 
-1. Installs the `sf-srs` skill under `.claude/skills/sf-srs/` (templates, scripts, dispatcher)
+1. Installs the `sf-srs` skill under `.claude/skills/sf-srs/` (templates, scripts, dispatcher, and the `reference/` files `SKILL.md` points to)
 2. Installs `sf-tool-notion` if not already present (the SRS V1 backend)
 3. Bootstraps the Epic root page on Notion via `adapter.init()` — sharing the parent page with the Notion integration is a prerequisite
 4. Writes `tools.srs.*` into `.saasfoundry.json` (enabled, backend, rootPage)

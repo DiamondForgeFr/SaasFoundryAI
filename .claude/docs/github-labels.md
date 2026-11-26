@@ -51,7 +51,7 @@ gh label create srs:new      --repo DiamondForgeFr/SaasFoundryAI --color 3B82F6 
 - **`sf feedback bug --source cli`** creates with `cli-bug` ; `--source scaffold` uses `scaffold-bug`. Both search their own label for dedup.
 - **`sf feedback list`** filters by all three feedback labels by default and shows them in a single table.
 - **`sf feedback vote --list`** ranks open `module-request` issues by 👍 reaction count.
-- **`sf-srs` skill** reads the `srs:*` label on an active ticket to pick the right drafter action (see `.claude/skills/sf-srs/SKILL.md` — "How other skills hand off to `sf-srs`").
+- **`sf-srs` skill** reads the `srs:*` label on an active ticket to pick the right drafter action (see `.claude/skills/sf-workflow/SKILL.md` — "SRS Handoff").
 
 ## Labels used by `sf-workflow` (Nature axis)
 

@@ -226,7 +226,7 @@ sf update --non-interactive \
 
 L’installateur :
 
-1. installe `sf-srs` sous `.claude/skills/sf-srs/` avec modèles, scripts et dispatcher ;
+1. installe `sf-srs` sous `.claude/skills/sf-srs/` avec modèles, scripts, dispatcher et les fichiers `reference/` que `SKILL.md` désigne ;
 2. installe `sf-tool-notion` s’il manque ;
 3. crée la page racine Epic dans Notion via `adapter.init()` — la page parente doit être partagée avec l’intégration ;
 4. écrit `tools.srs.*` dans `.saasfoundry.json`.

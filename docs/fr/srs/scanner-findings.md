@@ -195,7 +195,7 @@ L'extrait est limité à 280 caractères. Il sert d'amorce ; l'agent ouvre le fi
 | **TC**  | `test.cases[]`, endpoints sans test                | Un TC par cas ; un TC TODO rend une couverture manquante visible                         |
 | **NFR** | signaux auth/i18n/Prisma/Docker/Playwright/Swagger | Proposition P3 avec cible « proposed — needs human validation » avant validation humaine |
 
-La compétence `sf-srs` contient les règles détaillées et reste la source de vérité du comportement de l'agent.
+Les règles détaillées sont dans `data/clustering-rules.json`, que la compétence `sf-srs` fait lire à l'agent : elles restent la source de vérité de son comportement.
 
 ## Garanties de stabilité
 

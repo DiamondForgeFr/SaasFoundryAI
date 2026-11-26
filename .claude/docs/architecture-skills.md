@@ -137,7 +137,7 @@ A skill reaches an agent from up to four places, and only some are byte-equal:
 
 - `sf-srs` — Software Requirements Specifications host. Reads `.saasfoundry.json → tools.srs.backend` and routes drafting / spawning / evaluation through the matching `SrsAdapter` implementation in
   `src/srs/`.
-  - Bundle: `.claude/skills/sf-srs/` (SKILL.md + `scripts/srs-cli.sh` + `scripts/drafters/` + `templates/`)
+  - Bundle: `.claude/skills/sf-srs/` (SKILL.md + `reference/` + `scripts/srs-cli.sh` + `data/` + `templates/`)
   - Scaffold source of truth: `scaffolds/skills-templates/sf-srs/` (drift-guarded in `tool-skill-drift.spec.ts`)
   - Installer: `src/installers/srs-skill.installer.ts` copies the bundle and preserves the `srs-cli.sh` executable bit
   - Backend registry: `src/srs/registry.ts` + `src/srs/factory.ts` (`createSrsAdapter`, `SrsConfigError`)
