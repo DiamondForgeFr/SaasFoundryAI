@@ -37,6 +37,17 @@ project versions, and keeps running after the project's copy is updated. Inside 
 
 [`sf status`](./sf-status.md#personal-skills) reports a personal skill that already hides or competes with a project skill, and names the folder to remove.
 
+## What the skill contains
+
+The bundle that `install` copies is one entry file and the files it points to, which an agent reads only when a request needs them:
+
+- `SKILL.md` routes each request to its first command and holds what every flow shares: the bootstrap scripts, the non-interactive commands, the zero-to-project phases and how to resume them, the
+  project questions it answers from `read-project.sh`, and the catalogue check that runs before custom code.
+- `flows/` holds one file for each branch that only some requests reach: reading a POC and challenging its intent, `sf new`, `sf update`, the release milestone, module requests and bug reports.
+- `reference/` holds the intent schemas of `sf new` and `sf update`, and `scripts/` the helpers the flows run.
+
+A project whose skill `update` refreshed therefore finds a `flows/` folder beside `SKILL.md`.
+
 ## Examples
 
 ```bash
