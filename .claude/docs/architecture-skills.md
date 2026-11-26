@@ -1,3 +1,73 @@
+## Writing standard for agent-facing documents
+
+Applies to every document an agent reads: a skill (`SKILL.md` and the files it points to), the generated `AGENTS.md` region, the status documents. Source: Matt Pocock's
+[`writing-for-agents`](https://github.com/mattpocock/skills/blob/321658273c/skills/productivity/writing-for-agents/SKILL.md), pinned at commit `321658273c`. We keep its levers. It has no automated
+check; ours ship to projects we never see, so the standard below is enforced by a rule ledger (see "Running the skill check").
+
+### Three tiers
+
+Each piece of content sits on one rung, ranked by how soon the agent needs it:
+
+1. **Step**: what the agent does, in order. It lives in the entry file or in the status document the step belongs to.
+2. **In-file reference**: rules and facts consulted on demand, under one heading beside the steps that use them.
+3. **Disclosed reference**: a separate file reached by a pointer and loaded only when the pointer fires. What only some branches need goes here.
+
+### Pointers lead with their trigger
+
+A pointer names a file and the case that sends the agent to it: trigger first, file second ("A guard refuses the move: read `escape-hatches.md`"). Triggers live in the `description` frontmatter and
+nowhere else: delete body sections (`Auto-trigger keywords`, `When to activate`) that repeat it. One trigger per branch; synonyms are one branch written twice.
+
+### One source of truth per rule
+
+Each rule has one owner; every other mention is a pointer, never a copy. The environment is a source of truth too: do not restate what `package.json`, `--help` or a config file says.
+
+| Rule family                                         | Owner                                                                   |
+| --------------------------------------------------- | ----------------------------------------------------------------------- |
+| Session rules, capabilities (generated `AGENTS.md`) | the generated region, rendered from `src/harness/agent-instructions.ts` |
+| Workflow lifecycle, guards, delegation              | `sf-workflow/SKILL.md`                                                  |
+| One status: its steps and exit conditions           | that status's file under `sf-workflow/statuses/`                        |
+| Escape hatches                                      | `sf-workflow/escape-hatches.md`                                         |
+| Board and pull-request commands                     | `sf-tool-github-projects/SKILL.md`                                      |
+| SRS drafting, spawning, evaluation                  | `sf-srs/SKILL.md`                                                       |
+| `sf` CLI orchestration, discovery, feedback         | `tool-saasfoundry/SKILL.md`                                             |
+| Integration grammar of the generated stack          | `sf-integration-rules/`                                                 |
+| Rules of this repository only                       | the hand-written part of this repository's `AGENTS.md`                  |
+
+### Each step ends on a completion criterion
+
+Name what the agent can check: an exit code, an output line, a heading that exists ("`## Test report` posted" beats "testing done"). A criterion that is checkable and exhaustive ("every changed model
+accounted for") drives more legwork than a vague one.
+
+### Positive instructions
+
+Say what to do. Keep a prohibition only as a hard guardrail, paired with the positive target beside it.
+
+### Delete no-ops
+
+A sentence the model already obeys by default costs context and changes nothing. Delete the whole sentence, not some of its words. A line added after an incident goes only when a guard enforces the
+rule or the behaviour check shows no change without it.
+
+### Measure bytes, not lines
+
+Our files wrap at 200 columns, so line counts mislead. Ceilings are in bytes (`tests/skill-check/budgets.json`), per surface: the template, the generated project, this repository's copy, the `.agents`
+projection. A ceiling is a ratchet: lower it in the change that shrinks the file, and say why in the pull request when a change raises one.
+
+### Before merging a change to an agent-facing document
+
+1. Classify each changed section: step, in-file reference, disclosed reference or deleted.
+2. Update the rule ledger (`tests/skill-check/ledger/<skill>.json`) for every rule that moved, was reworded or was retired.
+3. Run `npm run skill:check`, then the replay of the core scenarios.
+4. Anchor specs on tokens (a command, a flag, a heading, a label), never on sentences: a reworded sentence must not break a test.
+
+### Running the skill check
+
+Two layers, both under `tests/skill-check/` (see its `README.md`):
+
+- **Layer 1, the rule ledger (CI gate, no model).** `npm run skill:check` verifies that every ledgered rule keeps its tokens in the file that owns it, that pointers and relative links resolve, and
+  that no surface exceeds its byte ceiling. `node tests/skill-check/run.mjs metrics` prints the sizes. The Jest spec `src/__tests__/unit/skill/skill-check-ledger.spec.ts` runs it.
+- **Layer 2, plan-only agent replay (evidence, not a gate).** `node tests/skill-check/run.mjs run` puts each scenario to a real agent with read-only tools, in a disposable generated project, and
+  compares the files it reads and the commands it plans before and after a change. A session runs it, never CI.
+
 ## Skills Architecture (CRITICAL — Read when adding/modifying Skills)
 
 SaaSFoundryAI integrates **Claude Code skills** into generated projects. All skills are prefixed with `sf-` to avoid conflicts with users' global skills.
@@ -32,6 +102,17 @@ alone) gets no copy.
 The copy translates Claude-only prose (`$ARGUMENTS`, the Task tool, `PARALLEL ONLY`, `` !`cmd` `` injection where the `!` opens the span) and copies fenced blocks and inline code byte for byte.
 
 Never edit a file under `.agents/skills/` by hand: edit the `.claude/skills/` source, then run `sf agents refresh --scope shared` and commit the copies with their `fileHashes`.
+
+#### Which copies must match
+
+A skill reaches an agent from up to four places, and only some are byte-equal:
+
+- **Byte-equal, guarded.** The pairs listed in `src/__tests__/unit/skill/tool-skill-drift.spec.ts` (the board CLI skill, the workflow CLI, `ui-checklist.md`, the `sf-srs` and `sf-integration-rules`
+  files, the shared docs of `scaffolds/docs/`) must equal their dogfood copy under `.claude/`, byte for byte. This document is one of them: `scaffolds/docs/architecture-skills.md` is the same file.
+- **Different on purpose.** `sf-workflow/SKILL.md` carries placeholders the installer fills, and this repository's copy adds to it. This repository runs the Solo preset, so its `statuses/` folder
+  holds what the template keeps under `statuses-solo/` (the guard covers those). The `.agents/skills/` copies add the capabilities text (`sf agents refresh` writes them). `tool-saasfoundry` is a
+  symlink to its template.
+- **Measured per surface.** The skill check (below) sizes each of these separately, so a shrink is credited where it lands.
 
 ### Current Skills Inventory
 
@@ -294,8 +375,9 @@ export async function installSkills({
 #### When modifying a Core Skill:
 
 1. Update `scaffolds/skills-templates/core/<name>/`, the single source
-2. If this repository dogfoods the skill (`.claude/skills/<name>/`), mirror it: `tool-skill-drift.spec.ts` checks the copies
-3. Update documentation if behavior changed
+2. If this repository dogfoods the skill (`.claude/skills/<name>/`), mirror the files the drift guard pairs (see "Which copies must match"); `tool-skill-drift.spec.ts` checks them
+3. Follow the writing standard above, then run `npm run skill:check`
+4. Update documentation if behavior changed
 
 #### When modifying a Tool Skill:
 
@@ -343,8 +425,8 @@ The `sf-tool-github-projects` CLI talks to GitHub Projects V2 via the `gh` CLI (
 
 **Dogfood + scaffold parity**
 
-- The in-repo copy at `.claude/skills/sf-tool-github-projects/` and the scaffold template at `scaffolds/skills-templates/tools/github-projects/` must stay byte-identical. A jest drift guard enforces
-  this at pre-commit; if you edit one, copy to the other in the same commit.
+- The in-repo copy at `.claude/skills/sf-tool-github-projects/` and the scaffold template at `scaffolds/skills-templates/tools/github-projects/` (its `SKILL.md` and CLI script) must stay
+  byte-identical. A jest drift guard enforces this at pre-commit; if you edit one, copy to the other in the same commit. The `.agents/skills/` copy is a projection: `sf agents refresh` rewrites it.
 
 ### Known classifier failure modes (`sf-srs` intent-detector hook, #317)
 
