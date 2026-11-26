@@ -123,10 +123,10 @@ Sans `Human testing` (preset Solo, ou ticket `nature:internal`), l'agent ouvre a
 `update-status` vérifie deux points qui n'étaient jusqu'ici que des consignes :
 
 - **`→ AI testing` exige un travail poussé.** Le garde-fou ne lit que git : il vaut donc pour tous les outils de workflow. Il inspecte le checkout qui porte le travail : la branche du ticket, la
-  branche du parent de livraison pour un enfant bundled, une branche nommée par l'hôte (`worktree-agent-<id>`) comparée à l'unique branche du ticket sur `origin`, ou, depuis le checkout principal, le
-  worktree de la branche du ticket. Sont refusés : des modifications suivies (indexées ou non), une branche absente d'`origin`, un commit qu'il n'a pas, une branche qu'il a dépassée, un `origin`
-  injoignable et un HEAD détaché ; le message nomme la commande de commit, de push ou de `git pull --rebase`. Les fichiers non suivis ne font qu'avertir. La même vérification couvre le retour de
-  `Human testing` vers `AI testing` après un correctif.
+  branche du parent de livraison pour un enfant bundled, une branche nommée par l'hôte (`worktree-agent-<id>`) comparée à l'unique branche du ticket sur `origin`, ou, depuis le checkout principal ou
+  un checkout sur la branche d'un autre ticket, le worktree de la branche du ticket. Sont refusés : des modifications suivies (indexées ou non), une branche absente d'`origin`, un commit qu'il n'a
+  pas, une branche qu'il a dépassée, un `origin` injoignable et un HEAD détaché ; le message nomme la commande de commit, de push ou de `git pull --rebase`. Les fichiers non suivis ne font qu'avertir.
+  La même vérification couvre le retour de `Human testing` vers `AI testing` après un correctif.
 - **`→ Human testing` exige une CI locale verte.** Avec GitHub Projects, le garde-fou lit le commit de tête de la pull request en brouillon qu'il vient d'identifier, depuis n'importe quel checkout, et
   exige que les statuts de CI locale du projet y soient verts. Ils viennent de `workflow.localCi.requiredStatuses` quand il est enregistré (`sf workflow set-local-ci`), sinon de `local-<job>` pour
   chaque job de `.molten/project.json` quand il publie vers GitHub, sinon du statut `AI testing / Local CI` que l'agent publie avec `workflow-cli.sh ai-status <ticket> "Local CI" success` une fois la

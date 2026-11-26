@@ -384,6 +384,72 @@ describe('sf-workflow CLI — pushed-commits guard (→ AI testing)', () => {
     })
   })
 
+  // #1345 — the command runs from a checkout on another ticket's branch, and a worktree holds the ticket's own
+  // branch: the guard checks that worktree, as it does from the working branch, instead of refusing outright.
+  describe('from a checkout on another ticket’s branch', () => {
+    const onOtherTicketBranch = async () => {
+      sandbox = await buildSandbox()
+      sandbox.repo.git(['checkout', '-b', 'feature/43-other'])
+    }
+
+    it('lets a clean, pushed worktree of the ticket branch through', async () => {
+      await onOtherTicketBranch()
+      sandbox.repo.addWorktree('feature/42-add-stuff')
+      const res = await toAiTesting()
+      expect(res.code).toBe(0)
+      expect(res.stderr).not.toContain('delivers another ticket')
+      expect(statusCalls()).toEqual(['update-status 42 AI testing'])
+    })
+
+    it('inspects that worktree, and names it when it is dirty', async () => {
+      await onOtherTicketBranch()
+      const worktree = sandbox.repo.addWorktree('feature/42-add-stuff')
+      writeFileSync(path.join(worktree, 'work.txt'), 'changed in the worktree\n')
+      const res = await toAiTesting()
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain(`git -C ${worktree} add <paths>`)
+      expect(statusCalls()).toEqual([])
+    })
+
+    it('names the push of that worktree for a commit origin does not have', async () => {
+      await onOtherTicketBranch()
+      const worktree = sandbox.repo.addWorktree('feature/42-add-stuff')
+      sandbox.repo.commit('more.txt', 'more\n', worktree)
+      const res = await toAiTesting()
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain(`Push them: git -C ${worktree} push`)
+    })
+
+    it('ignores the changes of this checkout, which belong to the other ticket', async () => {
+      await onOtherTicketBranch()
+      sandbox.repo.addWorktree('feature/42-add-stuff')
+      writeFileSync(path.join(sandbox.repo.dir, 'work.txt'), 'work of #43 in progress\n')
+      const res = await toAiTesting()
+      expect(res.code).toBe(0)
+      expect(statusCalls()).toEqual(['update-status 42 AI testing'])
+    })
+
+    it('refuses when several worktrees hold a branch of the ticket', async () => {
+      await onOtherTicketBranch()
+      sandbox.repo.git(['branch', 'fix/42-second', 'feature/42-add-stuff'])
+      sandbox.repo.addWorktree('feature/42-add-stuff')
+      sandbox.repo.addWorktree('fix/42-second')
+      const res = await toAiTesting()
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('several worktrees hold a branch of #42')
+      expect(statusCalls()).toEqual([])
+    })
+
+    it('still refuses when no worktree holds a branch of the ticket, even with one on origin', async () => {
+      await onOtherTicketBranch()
+      const res = await toAiTesting()
+      expect(res.code).toBe(2)
+      expect(res.stderr).toContain('delivers another ticket')
+      expect(res.stderr).toContain('no worktree of this repository holds a branch of #42')
+      expect(statusCalls()).toEqual([])
+    })
+  })
+
   describe('for a nature:bundled-pr child, whose commit lands on its delivery parent’s branch', () => {
     it('inspects the parent branch of this checkout', async () => {
       sandbox = await buildSandbox({ natureLabel: 'bundled-pr', parent: 41, branch: 'feature/41-parent' })

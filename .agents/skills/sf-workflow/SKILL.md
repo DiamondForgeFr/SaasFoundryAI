@@ -120,8 +120,8 @@ An Epic only groups delivery parents and never owns this PR.
 - **PR-state guard** — `→ Human Testing` requires an open draft PR; `→ In Review` requires an open non-draft PR. Unknown PR state blocks these transitions. Epic groupers without a PR keep their
   derived lifecycle. Escape hatch: the developer's.
 - **Pushed-commits guard** — `→ AI Testing` requires the ticket's work committed and pushed to `origin`, read from git in the checkout that holds it (the ticket branch, a bundled child's parent
-  branch, a host-named branch against the ticket branch of `origin`, or the worktree of the ticket branch from the primary checkout). Tracked changes and unpushed commits are refused with the command
-  to run; untracked files only warn. Escape hatch: the developer's.
+  branch, a host-named branch against the ticket branch of `origin`, or the worktree of the ticket branch from the primary checkout or from another ticket's branch). Tracked changes and unpushed
+  commits are refused with the command to run; untracked files only warn. Escape hatch: the developer's.
 - **Local CI guard** — `→ Human Testing` requires the project's required local CI statuses green on the exact head commit of the draft PR: `workflow.localCi.requiredStatuses` when recorded
   (`sf workflow set-local-ci`), otherwise `local-<job>` for each job of `.molten/project.json` when it publishes to GitHub, otherwise the `AI testing / Local CI` status published with
   `workflow-cli.sh ai-status <ticket> "Local CI" success`. The refusal names the source and the command to run. Escape hatch: the developer's, recorded on the PR. Without a Human Testing status (Solo)

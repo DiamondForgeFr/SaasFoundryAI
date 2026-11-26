@@ -909,10 +909,8 @@ check_pushed_commits_guard() {
     mode=branch
     branch=$current
   elif branch_follows "$current" "$any_patterns"; then
-    echo -e "${RED}${refusal}: this checkout is on ${current}, which delivers another ticket (the commits of #${owner} are on its own branch).${NC}" >&2
-    echo "  Switch to the branch of #${owner}, or run the command from the checkout that holds it." >&2
-    echo "$hatch" >&2
-    return 1
+    # Another ticket's branch holds none of this ticket's work, but a worktree may hold its branch (#1345)
+    mode=other
   elif [[ "$current" == "$WORKING_BRANCH" || "$current" == "$target_branch" || "$current" == "$release_branch" ]]; then
     mode=primary
   else
@@ -931,8 +929,8 @@ check_pushed_commits_guard() {
     fi
   done <<<"$origin_heads"
 
-  if [[ "$mode" == primary ]]; then
-    # The working branch holds no ticket work: look for the worktree on the ticket's branch
+  if [[ "$mode" == primary || "$mode" == other ]]; then
+    # The working branch, or another ticket's branch, holds no work of this ticket: look for the worktree on its branch
     local wt_path="" wt_branch="" found_path="" found_branch="" found=0
     while IFS= read -r line; do
       case "$line" in
@@ -955,6 +953,12 @@ check_pushed_commits_guard() {
       mode=worktree
       dir=$found_path
       branch=$found_branch
+    elif [[ "$mode" == other ]]; then
+      # Only the working branch falls back on origin alone: a checkout on another ticket's branch may hold this work by mistake
+      echo -e "${RED}${refusal}: this checkout is on ${current}, which delivers another ticket (the commits of #${owner} are on its own branch), and no worktree of this repository holds a branch of #${owner}.${NC}" >&2
+      echo "  Switch to the branch of #${owner}, or run the command from the checkout that holds it." >&2
+      echo "$hatch" >&2
+      return 1
     elif [[ ${#names[@]} -eq 1 ]]; then
       echo -e "${YELLOW}⚠ Pushed-commits check for #${ticket}: this checkout is on ${current} and no worktree holds a branch of #${owner}; only origin was checked, and origin has ${names[0]} (${shas[0]:0:8}). The work itself is not in this checkout.${NC}" >&2
       return 0
