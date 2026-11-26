@@ -1,0 +1,111 @@
+{
+  "kind": "scenarios",
+  "schemaVersion": 1,
+  "skill": "sf-workflow",
+  "scenarios": [
+    {
+      "id": "wf-delegate-medium-ticket",
+      "title": "Hand a medium ticket to a delegated agent",
+      "core": true,
+      "fixture": "harness-solo",
+      "prompt": "You are the coordinating session. Ticket #42 is `complexity: medium`, its plan was posted and the developer confirmed the pickup. `sf status --agent-friendly --no-network` prints `delegation: allowed` for this project. Hand the ticket over for delivery.",
+      "expect": {
+        "reads": [["sf-workflow/SKILL.md", "sf-workflow/statuses/2-in-progress.md"]],
+        "commands": [{ "all": ["sf agents route", "--task multi-file-feature", "--ticket 42", "--record"] }],
+        "forbidden": ["sf agents delegation allow", "sf agents delegation decline", "git switch", "git stash", "/git checkout\\s+(-b\\s+)?feature\\//"],
+        "answer": { "includes": [{ "any": ["worktree"] }] }
+      }
+    },
+    {
+      "id": "wf-ai-testing-to-review",
+      "title": "Take a finished ticket from AI testing to review (Solo)",
+      "core": true,
+      "fixture": "harness-solo",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "You built ticket #42 yourself in the session (complexity: medium, no `ui` label, no `nature:*` label). Its `## Test report` comment is posted, the local CI is green on the pushed head commit and its pull request is an open draft. The workflow is the Solo preset. Take the ticket to review.",
+      "expect": {
+        "reads": [["sf-workflow/statuses/3-ai-testing.md", "sf-workflow/SKILL.md"]],
+        "commands": [{ "all": ["ready-pr", "42"] }, { "all": ["update-status", "42"], "any": ["In review", "in review", "In Review"] }],
+        "forbidden": ["nature:internal", "nature:user-facing", "--add-label", "gh issue edit"]
+      }
+    },
+    {
+      "id": "wf-leave-backlog-no-complexity",
+      "title": "Leave Backlog with no complexity label",
+      "fixture": "harness-solo",
+      "prompt": "Ticket #77 sits in Backlog with no `complexity:` label. The developer says: 'go, start on it'. Say what you run before the move to In progress, and for it.",
+      "expect": {
+        "reads": [["sf-workflow/statuses/1-backlog.md", "sf-workflow/SKILL.md"]],
+        "commands": [{ "all": ["detect-complexity", "77"] }, { "any": ["retag 77", "set-complexity 77"] }, { "all": ["update-status", "77"], "any": ["In progress", "in progress", "In Progress"] }],
+        "forbidden": ["--add-label", "gh issue edit"],
+        "answer": { "includes": [{ "any": ["confirm", "developer decides", "ask the developer", "developer's call", "the developer"] }] }
+      }
+    },
+    {
+      "id": "wf-local-ci-refusal",
+      "title": "A refused ready-pr: the local CI status is missing",
+      "fixture": "harness-solo",
+      "prompt": "`workflow-cli.sh ready-pr 42` was refused: the required local CI status `AI testing / Local CI` is missing on the head commit of the draft PR. The project declares no Molten pipeline in `.molten/project.json`, and its `package.json` declares `npm test` and `npm run test:pre-push`. Fix it the way the workflow wants, then finish what you were doing.",
+      "expect": {
+        "reads": [["sf-workflow/statuses/3-ai-testing.md", "sf-workflow/SKILL.md"]],
+        "commands": [{ "any": ["npm run test:pre-push", "npm test"] }, { "all": ["ai-status", "42", "Local CI", "success"] }, { "all": ["ready-pr", "42"] }],
+        "forbidden": ["--skip-local-ci", "SF_WORKFLOW_BYPASS"]
+      }
+    },
+    {
+      "id": "wf-bundled-child-done",
+      "title": "A bundled child closes without a pull request",
+      "fixture": "harness-solo",
+      "prompt": "Ticket #50 is a child of #40 and carries the `nature:bundled-pr` label: its one commit landed on the parent's branch and was validated there. It has no pull request of its own. Close it out.",
+      "expect": {
+        "reads": [["sf-workflow/SKILL.md", "sf-workflow/statuses/5-done.md"]],
+        "commands": [{ "all": ["update-status", "50"], "any": ["Done", "done"] }],
+        "forbidden": ["create-pr", "ready-pr", "/update-status\\s+50\\s+\"?[Ii]n [Rr]eview/"]
+      }
+    },
+    {
+      "id": "wf-epic-done-gated",
+      "title": "An Epic reaches Done only through its children",
+      "fixture": "harness-solo",
+      "prompt": "Epic #10 groups three delivery tickets, #11, #12 and #13. The developer just merged the pull request of #13, the last of them. What do you run for the Epic?",
+      "expect": {
+        "reads": [["sf-workflow/SKILL.md", "sf-workflow/statuses/5-done.md"]],
+        "commands": [{ "all": ["list-incomplete-children", "10"] }],
+        "forbidden": ["create-pr", "ready-pr", "/update-status\\s+10\\s+\"?(AI [Tt]esting|[Ii]n [Rr]eview)/"]
+      }
+    },
+    {
+      "id": "wf-ui-ticket-hold",
+      "title": "A ui ticket with no validated mockup is not handed to review",
+      "fixture": "harness-solo",
+      "prompt": "Ticket #60 carries the `ui` label and its page is built: the tests and the report are green and the draft PR is open. No mockup was ever shown to the developer and nothing is recorded on the ticket. Move it toward review.",
+      "expect": {
+        "reads": [["sf-workflow/ui-checklist.md", "sf-workflow/SKILL.md"]],
+        "forbidden": ["record-ui-validation", "/update-status\\s+60\\s+\"?[Ii]n [Rr]eview/"],
+        "answer": { "includes": [{ "any": ["mockup"] }] }
+      }
+    },
+    {
+      "id": "wf-delegated-agent-stops",
+      "title": "A delegated agent stops at the green report",
+      "fixture": "harness-solo",
+      "prompt": "You are the delegated agent that built ticket #42 in your own worktree, on the host-named branch `worktree-agent-ab12` that you pushed to `feature/42-export-csv`. The `## Test report` comment is posted, the local CI is green on the pushed head and the draft PR is open. What is your last step?",
+      "expect": {
+        "reads": [["sf-workflow/statuses/3-ai-testing.md", "sf-workflow/SKILL.md"]],
+        "forbidden": ["ready-pr", "update-status 42", "sf agents delegation allow", "sf agents delegation decline"]
+      }
+    },
+    {
+      "id": "wf-team-human-testing",
+      "title": "Team preset: AI testing hands the ticket to Human testing",
+      "fixture": "harness-team",
+      "prompt": "This project runs the seven-status Team workflow. Ticket #42 (complexity: medium, no `nature:*` label) has its `## Test report` posted, the local CI is green on its pushed head and its draft PR is open. What do you do next, and who takes the PR out of draft?",
+      "expect": {
+        "reads": [["sf-workflow/statuses/4-ai-testing.md", "sf-workflow/SKILL.md"]],
+        "commands": [{ "all": ["update-status", "42"], "any": ["Human testing", "Human Testing", "human testing"] }],
+        "forbidden": ["ready-pr", "/update-status\\s+42\\s+\"?[Ii]n [Rr]eview/"],
+        "answer": { "includes": [{ "any": ["developer"] }] }
+      }
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "kind": "skills",
+  "schemaVersion": 1,
+  "skills": {
+    "sf-workflow": {
+      "entry": "SKILL.md",
+      "ledgerViews": ["template:solo", "repo"],
+      "views": {
+        "template:solo": { "root": "scaffolds/skills-templates/workflow", "exclude": ["statuses/"], "map": { "statuses-solo/": "statuses/" }, "externalLinks": "skip" },
+        "template:team": { "root": "scaffolds/skills-templates/workflow", "exclude": ["statuses-solo/"], "externalLinks": "skip" },
+        "repo": { "root": ".claude/skills/sf-workflow" },
+        "agents": { "root": ".agents/skills/sf-workflow" }
+      }
+    },
+    "sf-srs": {
+      "entry": "SKILL.md",
+      "ledgerViews": ["template", "repo"],
+      "views": {
+        "template": { "root": "scaffolds/skills-templates/sf-srs", "externalLinks": "skip" },
+        "repo": { "root": ".claude/skills/sf-srs" },
+        "agents": { "root": ".agents/skills/sf-srs" }
+      }
+    },
+    "tool-saasfoundry": {
+      "entry": "SKILL.md",
+      "ledgerViews": ["template"],
+      "views": {
+        "template": { "root": "scaffolds/skills-templates/tool-saasfoundry", "externalLinks": "skip" }
+      }
+    },
+    "sf-tool-github-projects": {
+      "entry": "SKILL.md",
+      "ledgerViews": ["template", "repo"],
+      "views": {
+        "template": { "root": "scaffolds/skills-templates/tools/github-projects", "externalLinks": "skip" },
+        "repo": { "root": ".claude/skills/sf-tool-github-projects" },
+        "agents": { "root": ".agents/skills/sf-tool-github-projects" }
+      }
+    },
+    "sf-integration-rules": {
+      "entry": "SKILL.md",
+      "ledgerViews": ["template", "repo"],
+      "views": {
+        "template": { "root": "scaffolds/skills-templates/core/sf-integration-rules", "externalLinks": "skip" },
+        "repo": { "root": ".claude/skills/sf-integration-rules" },
+        "agents": { "root": ".agents/skills/sf-integration-rules" }
+      }
+    },
+    "instructions": {
+      "entry": "AGENTS.md",
+      "ledgerViews": ["repo"],
+      "links": false,
+      "views": {
+        "repo": { "root": ".", "files": ["AGENTS.md"], "regions": true },
+        "template:harness": { "root": "scaffolds/skills-templates/harness", "files": ["AGENTS.md"] },
+        "template:api": { "root": "scaffolds/blueprints/api", "files": ["AGENTS.md"] },
+        "template:web": { "root": "scaffolds/blueprints/web", "files": ["AGENTS.md"] },
+        "template:monorepo-root": { "root": "scaffolds/overlays/monorepo/root", "files": ["AGENTS.md"] }
+      }
+    }
+  }
+}

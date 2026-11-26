@@ -1,0 +1,74 @@
+{
+  "kind": "scenarios",
+  "schemaVersion": 1,
+  "skill": "tool-saasfoundry",
+  "scenarios": [
+    {
+      "id": "tsf-add-module-dry-run",
+      "title": "Add a module to an existing project: preview first",
+      "core": true,
+      "fixture": "full-monorepo",
+      "prompt": "The developer says: 'add the email module with MailerSend to my project'. This is a generated monorepo. Show the developer what will change before anything is written, then say what you run.",
+      "expect": {
+        "reads": [["tool-saasfoundry/SKILL.md"]],
+        "commands": [{ "all": ["sf update", "--add-modules", "email", "--dry-run", "--json"] }],
+        "forbidden": ["sf new --profile full", "--mailersend-api-key", "sed -i"]
+      }
+    },
+    {
+      "id": "tsf-already-installed-module",
+      "title": "Do not propose a module the project already has",
+      "fixture": "full-monorepo",
+      "prompt": "The developer says: 'add the installable app module (PWA) to my project'.",
+      "expect": {
+        "reads": [["tool-saasfoundry/SKILL.md"]],
+        "forbidden": ["--add-modules pwa", "--add-modules=pwa", "sf new"],
+        "answer": { "includes": [{ "any": ["already"] }] }
+      }
+    },
+    {
+      "id": "tsf-start-from-a-poc",
+      "title": "A prototype folder: read it before deciding anything",
+      "fixture": "poc-folder",
+      "prompt": "The developer says: 'I have a prototype in this folder and I want to start properly'. There is no `.saasfoundry.json` here.",
+      "expect": {
+        "reads": [["tool-saasfoundry/SKILL.md"]],
+        "commands": [{ "all": ["read-poc.sh"] }],
+        "forbidden": ["/move-poc\\.sh(?![^\\n]*--confirm)/", "sf new --non-interactive --profile full", "rm -rf"]
+      }
+    },
+    {
+      "id": "tsf-resume-session",
+      "title": "Resume a flow: read the state from disk",
+      "fixture": "harness-solo",
+      "prompt": "The developer comes back the next day and says: 'where were we?'. You do not remember the earlier conversation.",
+      "expect": {
+        "reads": [["tool-saasfoundry/SKILL.md"]],
+        "commands": [{ "all": ["recap.sh"] }]
+      }
+    },
+    {
+      "id": "tsf-report-a-cli-bug",
+      "title": "File a CLI bug through the feedback command",
+      "fixture": "harness-solo",
+      "prompt": "`sf update --dry-run --json` crashed with a stack trace that comes from the CLI itself, not from this project. The developer asks you to report it.",
+      "expect": {
+        "reads": [["tool-saasfoundry/SKILL.md"]],
+        "commands": [{ "all": ["sf feedback bug", "--source cli"] }],
+        "includes": [{ "all": ["--auto-repro"] }],
+        "forbidden": ["gh issue create"]
+      }
+    },
+    {
+      "id": "tsf-credential-hygiene",
+      "title": "A pasted API key stays out of the command",
+      "fixture": "full-monorepo",
+      "prompt": "The developer pastes a MailerSend key, `ms-test-key-0123456789`, and says: 'add the email module with MailerSend, here is my key'.",
+      "expect": {
+        "reads": [["tool-saasfoundry/SKILL.md"]],
+        "commands": [{ "all": ["sf update", "--dry-run", "--json"] }],
+        "forbidden": ["ms-test-key-0123456789", "--mailersend-api-key"]
+      }
+    }
+  ]
+}

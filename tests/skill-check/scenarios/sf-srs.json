@@ -1,0 +1,90 @@
+{
+  "kind": "scenarios",
+  "schemaVersion": 1,
+  "skill": "sf-srs",
+  "scenarios": [
+    {
+      "id": "srs-respawn-version",
+      "title": "Spawn an FR added to a version that was already spawned",
+      "core": true,
+      "fixture": "harness-srs",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "The SRS holds the feature « Projects » with the version page « v1 — MVP » (https://notion.invalid/projects-v1). Its Epic « Projects - v1 » (#10) and the Stories of FR-PRJ-001 to FR-PRJ-004 were spawned last week, and one of those Stories (#14) is already closed. FR-PRJ-005 was added to the version page this morning. Create the work for the new FR without touching what exists.",
+      "expect": {
+        "reads": [["sf-srs/SKILL.md"]],
+        "commands": [
+          { "all": ["--dry-run"], "any": ["sf srs spawn", "srs-cli.sh spawn"] },
+          { "any": ["sf srs spawn", "srs-cli.sh spawn"], "none": ["--dry-run"] }
+        ],
+        "forbidden": ["create-ticket", "create-subtask", "create-epic", "gh issue create", "unlink-subtask"]
+      }
+    },
+    {
+      "id": "srs-spawn-with-milestone",
+      "title": "Spawn a version into a named release",
+      "fixture": "harness-srs",
+      "prompt": "Spawn the version « v1 — MVP » of the feature « Projects » (feature page https://notion.invalid/projects) so that its tickets belong to the release v1.0.0.",
+      "expect": {
+        "reads": [["sf-srs/SKILL.md"]],
+        "commands": [{ "all": ["spawn", "--milestone"] }],
+        "includes": [{ "all": ["v1.0.0"] }],
+        "forbidden": ["gh issue edit", "milestone assign", "/--milestone\\s+[\"']?v1 —/"]
+      }
+    },
+    {
+      "id": "srs-new-version-of-existing-feature",
+      "title": "Write a new version of a feature that already exists",
+      "fixture": "harness-srs",
+      "prompt": "Add the version « v3 — Exports » to the existing feature « Reports » (https://notion.invalid/reports) with two new functional requirements. The spec you will write is `./spec.json`.",
+      "expect": {
+        "reads": [["sf-srs/SKILL.md"]],
+        "commands": [{ "all": ["next-ids", "--feature"] }, { "any": ["sf srs write", "srs-cli.sh write"] }],
+        "forbidden": ["create-ticket", "gh issue create"]
+      }
+    },
+    {
+      "id": "srs-conformance-normalize",
+      "title": "Answer a feature-without-version finding",
+      "fixture": "harness-srs",
+      "prompt": "`sf srs eval` just reported `feature-without-version` for the feature « Billing » (https://notion.invalid/billing). Handle it.",
+      "expect": {
+        "reads": [["sf-srs/SKILL.md"]],
+        "commands": [{ "all": ["normalize", "--feature"], "none": ["--apply"] }],
+        "forbidden": ["--apply"]
+      }
+    },
+    {
+      "id": "srs-update-fr-in-place",
+      "title": "Revise an existing functional requirement",
+      "fixture": "harness-srs",
+      "prompt": "The developer says: 'FR-AEX-014 must now also round the duration up to the minute'. Apply that to the SRS.",
+      "expect": {
+        "reads": [["sf-srs/SKILL.md"]],
+        "commands": [{ "all": ["apply-update", "--dry-run"] }],
+        "forbidden": ["add-ds", "create-ticket"]
+      }
+    },
+    {
+      "id": "srs-eval-freshness",
+      "title": "Check whether the SRS still matches the code",
+      "fixture": "harness-srs",
+      "prompt": "Is the SRS still up to date with the code? Check it.",
+      "expect": {
+        "reads": [["sf-srs/SKILL.md"]],
+        "commands": [{ "any": ["sf srs eval", "srs-cli.sh eval"] }],
+        "forbidden": ["curl ", "gh api"]
+      }
+    },
+    {
+      "id": "srs-draft-from-codebase",
+      "title": "Draft the SRS from the code of an installed SRS project",
+      "fixture": "harness-srs",
+      "prompt": "This project has code, and the manifest already declares its SRS backend and root page, but no feature page exists yet. Draft the SRS from the code, starting with the `src/` folder.",
+      "expect": {
+        "reads": [["sf-srs/SKILL.md"]],
+        "commands": [{ "all": ["draft", "--from codebase"] }],
+        "forbidden": ["sf update --add-modules srs", "--add-modules srs"]
+      }
+    }
+  ]
+}

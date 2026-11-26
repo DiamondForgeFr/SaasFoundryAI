@@ -1,0 +1,757 @@
+{
+  "kind": "metrics",
+  "schemaVersion": 1,
+  "commit": "bdfb1f12b2c3ff5d8415484bd14defbe851545ab",
+  "surfaces": {
+    "sf-workflow": {
+      "template:solo": {
+        "entry": {
+          "bytes": 48454,
+          "lines": 501
+        },
+        "total": {
+          "bytes": 146590,
+          "lines": 1698
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 48454,
+            "lines": 501
+          },
+          "complexity/README.md": {
+            "bytes": 19028,
+            "lines": 267
+          },
+          "escape-hatches.md": {
+            "bytes": 38523,
+            "lines": 353
+          },
+          "statuses/1-backlog.md": {
+            "bytes": 2925,
+            "lines": 55
+          },
+          "statuses/2-in-progress.md": {
+            "bytes": 8825,
+            "lines": 91
+          },
+          "statuses/2a-ai-drafting.md": {
+            "bytes": 3132,
+            "lines": 45
+          },
+          "statuses/2b-human-review.md": {
+            "bytes": 2211,
+            "lines": 54
+          },
+          "statuses/2c-spawning.md": {
+            "bytes": 3225,
+            "lines": 48
+          },
+          "statuses/3-ai-testing.md": {
+            "bytes": 8085,
+            "lines": 103
+          },
+          "statuses/4-in-review.md": {
+            "bytes": 4809,
+            "lines": 69
+          },
+          "statuses/5-done.md": {
+            "bytes": 4176,
+            "lines": 62
+          },
+          "ui-checklist.md": {
+            "bytes": 3197,
+            "lines": 50
+          }
+        }
+      },
+      "template:team": {
+        "entry": {
+          "bytes": 48454,
+          "lines": 501
+        },
+        "total": {
+          "bytes": 156013,
+          "lines": 1831
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 48454,
+            "lines": 501
+          },
+          "complexity/README.md": {
+            "bytes": 19028,
+            "lines": 267
+          },
+          "escape-hatches.md": {
+            "bytes": 38523,
+            "lines": 353
+          },
+          "statuses/1-backlog.md": {
+            "bytes": 2834,
+            "lines": 55
+          },
+          "statuses/2-ready.md": {
+            "bytes": 906,
+            "lines": 31
+          },
+          "statuses/3-in-progress.md": {
+            "bytes": 9723,
+            "lines": 97
+          },
+          "statuses/3a-ai-drafting.md": {
+            "bytes": 3132,
+            "lines": 45
+          },
+          "statuses/3b-human-review.md": {
+            "bytes": 2211,
+            "lines": 54
+          },
+          "statuses/3c-spawning.md": {
+            "bytes": 3225,
+            "lines": 48
+          },
+          "statuses/4-ai-testing.md": {
+            "bytes": 9307,
+            "lines": 108
+          },
+          "statuses/5-human-testing.md": {
+            "bytes": 4963,
+            "lines": 72
+          },
+          "statuses/6-in-review.md": {
+            "bytes": 5334,
+            "lines": 72
+          },
+          "statuses/7-done.md": {
+            "bytes": 5176,
+            "lines": 78
+          },
+          "ui-checklist.md": {
+            "bytes": 3197,
+            "lines": 50
+          }
+        }
+      },
+      "repo": {
+        "entry": {
+          "bytes": 55992,
+          "lines": 560
+        },
+        "total": {
+          "bytes": 154128,
+          "lines": 1757
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 55992,
+            "lines": 560
+          },
+          "complexity/README.md": {
+            "bytes": 19028,
+            "lines": 267
+          },
+          "escape-hatches.md": {
+            "bytes": 38523,
+            "lines": 353
+          },
+          "statuses/1-backlog.md": {
+            "bytes": 2925,
+            "lines": 55
+          },
+          "statuses/2-in-progress.md": {
+            "bytes": 8825,
+            "lines": 91
+          },
+          "statuses/2a-ai-drafting.md": {
+            "bytes": 3132,
+            "lines": 45
+          },
+          "statuses/2b-human-review.md": {
+            "bytes": 2211,
+            "lines": 54
+          },
+          "statuses/2c-spawning.md": {
+            "bytes": 3225,
+            "lines": 48
+          },
+          "statuses/3-ai-testing.md": {
+            "bytes": 8085,
+            "lines": 103
+          },
+          "statuses/4-in-review.md": {
+            "bytes": 4809,
+            "lines": 69
+          },
+          "statuses/5-done.md": {
+            "bytes": 4176,
+            "lines": 62
+          },
+          "ui-checklist.md": {
+            "bytes": 3197,
+            "lines": 50
+          }
+        }
+      },
+      "agents": {
+        "entry": {
+          "bytes": 60619,
+          "lines": 621
+        },
+        "total": {
+          "bytes": 158755,
+          "lines": 1818
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 60619,
+            "lines": 621
+          },
+          "complexity/README.md": {
+            "bytes": 19028,
+            "lines": 267
+          },
+          "escape-hatches.md": {
+            "bytes": 38523,
+            "lines": 353
+          },
+          "statuses/1-backlog.md": {
+            "bytes": 2925,
+            "lines": 55
+          },
+          "statuses/2-in-progress.md": {
+            "bytes": 8825,
+            "lines": 91
+          },
+          "statuses/2a-ai-drafting.md": {
+            "bytes": 3132,
+            "lines": 45
+          },
+          "statuses/2b-human-review.md": {
+            "bytes": 2211,
+            "lines": 54
+          },
+          "statuses/2c-spawning.md": {
+            "bytes": 3225,
+            "lines": 48
+          },
+          "statuses/3-ai-testing.md": {
+            "bytes": 8085,
+            "lines": 103
+          },
+          "statuses/4-in-review.md": {
+            "bytes": 4809,
+            "lines": 69
+          },
+          "statuses/5-done.md": {
+            "bytes": 4176,
+            "lines": 62
+          },
+          "ui-checklist.md": {
+            "bytes": 3197,
+            "lines": 50
+          }
+        }
+      }
+    },
+    "sf-srs": {
+      "template": {
+        "entry": {
+          "bytes": 54890,
+          "lines": 732
+        },
+        "total": {
+          "bytes": 92688,
+          "lines": 1344
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 54890,
+            "lines": 732
+          },
+          "templates/examples/example-epic.md": {
+            "bytes": 11650,
+            "lines": 98
+          },
+          "templates/pages/README.md": {
+            "bytes": 4893,
+            "lines": 76
+          },
+          "templates/tickets/README.md": {
+            "bytes": 6185,
+            "lines": 134
+          },
+          "templates/tickets/examples/epic.md": {
+            "bytes": 3684,
+            "lines": 92
+          },
+          "templates/tickets/examples/issue.md": {
+            "bytes": 3314,
+            "lines": 66
+          },
+          "templates/tickets/examples/story.md": {
+            "bytes": 3851,
+            "lines": 69
+          },
+          "templates/tickets/examples/task.md": {
+            "bytes": 4221,
+            "lines": 77
+          }
+        }
+      },
+      "repo": {
+        "entry": {
+          "bytes": 54890,
+          "lines": 732
+        },
+        "total": {
+          "bytes": 92688,
+          "lines": 1344
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 54890,
+            "lines": 732
+          },
+          "templates/examples/example-epic.md": {
+            "bytes": 11650,
+            "lines": 98
+          },
+          "templates/pages/README.md": {
+            "bytes": 4893,
+            "lines": 76
+          },
+          "templates/tickets/README.md": {
+            "bytes": 6185,
+            "lines": 134
+          },
+          "templates/tickets/examples/epic.md": {
+            "bytes": 3684,
+            "lines": 92
+          },
+          "templates/tickets/examples/issue.md": {
+            "bytes": 3314,
+            "lines": 66
+          },
+          "templates/tickets/examples/story.md": {
+            "bytes": 3851,
+            "lines": 69
+          },
+          "templates/tickets/examples/task.md": {
+            "bytes": 4221,
+            "lines": 77
+          }
+        }
+      },
+      "agents": {
+        "entry": {
+          "bytes": 59515,
+          "lines": 792
+        },
+        "total": {
+          "bytes": 97313,
+          "lines": 1404
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 59515,
+            "lines": 792
+          },
+          "templates/examples/example-epic.md": {
+            "bytes": 11650,
+            "lines": 98
+          },
+          "templates/pages/README.md": {
+            "bytes": 4893,
+            "lines": 76
+          },
+          "templates/tickets/README.md": {
+            "bytes": 6185,
+            "lines": 134
+          },
+          "templates/tickets/examples/epic.md": {
+            "bytes": 3684,
+            "lines": 92
+          },
+          "templates/tickets/examples/issue.md": {
+            "bytes": 3314,
+            "lines": 66
+          },
+          "templates/tickets/examples/story.md": {
+            "bytes": 3851,
+            "lines": 69
+          },
+          "templates/tickets/examples/task.md": {
+            "bytes": 4221,
+            "lines": 77
+          }
+        }
+      }
+    },
+    "tool-saasfoundry": {
+      "template": {
+        "entry": {
+          "bytes": 68283,
+          "lines": 758
+        },
+        "total": {
+          "bytes": 68283,
+          "lines": 758
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 68283,
+            "lines": 758
+          }
+        }
+      }
+    },
+    "sf-tool-github-projects": {
+      "template": {
+        "entry": {
+          "bytes": 24259,
+          "lines": 246
+        },
+        "total": {
+          "bytes": 24259,
+          "lines": 246
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 24259,
+            "lines": 246
+          }
+        }
+      },
+      "repo": {
+        "entry": {
+          "bytes": 24259,
+          "lines": 246
+        },
+        "total": {
+          "bytes": 24259,
+          "lines": 246
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 24259,
+            "lines": 246
+          }
+        }
+      },
+      "agents": {
+        "entry": {
+          "bytes": 28884,
+          "lines": 307
+        },
+        "total": {
+          "bytes": 28884,
+          "lines": 307
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 28884,
+            "lines": 307
+          }
+        }
+      }
+    },
+    "sf-integration-rules": {
+      "template": {
+        "entry": {
+          "bytes": 5896,
+          "lines": 70
+        },
+        "total": {
+          "bytes": 71350,
+          "lines": 1345
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 5896,
+            "lines": 70
+          },
+          "backend.md": {
+            "bytes": 28382,
+            "lines": 479
+          },
+          "frontend.md": {
+            "bytes": 18462,
+            "lines": 477
+          },
+          "topology.md": {
+            "bytes": 18610,
+            "lines": 319
+          }
+        }
+      },
+      "repo": {
+        "entry": {
+          "bytes": 5896,
+          "lines": 70
+        },
+        "total": {
+          "bytes": 71350,
+          "lines": 1345
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 5896,
+            "lines": 70
+          },
+          "backend.md": {
+            "bytes": 28382,
+            "lines": 479
+          },
+          "frontend.md": {
+            "bytes": 18462,
+            "lines": 477
+          },
+          "topology.md": {
+            "bytes": 18610,
+            "lines": 319
+          }
+        }
+      },
+      "agents": {
+        "entry": {
+          "bytes": 10469,
+          "lines": 129
+        },
+        "total": {
+          "bytes": 75923,
+          "lines": 1404
+        },
+        "files": {
+          "SKILL.md": {
+            "bytes": 10469,
+            "lines": 129
+          },
+          "backend.md": {
+            "bytes": 28382,
+            "lines": 479
+          },
+          "frontend.md": {
+            "bytes": 18462,
+            "lines": 477
+          },
+          "topology.md": {
+            "bytes": 18610,
+            "lines": 319
+          }
+        }
+      }
+    },
+    "instructions": {
+      "repo": {
+        "entry": {
+          "bytes": 28754,
+          "lines": 387
+        },
+        "total": {
+          "bytes": 28754,
+          "lines": 387
+        },
+        "files": {
+          "AGENTS.md": {
+            "bytes": 28754,
+            "lines": 387
+          }
+        },
+        "extra": {
+          "region": 14171,
+          "handWritten": 14583
+        }
+      },
+      "template:harness": {
+        "entry": {
+          "bytes": 3279,
+          "lines": 43
+        },
+        "total": {
+          "bytes": 3279,
+          "lines": 43
+        },
+        "files": {
+          "AGENTS.md": {
+            "bytes": 3279,
+            "lines": 43
+          }
+        }
+      },
+      "template:api": {
+        "entry": {
+          "bytes": 11870,
+          "lines": 317
+        },
+        "total": {
+          "bytes": 11870,
+          "lines": 317
+        },
+        "files": {
+          "AGENTS.md": {
+            "bytes": 11870,
+            "lines": 317
+          }
+        }
+      },
+      "template:web": {
+        "entry": {
+          "bytes": 12820,
+          "lines": 365
+        },
+        "total": {
+          "bytes": 12820,
+          "lines": 365
+        },
+        "files": {
+          "AGENTS.md": {
+            "bytes": 12820,
+            "lines": 365
+          }
+        }
+      },
+      "template:monorepo-root": {
+        "entry": {
+          "bytes": 13396,
+          "lines": 240
+        },
+        "total": {
+          "bytes": 13396,
+          "lines": 240
+        },
+        "files": {
+          "AGENTS.md": {
+            "bytes": 13396,
+            "lines": 240
+          }
+        }
+      }
+    }
+  },
+  "generated": {
+    "harness-solo": {
+      "instructions": 18601,
+      ".claude/skills/sf-workflow": {
+        "entryBytes": 49066,
+        "totalBytes": 147202,
+        "mdFiles": 12
+      },
+      ".claude/skills/sf-tool-github-projects": {
+        "entryBytes": 24259,
+        "totalBytes": 24259,
+        "mdFiles": 1
+      },
+      ".claude/skills/tool-saasfoundry": {
+        "entryBytes": 68283,
+        "totalBytes": 68283,
+        "mdFiles": 1
+      },
+      ".agents/skills/sf-workflow": {
+        "entryBytes": 53693,
+        "totalBytes": 151829,
+        "mdFiles": 12
+      },
+      ".agents/skills/sf-tool-github-projects": {
+        "entryBytes": 28884,
+        "totalBytes": 28884,
+        "mdFiles": 1
+      }
+    },
+    "harness-team": {
+      "instructions": 18608,
+      ".claude/skills/sf-workflow": {
+        "entryBytes": 49251,
+        "totalBytes": 156810,
+        "mdFiles": 14
+      },
+      ".claude/skills/sf-tool-github-projects": {
+        "entryBytes": 24259,
+        "totalBytes": 24259,
+        "mdFiles": 1
+      },
+      ".agents/skills/sf-workflow": {
+        "entryBytes": 53878,
+        "totalBytes": 161437,
+        "mdFiles": 14
+      },
+      ".agents/skills/sf-tool-github-projects": {
+        "entryBytes": 28884,
+        "totalBytes": 28884,
+        "mdFiles": 1
+      }
+    },
+    "full-monorepo": {
+      "instructions": 28688,
+      ".claude/skills/sf-workflow": {
+        "entryBytes": 49066,
+        "totalBytes": 147202,
+        "mdFiles": 12
+      },
+      ".claude/skills/sf-tool-github-projects": {
+        "entryBytes": 24259,
+        "totalBytes": 24259,
+        "mdFiles": 1
+      },
+      ".claude/skills/sf-integration-rules": {
+        "entryBytes": 5896,
+        "totalBytes": 71350,
+        "mdFiles": 4
+      },
+      ".claude/skills/tool-saasfoundry": {
+        "entryBytes": 68283,
+        "totalBytes": 68283,
+        "mdFiles": 1
+      },
+      ".agents/skills/sf-workflow": {
+        "entryBytes": 53693,
+        "totalBytes": 151829,
+        "mdFiles": 12
+      },
+      ".agents/skills/sf-tool-github-projects": {
+        "entryBytes": 28884,
+        "totalBytes": 28884,
+        "mdFiles": 1
+      },
+      ".agents/skills/sf-integration-rules": {
+        "entryBytes": 10469,
+        "totalBytes": 75923,
+        "mdFiles": 4
+      },
+      "chain:apps/api": 40543,
+      "chain:apps/web": 41493
+    },
+    "full-multirepo": {
+      "instructions": 27272,
+      ".claude/skills/sf-workflow": {
+        "entryBytes": 49066,
+        "totalBytes": 147202,
+        "mdFiles": 12
+      },
+      ".claude/skills/sf-tool-github-projects": {
+        "entryBytes": 24259,
+        "totalBytes": 24259,
+        "mdFiles": 1
+      },
+      ".claude/skills/sf-integration-rules": {
+        "entryBytes": 5896,
+        "totalBytes": 71350,
+        "mdFiles": 4
+      },
+      ".agents/skills/sf-workflow": {
+        "entryBytes": 53693,
+        "totalBytes": 151829,
+        "mdFiles": 12
+      },
+      ".agents/skills/sf-tool-github-projects": {
+        "entryBytes": 28884,
+        "totalBytes": 28884,
+        "mdFiles": 1
+      },
+      ".agents/skills/sf-integration-rules": {
+        "entryBytes": 10469,
+        "totalBytes": 75923,
+        "mdFiles": 4
+      }
+    }
+  }
+}

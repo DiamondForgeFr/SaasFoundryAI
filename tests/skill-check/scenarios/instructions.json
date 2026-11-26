@@ -1,0 +1,86 @@
+{
+  "kind": "scenarios",
+  "schemaVersion": 1,
+  "skill": "instructions",
+  "scenarios": [
+    {
+      "id": "ag-shell-calls-one-command",
+      "title": "Commit and push as one plain command per call",
+      "core": true,
+      "fixture": "harness-solo",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "You are on the branch `feature/42-export-csv` for ticket #42. You changed `src/export.ts` and `src/export.spec.ts`. Stage them, commit with a message that explains the change, push the branch, then open the draft pull request.",
+      "expect": {
+        "commands": [{ "all": ["git add"] }, { "all": ["git commit"], "any": ["(#42)", "-F "] }, { "all": ["git push"] }, { "all": ["create-pr", "42"] }],
+        "forbidden": ["/\\$\\(/", "/<<-?\\s*['\"]?\\w+/", "#TBD"]
+      }
+    },
+    {
+      "id": "ag-consent-not-asked",
+      "title": "Delegation consent was never asked",
+      "fixture": "harness-solo",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "`sf status --agent-friendly --no-network` prints `delegation: not-asked`. This is the first ticket of the session: #42, complexity medium, plan approved. Start it.",
+      "expect": {
+        "forbidden": ["sf agents delegation allow", "sf agents delegation decline"],
+        "answer": { "includes": [{ "any": ["ask", "consent", "permission"] }] }
+      }
+    },
+    {
+      "id": "ag-trivial-change-own-worktree",
+      "title": "A trivial change is built in a worktree of its own",
+      "fixture": "harness-solo",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "`delegation: allowed`. Ticket #51 is a typo in the README, one line in one file. You are the session, and the primary checkout is on the working branch `develop`. Start the work.",
+      "expect": {
+        "commands": [{ "all": ["git fetch origin"] }, { "all": ["git worktree add", "feature/51-"] }],
+        "forbidden": ["sf agents route", "git switch", "git stash", "/git checkout\\s+(-b\\s+)?feature\\//"]
+      }
+    },
+    {
+      "id": "ag-undeclared-agent",
+      "title": "The current agent is not declared in the project",
+      "fixture": "harness-solo",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "The host tells you that you are running as Kimi Code. Start the session.",
+      "expect": {
+        "commands": [{ "all": ["sf agents list", "--json"] }],
+        "forbidden": ["sf agents enable", "sf agents replace"],
+        "answer": { "includes": [{ "any": ["local", "shared"] }] }
+      }
+    },
+    {
+      "id": "ag-failed-precondition",
+      "title": "A failed precondition is routed, not worked around",
+      "fixture": "harness-solo",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "`sf status --agent-friendly --no-network` reports a precondition as `fail`: no GitHub Projects board is attached to the workflow. The developer asks you to create a ticket for a new feature.",
+      "expect": {
+        "forbidden": ["create-ticket", "gh project create", "gh issue create"],
+        "answer": { "includes": [{ "any": ["sf workflow use", "--project-url", "--create-board", "attach"] }] }
+      }
+    },
+    {
+      "id": "ag-unreachable-remote",
+      "title": "The remote is unreachable: stop and report",
+      "fixture": "harness-solo",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "`git push origin feature/42-export-csv` just failed with `Could not resolve host: github.com`. Three commits for ticket #42 exist only locally.",
+      "expect": {
+        "forbidden": ["git remote", "--no-verify", "git push --mirror", "git push https://", "gh api"],
+        "answer": { "includes": [{ "any": ["developer"] }, { "any": ["report", "tell", "ask"] }] }
+      }
+    },
+    {
+      "id": "ag-route-fails",
+      "title": "A failed route is never worked around with another agent's CLI",
+      "fixture": "harness-solo",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "`delegation: allowed`. You ran `sf agents route --task multi-file-feature --provider claude-code --ticket 42 --record` and it failed with a non-zero exit code. How do you proceed with ticket #42?",
+      "expect": {
+        "forbidden": ["/(^|[\\s;&|(])(claude|codex|kimi)\\s/"],
+        "answer": { "includes": [{ "any": ["session", "yourself", "myself", "in the session"] }] }
+      }
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "kind": "ledger",
+  "schemaVersion": 1,
+  "skill": "sf-integration-rules",
+  "rules": [
+    {
+      "id": "router-reads-topology-first",
+      "summary": "Confirm monorepo or multirepo from the manifest before any cross-app decision",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["Read the topology", "`.saasfoundry.json` → `structure`", "packages/"]
+    },
+    {
+      "id": "sub-guide-router",
+      "summary": "An intent maps to one sub-guide section",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["Sub-guide router", "`backend.md`", "`frontend.md`", "`topology.md`"]
+    },
+    {
+      "id": "discipline-rules",
+      "summary": "Extend the installer, never bypass a drift guard, never half-finish a wiring",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["Never invent a parallel install path", "Never bypass drift-guard tests", "Never half-finish a wiring", "Always confirm topology"]
+    },
+    {
+      "id": "missing-sub-guide",
+      "summary": "A sub-guide that is not there is reported, and the closest module is mirrored",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["When the sub-guide is missing", "mirror its structure exactly"]
+    },
+    {
+      "id": "backend-module-structure",
+      "summary": "Module, controller, service, DTO and test layout of an API module",
+      "owner": "backend.md",
+      "tier": "disclosed",
+      "tokens": ["## Module structure", "## Controllers", "## DTOs", "## Services", "## Tests"],
+      "pointer": { "from": "SKILL.md", "match": "backend.md" }
+    },
+    {
+      "id": "backend-rbac",
+      "summary": "Permissions are declared on the controller with RequirePermissions and seeded in the dataset",
+      "owner": "backend.md",
+      "tier": "disclosed",
+      "tokens": ["## RBAC", "@RequirePermissions", "default_user_modules_roles.sql"],
+      "pointer": { "from": "SKILL.md", "match": "backend.md" }
+    },
+    {
+      "id": "backend-prisma",
+      "summary": "Schema changes are migration-free: multi-file schema and db push",
+      "owner": "backend.md",
+      "tier": "disclosed",
+      "tokens": ["## Prisma", "prisma/schema/", "npx prisma db push"],
+      "pointer": { "from": "SKILL.md", "match": "backend.md" }
+    },
+    {
+      "id": "backend-validation",
+      "summary": "Requests use a Zod factory shared with the frontend; responses use class-validator",
+      "owner": "backend.md",
+      "tier": "disclosed",
+      "tokens": ["## Validation", "createZodDto", "shared-validation"],
+      "pointer": { "from": "SKILL.md", "match": "backend.md" }
+    },
+    {
+      "id": "frontend-pages",
+      "summary": "Pages are lazy-loaded under private or public, and routed in one place",
+      "owner": "frontend.md",
+      "tier": "disclosed",
+      "tokens": ["## Pages & routing", "lazy(", "pages/private"],
+      "pointer": { "from": "SKILL.md", "match": "frontend.md" }
+    },
+    {
+      "id": "frontend-hooks-forms",
+      "summary": "API hooks keep stable query keys; forms use React Hook Form with a shared Zod factory",
+      "owner": "frontend.md",
+      "tier": "disclosed",
+      "tokens": ["## API hooks", "queryKeys", "## Forms", "zodResolver", "useFormLanguageSync"],
+      "pointer": { "from": "SKILL.md", "match": "frontend.md" }
+    },
+    {
+      "id": "frontend-i18n",
+      "summary": "Translations are YAML keys, never inline strings",
+      "owner": "frontend.md",
+      "tier": "disclosed",
+      "tokens": ["## i18n", "useTranslation"],
+      "pointer": { "from": "SKILL.md", "match": "frontend.md" }
+    },
+    {
+      "id": "topology-canonical-and-mirror",
+      "summary": "On a monorepo the workspace package is canonical and the app copy is a byte-identical mirror; a multirepo has no canonical",
+      "owner": "topology.md",
+      "tier": "disclosed",
+      "tokens": ["## Mirror vs canonical rule", "byte-identical", "### Drift-guards enforce identity", "shared-types-drift"],
+      "pointer": { "from": "SKILL.md", "match": "topology.md" }
+    },
+    {
+      "id": "topology-api-client",
+      "summary": "The generated typed API client exists on a monorepo only; call it directly or wrap it",
+      "owner": "topology.md",
+      "tier": "disclosed",
+      "tokens": ["## API client + codegen", "### Direct call or wrapper", "api-client"],
+      "pointer": { "from": "SKILL.md", "match": "topology.md" }
+    }
+  ],
+  "knownBrokenLinks": []
+}

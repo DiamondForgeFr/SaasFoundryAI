@@ -1,0 +1,64 @@
+{
+  "kind": "scenarios",
+  "schemaVersion": 1,
+  "skill": "sf-tool-github-projects",
+  "scenarios": [
+    {
+      "id": "ghp-create-ticket-srs-project",
+      "title": "File a feature ticket on a project that has an SRS",
+      "core": true,
+      "fixture": "harness-srs",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "The developer says: 'file a ticket for a new feature: export the project list as CSV'. The manifest declares an SRS backend (`tools.srs.backend`).",
+      "expect": {
+        "reads": [["sf-tool-github-projects/SKILL.md", "sf-workflow/SKILL.md", "sf-srs/SKILL.md"]],
+        "commands": [{ "any": ["sf srs draft", "sf srs write", "srs-cli.sh draft", "srs-cli.sh write", "transition-drafting"] }],
+        "forbidden": ["create-ticket", "create-subtask", "create-epic", "--bypass-srs", "gh issue create"]
+      }
+    },
+    {
+      "id": "ghp-split-into-children",
+      "title": "Split a ticket into native children",
+      "fixture": "harness-solo",
+      "prompt": "Ticket #42 is medium and its plan was approved: a backend API part and a frontend UI part. Create the child tickets for them.",
+      "expect": {
+        "reads": [["sf-tool-github-projects/SKILL.md", "sf-workflow/SKILL.md"]],
+        "commands": [{ "all": ["create-subtask", "42"] }],
+        "forbidden": ["gh issue create", "addSubIssue", "gh api"]
+      }
+    },
+    {
+      "id": "ghp-ready-pr-from-primary-checkout",
+      "title": "Take a delegated agent's PR out of draft from the primary checkout",
+      "fixture": "harness-solo",
+      "prompt": "You are the session, in the primary checkout on the working branch `develop`. The agent that built ticket #42 left its worktree with the pull request open as a draft: its report is posted and the local CI is green on its head. The workflow is the Solo preset. Take the pull request out of draft.",
+      "expect": {
+        "reads": [["sf-tool-github-projects/SKILL.md", "sf-workflow/statuses/3-ai-testing.md", "sf-workflow/SKILL.md"]],
+        "commands": [{ "all": ["ready-pr", "42"] }],
+        "forbidden": ["/cd\\s+\\S*worktree/", "git checkout", "git switch"]
+      }
+    },
+    {
+      "id": "ghp-mark-ui-and-complexity",
+      "title": "Mark a ticket as a UI change and set its complexity",
+      "fixture": "harness-solo",
+      "prompt": "Ticket #70 changes a screen of the application and is a small change. Mark it as a UI change and give it its complexity.",
+      "expect": {
+        "reads": [["sf-tool-github-projects/SKILL.md", "sf-workflow/SKILL.md"]],
+        "commands": [{ "all": ["set-ui", "70"] }, { "any": ["set-complexity 70 low", "retag 70 low"] }],
+        "forbidden": ["gh issue edit", "--add-label", "gh label create"]
+      }
+    },
+    {
+      "id": "ghp-required-local-ci",
+      "title": "Find out whether a pull request may leave draft",
+      "fixture": "harness-solo",
+      "prompt": "Before marking the pull request of ticket #42 ready, check whether its head commit carries every required local CI status, and change nothing.",
+      "expect": {
+        "reads": [["sf-tool-github-projects/SKILL.md", "sf-workflow/statuses/3-ai-testing.md"]],
+        "commands": [{ "all": ["local-ci-gate", "42"], "none": ["--skip-local-ci"] }],
+        "forbidden": ["--skip-local-ci"]
+      }
+    }
+  ]
+}

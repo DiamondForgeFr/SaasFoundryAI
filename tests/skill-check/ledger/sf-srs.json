@@ -1,0 +1,158 @@
+{
+  "kind": "ledger",
+  "schemaVersion": 1,
+  "skill": "sf-srs",
+  "rules": [
+    {
+      "id": "sf-srs-is-the-entry",
+      "summary": "Commands go through sf srs; the shell wrapper exists only for a session without sf on the PATH",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["sf srs <action>", "srs-cli.sh <action>", "sf srs help"],
+      "source": "srs-cli.resolution.spec.ts, #525"
+    },
+    {
+      "id": "adapter-dispatch",
+      "summary": "No concrete backend is imported or hardcoded; every call goes through the adapter",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["createSrsAdapter()", "Never hardcode backend branches", "tools.srs.backend"],
+      "source": "no-notion-leak.spec.ts"
+    },
+    {
+      "id": "three-levels",
+      "summary": "Feature, version, FR: the level comes from position, never from the title; a version of an older feature uses its page id",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["epic.parentId", "epic.version.changes", "write-srs", "parentEpicPageId"],
+      "source": "srs-spec-examples.spec.ts"
+    },
+    {
+      "id": "next-ids",
+      "summary": "Ids and version numbers come from the SRS, read right before writing the spec",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["sf srs next-ids --feature", "exit 2, nothing written", "#919"]
+    },
+    {
+      "id": "conformance-findings",
+      "summary": "A conformance finding is answered with normalize, shown as a dry run first, one feature at a time",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["sf srs normalize --feature", "--apply", "feature-without-version", "feature-without-frs", "fr-at-root-level"]
+    },
+    {
+      "id": "spawn-a-version",
+      "summary": "A batch of tickets belongs to one version; pointing spawn at a versioned feature lists the versions",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["sf srs spawn", "--version", "--epic", "--dry-run", "versioned feature"]
+    },
+    {
+      "id": "spawn-milestone",
+      "summary": "The milestone is the release, never the version page, and spawning is when it is declared",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["--milestone", "release: none", "The name is the release, not the version page", "#542"]
+    },
+    {
+      "id": "spawn-complexity",
+      "summary": "A spawned story gets a complexity label before it leaves Backlog",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["--complexity <level>", "workflow-cli.sh retag"]
+    },
+    {
+      "id": "respawn-reuses-tickets",
+      "summary": "Spawning again reuses the stories that exist, never creates them twice, and never reparents implicitly",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["Existing tickets are reused", "exit 10", "closed as **not planned**", "workflow-cli.sh unlink-subtask", "gh issue close <duplicate> --reason \"not planned\""],
+      "source": "#1037"
+    },
+    {
+      "id": "reconciliation-plan",
+      "summary": "An approved version that may overlap existing work is spawned with an evidence plan",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["--reconciliation-plan", "transition-drafting 42 spawning", "delivered", "partial", "missing", "superseded", "Never assign the tickets one by one afterwards"]
+    },
+    {
+      "id": "freshness-eval",
+      "summary": "sf srs eval scores drift in batch; its exit codes and the three-layer matcher",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["sf srs eval", "## Freshness eval", "Three-layer matcher", "--review-packet"]
+    },
+    {
+      "id": "draft-from-codebase",
+      "summary": "Drafting from the code scans a source folder, not the whole repository",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["draft --from codebase", "--path src", ".srsignore", "sf update --add-modules srs"],
+      "source": "#238, #240"
+    },
+    {
+      "id": "conversational-eval-hook",
+      "summary": "At most one proposal per turn, applied only on accept, through apply-update",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["detect-eval-signals.sh", "sf srs apply-update", "accept / edit / reject", "update-fr", "once per conversation turn"],
+      "source": "srs-detect-eval-signals.spec.ts"
+    },
+    {
+      "id": "update-fr-in-place",
+      "summary": "A revision of an FR is applied where it is listed, dry run first, never appended as a design item",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["sf srs apply-update --dry-run", "\"kind\": \"update-fr\"", "Refused before any write", "Safe to repeat"]
+    },
+    {
+      "id": "intent-hook-opt-outs",
+      "summary": "Three ways to silence the auto-firing hook, in priority order; a broken manifest fails open",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["SF_DISABLE_SRS_HOOK", "tools.srs.intentDetectorEnabled", "tools.srs.enabled", "fail open"],
+      "source": "srs-intent-hook.spec.ts"
+    },
+    {
+      "id": "fr-title-separator",
+      "summary": "The FR title separator is one em dash shared by the renderer and the parser",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["FR_TITLE_SEPARATOR", "U+2014"],
+      "source": "#246"
+    },
+    {
+      "id": "output-language",
+      "summary": "SRS pages follow language.srs, never the language of the conversation",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["language.srs"]
+    },
+    {
+      "id": "zero-to-project-handoff",
+      "summary": "Phase 4 of the flow; resume with recap.sh, never from chat history",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["tool-saasfoundry", "scripts/recap.sh", "zero-to-project flow"]
+    },
+    {
+      "id": "ticket-example-templates",
+      "summary": "Authoring a ticket body starts from the archetypal examples, each opening with its pattern and anti-patterns",
+      "owner": "templates/tickets/examples/story.md",
+      "tier": "disclosed",
+      "tokens": ["Why this example", "Shows:"],
+      "pointer": { "from": "SKILL.md", "match": "templates/tickets/examples/" },
+      "source": "examples-contract.spec.ts"
+    }
+  ],
+  "knownBrokenLinks": [
+    {
+      "view": "agents",
+      "file": "SKILL.md",
+      "target": "scripts/srs-intent-hook.sh",
+      "reason": "The .agents projection does not carry the hook script the skill links to; a child of #1095 removes the link or the projection carries the file"
+    }
+  ]
+}
