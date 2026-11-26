@@ -234,6 +234,75 @@ export function renderComparison({ ok, rows }) {
   return lines.join('\n')
 }
 
+// ---------------------------------------------------------------------------------------------- merge
+
+const costOf = (doc) => doc.totals?.costUsd ?? doc.scenarios.flatMap((s) => s.runs).reduce((sum, run) => sum + (run.costUsd ?? 0), 0)
+const roundUsd = (value) => Number(value.toFixed(4))
+
+/**
+ * A full run whose scenarios are replaced by a partial rerun of the same ones: what a recalibration of a scenario's expectations
+ * needs, since the agent's runs are not repeated for the scenarios whose definition did not change. The runs of a replaced scenario are
+ * the rerun's, the others keep theirs, and the file says which is which (`ranOn` per scenario, `sources` in the meta), why, and what the
+ * two runs cost together. Both must be the same kind of run (runner, host, repeat), and the rerun may only hold scenarios the base has.
+ */
+export function mergeResults(base, rerun, { reason }) {
+  if (!reason || !reason.trim()) throw new UsageError('merge needs --reason "<why these scenarios were run again>": a baseline that does not say is not trusted')
+  for (const [name, doc] of [
+    ['base', base],
+    ['rerun', rerun]
+  ]) {
+    if (doc.kind !== 'results') throw new UsageError(`the ${name} file is not a results file (kind ${JSON.stringify(doc.kind)})`)
+  }
+  for (const key of ['runner', 'host', 'repeat', 'passThreshold']) {
+    if (base.meta[key] !== rerun.meta[key]) throw new UsageError(`the two runs differ on ${key} (${base.meta[key]} and ${rerun.meta[key]}): they cannot be merged`)
+  }
+  const key = (item) => `${item.id}@${item.host}`
+  const known = new Set(base.scenarios.map(key))
+  const unknown = rerun.scenarios.filter((item) => !known.has(key(item)))
+  if (unknown.length > 0) throw new UsageError(`the rerun holds scenarios the base does not: ${unknown.map(key).join(', ')}`)
+  const replacements = new Map(rerun.scenarios.map((item) => [key(item), item]))
+
+  const scenarios = base.scenarios.map((item) => (replacements.has(key(item)) ? { ...replacements.get(key(item)), ranOn: rerun.meta.commit } : { ...item, ranOn: base.meta.commit }))
+  const runs = scenarios.flatMap((item) => item.runs)
+  const source = (role, doc) => ({
+    role,
+    label: doc.meta.label,
+    commit: doc.meta.commit,
+    createdAt: doc.meta.createdAt,
+    modelRuns: doc.meta.modelRuns,
+    costUsd: roundUsd(costOf(doc)),
+    scenarios: doc.scenarios.length
+  })
+
+  return {
+    kind: 'results',
+    schemaVersion: 1,
+    meta: {
+      label: base.meta.label,
+      commit: rerun.meta.commit,
+      createdAt: base.meta.createdAt,
+      mergedAt: new Date().toISOString(),
+      runner: base.meta.runner,
+      host: base.meta.host,
+      models: [...new Set([...(base.meta.models ?? []), ...(rerun.meta.models ?? [])])].sort(),
+      repeat: base.meta.repeat,
+      passThreshold: base.meta.passThreshold,
+      agentHome: base.meta.agentHome === rerun.meta.agentHome ? base.meta.agentHome : 'mixed',
+      modelRuns: runs.length,
+      modelRunsSpent: (base.meta.modelRuns ?? 0) + (rerun.meta.modelRuns ?? 0),
+      costUsdSpent: roundUsd(costOf(base) + costOf(rerun)),
+      sources: [source('base', base), { ...source('rerun', rerun), replaces: [...replacements.values()].map((item) => item.id), reason: reason.trim() }]
+    },
+    scenarios,
+    totals: {
+      scenarios: scenarios.length,
+      passed: scenarios.filter((item) => item.passed).length,
+      failed: scenarios.filter((item) => !item.passed).length,
+      costUsd: roundUsd(runs.reduce((sum, run) => sum + (run.costUsd ?? 0), 0))
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------------------------- invocations
 
 const BASE_ENV = ['PATH', 'LANG', 'LC_ALL', 'TERM', 'TMPDIR']

@@ -1,0 +1,2613 @@
+{
+  "kind": "results",
+  "schemaVersion": 1,
+  "meta": {
+    "label": "develop bdfb1f12",
+    "commit": "a77437591a5d23b938c0161a669df540d625ffad",
+    "createdAt": "2026-11-26T11:12:47.872Z",
+    "mergedAt": "2026-11-26T11:20:44.189Z",
+    "runner": "claude",
+    "host": "claude-code",
+    "models": ["claude-sonnet-5-5"],
+    "repeat": 3,
+    "passThreshold": 2,
+    "agentHome": "inherit",
+    "modelRuns": 123,
+    "modelRunsSpent": 141,
+    "costUsdSpent": 21.5998,
+    "sources": [
+      {
+        "role": "base",
+        "label": "develop bdfb1f12",
+        "commit": "171861026f005a44823b155e77bbaceb2005fec2",
+        "createdAt": "2026-11-26T11:12:47.872Z",
+        "modelRuns": 123,
+        "costUsd": 19.1721,
+        "scenarios": 41
+      },
+      {
+        "role": "rerun",
+        "label": "develop bdfb1f12 (recalibrated 6)",
+        "commit": "a77437591a5d23b938c0161a669df540d625ffad",
+        "createdAt": "2026-11-26T11:19:28.200Z",
+        "modelRuns": 18,
+        "costUsd": 2.4277,
+        "scenarios": 6,
+        "replaces": ["df-skill-copies-in-step", "ag-trivial-change-own-worktree", "ag-unreachable-remote", "srs-eval-freshness", "ghp-required-local-ci", "tsf-report-a-cli-bug"],
+        "reason": "Recalibration in a7743759: after the first full run, the expectations of these 6 scenarios were corrected because the agent's behaviour was right and the check wrongly failed it (the reasons are in that commit's message). Their runs on 17186102 are replaced by the rerun on a7743759; the other 35 scenarios keep their runs from 17186102, their definitions being unchanged."
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "df-commit-format",
+      "skill": "dogfood",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "dogfood",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "git worktree list",
+            "git branch --show-current",
+            "git status",
+            "git diff -- src/commands/status.ts",
+            "git add src/commands/status.ts",
+            "git commit -m \"fix(#1234): handle a null owner in the status command\"",
+            "git status",
+            "git log -1 --stat"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".saasfoundry.json", "package.json"],
+          "forbiddenHits": [],
+          "answer": "I rely on the commit format `<type>(#<ticket>): <description>` (header of 100 characters at most) and on one plain command per call. I'd stage only `src/commands/status.ts`, and adjust the message if the diff shows something else.\nThe commands run in the ticket's worktree. If `fix/1234-null-owner` turns out to be checked out in the primary checkout, I'd stop and tell you before committing, without switching or stashing anything there.\nThe commit hook runs the staged format, lint, type and related-test checks. If it fails, I'd fix the cause and not skip the hook.\nYou asked only for a commit, so I won't push. The commit will be on no remote until you ask me to push, which is required before AI Testing. Should I push it now?",
+          "costUsd": 0.2119135,
+          "durationMs": 11938,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["git status", "git diff -- src/commands/status.ts", "git add src/commands/status.ts", "git commit -m \"fix(#1234): handle a null owner in the status command\"", "git status"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json", "package.json"],
+          "forbiddenHits": [],
+          "answer": "Commit format is `<type>(#<ticket>): <description>` in English, staging only your file. I'd run these in the worktree holding `fix/1234-null-owner`, never switching the primary checkout's branch (it reads `main` here, so I'd confirm where the change is with `git status` first).\nThe message is inferred from the branch name, so I'd adjust it to match the diff. If a commit hook fails, I'd fix the cause rather than bypass it.\nNothing to ask before committing. I'd push only if you ask or when the ticket heads to AI testing, which requires it.",
+          "costUsd": 0.22141370000000002,
+          "durationMs": 10104,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "git branch --show-current",
+            "git status --short",
+            "git diff -- src/commands/status.ts",
+            "git add src/commands/status.ts",
+            "git diff --cached --stat",
+            "git commit -m \"fix(#1234): handle null owner in status command\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".saasfoundry.json", "package.json"],
+          "forbiddenHits": [],
+          "answer": "- **Rules:** the commit follows `<type>(#<ticket>): <description>`, in English, on the ticket's `fix/1234-…` branch. Only `src/commands/status.ts` is staged, so the other untracked files stay out.\n- **Checks:** I'd run this in the ticket's worktree and stop if the branch isn't `fix/1234-null-owner`; I'd adjust the message if the diff shows something else. The commit hook runs the staged checks; if it fails, I'd fix the cause rather than skip it.\n- **Not included:** no push, since you asked for a commit only; the push is required before the ticket moves to AI Testing. There's nothing to ask you first.",
+          "costUsd": 0.1949587,
+          "durationMs": 9368,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "df-harness-evolution-mirrored",
+      "skill": "dogfood",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "dogfood",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "npm run build",
+            "node bin/sf.js agents refresh --scope shared",
+            "npx prettier --write .saasfoundry.json",
+            "git status",
+            "git diff",
+            "git add src/harness/agent-instructions.ts AGENTS.md .agents .saasfoundry.json",
+            "git commit -m \"feat(#<ticket>): update the generated agent instructions\"",
+            "git push -u origin HEAD"
+          ],
+          "filesRead": [],
+          "forbiddenHits": [],
+          "answer": "Rule: `AGENTS.md`, \"Harness evolutions\": the same ticket carries the regenerated `AGENTS.md` region and `.agents/`, plus `.saasfoundry.json` if refresh updates it (hashes); never hand-edit those copies.\nAll commands run in the ticket's own worktree, each as a separate call (guard hook); `<ticket>` and the commit type come from the real ticket.\nIf the change also touches skills, agents/routing or a `modules.harness` field, mirror `.claude/skills/sf-*` and its template, `.claude/agents/` and `.codex/agents/`, or record the field with its CLI command, and stage those too.\nNothing to ask first. I would check the diff before staging; affected tests and the AI Testing validation still apply before the PR leaves draft.",
+          "costUsd": 0.099329,
+          "durationMs": 9796,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["npm run build", "node bin/sf.js agents refresh --scope shared", "npx prettier --write .saasfoundry.json"],
+          "filesRead": [],
+          "forbiddenHits": [],
+          "answer": "Rule: `AGENTS.md`, \"Harness evolutions\": the same ticket carries the regenerated `AGENTS.md` region and `.agents/` here, committed with the source change, including the updated hashes in `.saasfoundry.json`.\nRun these as three separate calls (the guard refuses chains), from the ticket's own worktree, using its local `bin/sf.js`, never a bare `sf`. Don't hand-edit the generated region or `.agents/`.\nThen review the diff and commit as `<type>(#<ticket>): …`; if the change also touches skills, tier agents/routing or a `modules.harness` field, mirror those too (the last recorded with its own CLI command).\nNothing to ask first, assuming the ticket and its worktree already exist.",
+          "costUsd": 0.041151400000000005,
+          "durationMs": 9135,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["npm run build", "node bin/sf.js agents refresh --scope shared", "npx prettier --write .saasfoundry.json"],
+          "filesRead": [],
+          "forbiddenHits": [],
+          "answer": "Rule: `AGENTS.md`, \"Harness evolutions\": the same ticket's commits carry the regenerated `AGENTS.md` region, `.agents/` and the refreshed `.saasfoundry.json` (`fileHashes`) alongside the source change.\nRun these after the source edit, from the ticket's worktree root, as three separate calls (the guard refuses a chain); then review the diff and commit it with the change.\nNever hand-edit the generated region, `.agents/` or the manifest. Skill copies, tier agents or a `modules.harness` field must be mirrored too only if the ticket also changes them.\nNothing to ask the developer first. I ran nothing and did not inspect the source file, as this is plan-only.",
+          "costUsd": 0.028439400000000004,
+          "durationMs": 7914,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "df-skill-copies-in-step",
+      "skill": "dogfood",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "dogfood",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "npm run build",
+            "node bin/sf.js agents refresh --scope shared",
+            "npx prettier --write .saasfoundry.json",
+            "npx jest src/__tests__/unit/skill/tool-skill-drift.spec.ts",
+            "git status --short"
+          ],
+          "filesRead": [".claude/docs/architecture-skills.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "1. `.claude/skills/sf-tool-github-projects/SKILL.md`: apply the same change with the Edit tool before running the block. It must be byte-identical to the template, and `tool-skill-drift.spec.ts` guards this (`.claude/docs/architecture-skills.md`, \"Dogfood + scaffold parity\").\n2. `.agents/skills/sf-tool-github-projects/SKILL.md`: never edit it by hand. The build and refresh regenerate it from `.claude/`, with its `fileHashes` entry in `.saasfoundry.json`; Prettier then reformats that manifest (`AGENTS.md`, \"Harness evolutions\").\n3. All copies go in the same ticket and commit, made in that ticket's worktree. I would check `git status` for unexpected regenerated files before committing.\n4. I would first ask for the ticket number if there isn't one yet, since no commit can be made without it.",
+          "costUsd": 0.1543502,
+          "durationMs": 12295,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "cp scaffolds/skills-templates/tools/github-projects/SKILL.md .claude/skills/sf-tool-github-projects/SKILL.md",
+            "npm run build",
+            "node bin/sf.js agents refresh --scope shared",
+            "npx prettier --write .saasfoundry.json",
+            "npx jest src/__tests__/unit/skill/tool-skill-drift.spec.ts"
+          ],
+          "filesRead": [".claude/docs/architecture-skills.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Two copies follow: `.claude/skills/sf-tool-github-projects/SKILL.md` (byte-identical, via `cp`) and `.agents/skills/sf-tool-github-projects/SKILL.md` (only via `agents refresh`, never by hand). Commit both with the template and the `.saasfoundry.json` `fileHashes`, in the same ticket (`AGENTS.md`, \"Harness evolutions\"; `.claude/docs/architecture-skills.md`, parity and projection).\nRun these in the ticket's worktree, not the primary checkout. Before the `cp`, I'd diff the two files and ask you if `.claude/` holds changes the template lacks, since the copy would overwrite them. If no ticket exists for this edit, I'd ask for its number first.",
+          "costUsd": 0.1606474,
+          "durationMs": 12747,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "cp scaffolds/skills-templates/tools/github-projects/SKILL.md .claude/skills/sf-tool-github-projects/SKILL.md",
+            "npm run build",
+            "node bin/sf.js agents refresh --scope shared",
+            "npx prettier --write .saasfoundry.json",
+            "npx jest src/__tests__/unit/skill/tool-skill-drift.spec.ts"
+          ],
+          "filesRead": [".claude/docs/architecture-skills.md"],
+          "forbiddenHits": [],
+          "answer": "1. Two copies follow: `.claude/skills/sf-tool-github-projects/SKILL.md` must be byte-identical (`cp`), and `.agents/skills/sf-tool-github-projects/SKILL.md` is generated by `agents refresh`, never edited by hand.\n2. Rules: \"Harness evolutions\" in `AGENTS.md` and \"Which copies must match\" in `.claude/docs/architecture-skills.md`. The drift spec guards the byte equality.\n3. Before the `cp`, I'd compare the two files so it doesn't overwrite a change made only in the dogfood copy. Commit the template, both copies and the `fileHashes` in `.saasfoundry.json` together.\n4. I'd first ask for the ticket number if none exists: the work belongs in that ticket's worktree and branch, and these commands run there (the session reports `main`, in the shared checkout). Nothing was run here.",
+          "costUsd": 0.1457524,
+          "durationMs": 13908,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "a77437591a5d23b938c0161a669df540d625ffad"
+    },
+    {
+      "id": "ag-shell-calls-one-command",
+      "skill": "instructions",
+      "core": true,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            "git status",
+            "git diff -- src/export.ts src/export.spec.ts",
+            "git add src/export.ts src/export.spec.ts",
+            "git diff --cached --stat",
+            "git commit -m \"feat(#42): add CSV export\" -m \"Add the CSV export in src/export.ts and cover it in src/export.spec.ts.\"",
+            "git push -u origin feature/42-export-csv",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft"
+          ],
+          "filesRead": [".claude/skills/sf-git-commit/SKILL.md", ".claude/skills/sf-git-create-pr/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rules: commits follow `type(#N): description`, only your two files are staged, each call is one command, and the draft PR goes through the guarded `create-pr`, not raw `gh pr create`. The commit text is provisional until I've read the diff.\nAsk first: which build, lint and test commands validate this? I found no `package.json` and `AGENTS.md` lists none, so no tests are in the plan and I wouldn't claim any passed.\nLimits: the Skill call for `sf-git-create-pr` was denied, so I read its file instead. I also didn't find `src/export*`, and nothing was run.\nIf a guard, the push or `gh` fails, I'd stop and report it without bypassing. I wouldn't run `ready-pr`, merge or move the ticket.",
+          "costUsd": 0.1859562,
+          "durationMs": 19905,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            "git status",
+            "git diff HEAD -- src/export.ts src/export.spec.ts",
+            "git add src/export.ts src/export.spec.ts",
+            "git diff --cached --stat",
+            "git commit -F /tmp/commit-msg-42.txt",
+            "git push -u origin feature/42-export-csv",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft"
+          ],
+          "filesRead": [
+            ".claude/skills/sf-git-commit/SKILL.md",
+            ".claude/skills/sf-git-create-pr/SKILL.md",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/statuses/2-in-progress.md",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "Rules: stage only your two files (not the `git add .` of `sf-git-commit`, as the harness files were untracked at session start); commit as `type(#42): description`, with an explanatory body written from the diff into the `-F` file (likely `feat(#42): add CSV export`).\nPR: use the guarded `create-pr 42 --draft`, not raw `gh pr create`; it targets `develop`, and I would not run `ready-pr`, merge or set any bypass.\nIf a hook, the push or the CLI refuses, I stop and report it. Nothing to ask first; I haven't run any tests, and `AGENTS.md` names no test command.",
+          "costUsd": 0.1713015,
+          "durationMs": 14734,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "git status --short",
+            "git diff -- src/export.ts src/export.spec.ts",
+            "git add src/export.ts src/export.spec.ts",
+            "git diff --cached --stat",
+            "git commit -F /tmp/commit-42-message.txt",
+            "git push -u origin feature/42-export-csv",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft"
+          ],
+          "filesRead": [
+            ".claude/skills/sf-git-commit/SKILL.md",
+            ".claude/skills/sf-git-create-pr/SKILL.md",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/statuses/3-ai-testing.md",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "I'd write the message file after reading the diff: subject `feat(#42): …` (`fix` or another allowed type if the diff shows that), then a body explaining the change. Only your two files are staged.\nThe PR goes through the guarded `create-pr 42 --draft`, not `gh pr create`: it targets `develop` and adds the `Resolves #42` line. I won't run `ready-pr` or move the ticket.\nThe Skill call for `sf-git-create-pr` was denied, so I read its file instead. This plan doesn't run tests, and `AGENTS.md` lists no test command; they're still due in AI Testing.\nNothing to ask first. If the push or a guard fails, I'd stop and report it rather than bypass it.",
+          "costUsd": 0.107129,
+          "durationMs": 16826,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ag-consent-not-asked",
+      "skill": "instructions",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 42"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "`delegation: not-asked` means I ask you once before starting #42: **may tickets be built by background agents, each in its own worktree?** Only your own reply counts as consent, so the approved plan doesn't.\nI stop after that read-only check: no status move, branch, worktree or route until you answer.\nIf yes, I run `sf agents delegation allow` and hand #42 to a background agent, routed as `multi-file-feature`. If no, I run `sf agents delegation decline` and build it here in its own worktree.\nEither way, the manifest change is committed on #42's branch, not directly on `develop`.",
+          "costUsd": 0.1572369,
+          "durationMs": 7434,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 42"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "`delegation: not-asked`, so I'd ask you once, before any branch, worktree, status move or routing: **\"May tickets be built by background agents, one worktree each?\"** Only your reply records consent (`sf agents delegation allow` or `decline`), and I commit that manifest change on #42's branch.\nIf yes, #42 (medium) goes to one background agent in its own worktree, routed as `multi-file-feature` with `--record`; if no, I build it here, in a separate worktree off `origin/develop`.",
+          "costUsd": 0.1370076,
+          "durationMs": 10938,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 42"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "`delegation: not-asked` means I ask you once before building #42, so I stop after this read: no status move, branch or worktree yet.\n**Question:** may tickets be built by background agents, one worktree each? #42 is medium, so it would go to one agent as `multi-file-feature`, from In progress to the end of AI Testing, ending in a draft PR.\nOnly your reply counts as consent. I then record it with `sf agents delegation allow` or `decline` and commit that manifest change on #42's branch.\nIf you decline, I build #42 myself in its own worktree cut from `origin/develop`, one ticket at a time.",
+          "costUsd": 0.1303622,
+          "durationMs": 9335,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ag-trivial-change-own-worktree",
+      "skill": "instructions",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 51",
+            ".claude/skills/sf-workflow/workflow-cli.sh get-complexity 51",
+            "git fetch origin",
+            "git worktree add ../fixture-solo-51 -b feature/51-readme-typo origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 51 \"In progress\"",
+            "git -C ../fixture-solo-51 add README.md",
+            "git -C ../fixture-solo-51 commit -m \"docs(#51): fix README typo\"",
+            "git -C ../fixture-solo-51 push -u origin feature/51-readme-typo",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 51 \"AI testing\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/1-backlog.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "A one-line typo is trivial, so I build it in this session with no delegated agent, but still in its own worktree; the primary checkout stays on `develop`.\nThis assumes #51 already has a complexity label and your \"start the work\" confirms pickup. If the label is missing, I stop after `get-complexity`, suggest `low`, and run `retag 51 low` only once you agree.\nIf `gh`, fetch or push fails, I stop and report it. After the last command, I follow the AI Testing status document for the test plan, report and draft PR.",
+          "costUsd": 0.1978366,
+          "durationMs": 14096,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 51",
+            ".claude/skills/sf-workflow/workflow-cli.sh get-complexity 51",
+            "git fetch origin",
+            "git worktree add ../fixture-solo-51 -b feature/51-fix-readme-typo origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 51 \"In progress\"",
+            "git -C ../fixture-solo-51 add README.md",
+            "git -C ../fixture-solo-51 commit -m \"docs(#51): fix README typo\"",
+            "git -C ../fixture-solo-51 push -u origin feature/51-fix-readme-typo"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/1-backlog.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- A one-line typo in one file is trivial, so I build it in this session even with `delegation: allowed`, but in its own worktree; the primary checkout stays on `develop`. The README edit happens in that worktree, between `update-status` and `add`.\n- If `get-complexity` prints `(none)`, I stop before `update-status`, suggest `low`, and run `retag 51 low` only once you confirm. I take \"Start the work\" as your pickup confirmation.\n- If the ticket doesn't identify the typo clearly, I ask you which one it is. If `gh`, fetch or push fails, I stop and report it.\n- After the push come AI Testing (checks, test plan, report) and the draft PR; I haven't listed those commands here.",
+          "costUsd": 0.14461010000000002,
+          "durationMs": 15283,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 51",
+            ".claude/skills/sf-workflow/workflow-cli.sh get-complexity 51",
+            "git fetch origin",
+            "git worktree add ../fixture-solo-51 -b fix/51-readme-typo origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 51 \"In progress\"",
+            "git -C ../fixture-solo-51 add README.md",
+            "git -C ../fixture-solo-51 commit -m \"docs(#51): fix typo in README\"",
+            "git -C ../fixture-solo-51 push -u origin fix/51-readme-typo"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/1-backlog.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "A one-line typo is trivial, so I build it in this session despite `delegation: allowed`, in its own worktree; the primary checkout stays on `develop` (the README edit goes between the status move and `git add`).\n`update-status` needs a `complexity:` label: if `get-complexity` prints `(none)`, I stop there and ask you to confirm `low` before running `retag`.\nI would also stop and report if the ticket tool or `git fetch` fails, or if ticket #51 doesn't say which typo to fix and it isn't obvious.\nAfter the push come AI Testing, with its test plan and report, and the draft PR; I have left those commands out until I've read that status document.",
+          "costUsd": 0.046038800000000005,
+          "durationMs": 13926,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "a77437591a5d23b938c0161a669df540d625ffad"
+    },
+    {
+      "id": "ag-undeclared-agent",
+      "skill": "instructions",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf agents list --json"],
+          "filesRead": [".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- **Rules:** `AGENTS.md`, \"Preconditions first\" and \"Coding-agent identity and onboarding\". The host names the identity (`kimi`), and no hook runs the status for it. I have already read `.saasfoundry.json`: its shared `agents` list is `claude-code` and `codex`, so `kimi` is not in it (`agents list` also checks the local inventory).\n- **Ask first:** if `kimi` is undeclared there too, I'd report both inventories and ask you to pick one: add `kimi`, replace the set with agents you name, or change nothing. Only if you add or replace would I then ask local or shared; no `enable` or `replace` runs before that.\n- **Then:** I'd resolve any `fail` precondition. If `delegation:` reads `not-asked`, I'd ask once, before the first ticket, whether background agents may build tickets. Kimi has no guard or capture hook, so I'd apply those rules myself.",
+          "costUsd": 0.1136923,
+          "durationMs": 10931,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf agents list --json"],
+          "filesRead": [".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- Rule: `AGENTS.md`, \"Preconditions first\" and \"Coding-agent identity and onboarding\". The host explicitly says Kimi Code (`kimi`), but `.saasfoundry.json` declares only `claude-code` and `codex`. I would report the shared and local inventories and change nothing until you answer.\n- First question: add Kimi, replace the declaration with a set you name, or leave the project unchanged? Only if you choose add or replace would I then ask whether it is local or shared.\n- If the `delegation:` line reads `not-asked`, I would ask once, before the first ticket, whether background agents may build tickets. Kimi's documented lack of worktree support means it would still deliver tickets in-session and delegate only sub-tasks.\n- Kimi gets no guard or capture hooks here, so I would run the preconditions and follow the shell rules myself, and resolve any `fail` first.",
+          "costUsd": 0.0624978,
+          "durationMs": 9369,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf agents list --json"],
+          "filesRead": [".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rule: `AGENTS.md`, \"Coding-agent identity and onboarding\". The host says Kimi Code (`kimi`), but `.saasfoundry.json` declares only `claude-code` and `codex`. I'd report the shared and local inventories, then ask you to pick one: add `kimi`, replace the declaration with a named set, or change nothing. I'd ask local or shared scope only if you choose add or replace, and run no `enable` or `replace` before you answer.\nAny `fail` in the status gets resolved first; if its `delegation:` line reads `not-asked`, I'd also ask once, before the first ticket, whether background agents may build tickets.",
+          "costUsd": 0.06886110000000001,
+          "durationMs": 8995,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ag-failed-precondition",
+      "skill": "instructions",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-tool-github-projects/github-projects-cli.sh", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "1. Nothing to run yet: `.saasfoundry.json` has no `workflow.projectUrl`, and AGENTS.md says a `fail` precondition is resolved before any project action. Ticket commands are refused without a board.\n2. I wouldn't work around it with `gh issue create` or a hand edit of the manifest. No code or branch comes before the ticket exists.\n3. I'd report the failure and route you to its remediation in the status report, through `sf workflow`. I haven't checked the exact subcommand for attaching a board.\n4. I'd ask: do you have a GitHub Projects board to attach (send its URL), or should a new one be created under the `origin` owner? Creating one is outward-facing, so I need your go-ahead.\n5. Please also describe the feature; once the board is attached, I'd file the ticket in English through `github-projects-cli.sh create-ticket`.",
+          "costUsd": 0.1459497,
+          "durationMs": 12122,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-workflow/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "1. I run nothing yet: a `fail` precondition is resolved before any project action (`AGENTS.md`, \"Reading the project status\"), and `.saasfoundry.json` indeed has no `workflow.projectUrl`.\n2. No workaround: no `create-ticket`, no raw `gh issue create` that would leave the ticket off the board, no hand edit of the manifest, and no branch or code before the ticket exists.\n3. Please attach the board with `sf workflow`, following the remediation in the status report; it's your configuration step, and I won't drive its interactive prompts.\n4. I'd ask: do you already have a GitHub Projects board (send its URL), or does one need to be created? Is your `gh` login scoped for `project` and `repo`?\n5. Once the status check passes, I'll create the ticket in English with `workflow-cli.sh create-ticket`, after we agree on its title, type and complexity.",
+          "costUsd": 0.14124659999999997,
+          "durationMs": 8392,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-workflow/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "1. I would run nothing yet: `AGENTS.md` (\"Preconditions first\") says a `fail` precondition is resolved before any project action. `.saasfoundry.json` has `workflow.tool: github-projects` but no `workflow.projectUrl`, which the adapter needs.\n2. I would not work around it with `gh issue create` or a hand edit of the manifest, and no code or branch comes before the ticket (\"Ticket first, and an unreachable tool\").\n3. I would report the failure and ask you to attach the board through `sf workflow`, following the remediation `sf status` prints; `gh` needs the `project` and `repo` scopes.\n4. I would ask you: does a GitHub Projects board already exist (if so, what is its URL), or does one need to be created?\n5. Once the precondition passes, the ticket goes through `workflow-cli.sh create-ticket`, written in English, with its type and complexity confirmed with you.",
+          "costUsd": 0.0149609,
+          "durationMs": 7849,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ag-unreachable-remote",
+      "skill": "instructions",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "I'd run nothing yet. The rule in `AGENTS.md` (\"Ticket first, and an unreachable tool\") is to stop on a refused push, report it and let you choose, with no workaround of my own.\n\n**Blocker:** `git push origin feature/42-export-csv` failed with `Could not resolve host: github.com`, so ticket #42's three commits exist only locally, on no remote.\n\n**Which do you want?** (a) I wait and retry the same push; (b) you restore the network or DNS (or VPN/proxy) first, then I push; (c) I keep working locally on a branch you name and push as soon as the remote answers.\n\nUntil the push succeeds, I wouldn't open the draft PR or move #42 to AI Testing, whose pushed-commits guard needs the work on `origin`, and I wouldn't set any bypass.",
+          "costUsd": 0.1247421,
+          "durationMs": 4875,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "The rule is \"Ticket first, and an unreachable tool\" in `AGENTS.md`: when the remote is unreachable, stop and let you choose the workaround, so I run nothing yet, not even a retry.\nWhat I'd report: `git push origin feature/42-export-csv` failed with `Could not resolve host: github.com`, and three commits for #42 are only local: on no remote, and not delivered to any pull request.\nWhat I'd ask: should I (a) wait and retry once your network or DNS is back, (b) pause while you restore access, or (c) keep working locally on a branch you name, and push as soon as the remote answers?\nUntil the push succeeds, #42 can't move to AI Testing (pushed-commits guard), and I won't set a bypass.",
+          "costUsd": 0.07710380000000001,
+          "durationMs": 5004,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "I run nothing yet, per `AGENTS.md`, \"Ticket first, and an unreachable tool\": when the remote is unreachable, I stop, report, and let you choose, with no workaround or retry of my own.\nBlocker: `git push origin feature/42-export-csv` failed with `Could not resolve host: github.com`, so ticket #42's three commits exist only locally, on no remote.\nOptions: (a) wait, then retry the same push; (b) you restore network, DNS or access first; (c) I keep working locally on a branch you name and push as soon as the remote answers.\nWhich do you want? Until the push succeeds, #42 stays in its current status, because the pushed-commits guard blocks `→ AI Testing`, and I won't bypass it.",
+          "costUsd": 0.07770380000000002,
+          "durationMs": 5385,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "a77437591a5d23b938c0161a669df540d625ffad"
+    },
+    {
+      "id": "ag-route-fails",
+      "skill": "instructions",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            "git fetch origin",
+            "git worktree add ../fixture-solo-42 -b feature/42-<description> origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In progress\"",
+            "git -C ../fixture-solo-42 add <changed-files>",
+            "git -C ../fixture-solo-42 commit -m \"feat(#42): <description>\"",
+            "git -C ../fixture-solo-42 push -u origin feature/42-<description>",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"AI testing\"",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-pr 42 --draft"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "A failed route means I build #42 myself, sequentially, in its own worktree: no other agent CLI, background session, hand-picked model or retry to get around it.\nI'd tell you the route's error, and that my self-review is not an independent review, so your PR review is still needed.\nI'd ask you to confirm pickup of #42 if you haven't already; `status 42` must show it is ready, with a complexity label, and gives the `<description>` (use `fix/` and `fix(#42)` for a bug).\nEdits come before the commit; test, test-plan and report steps follow the status documents (`AGENTS.md` names no build or test commands, so I'd ask for them).",
+          "costUsd": 0.1823418,
+          "durationMs": 12440,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            "git fetch origin",
+            "git worktree add ../fixture-solo-42 -b feature/42-<description> origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In progress\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "A failed route means I build #42 myself, sequentially, in its own worktree (sf-workflow, \"Delegation routing: No routing\"). I won't pick a model or tier, invent a route id or start another agent CLI.\nI'd tell you the route failed, with its error, and that my self-review isn't an independent review, so your PR review is still needed. No question is needed to start.\nThese assume #42 is picked up, has a complexity label and an approved plan; `<description>` comes from its title (`fix/` for a bug). Build, test, push and draft PR follow, but `AGENTS.md` names no build or test commands yet.\nThe starting git snapshot shows no commits here. If the repository really is empty, `origin/develop` won't exist, and I'd stop and check with you before using `workflow-cli.sh bootstrap`.",
+          "costUsd": 0.13269809999999999,
+          "durationMs": 11498,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            "gh issue view 42 --comments",
+            "git fetch origin",
+            "git worktree add ../fixture-solo-42 -b feature/42-<description> origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In progress\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "A failed route means I build #42 myself, sequentially, in its own worktree. I won't pick a tier or model by hand, or start another agent CLI or background session.\nI'd tell you the route failed, with its error, and that my self-review isn't an independent review, so your PR review is still needed.\n`<description>` comes from the ticket title (`fix/42-…` for a bug). If the status shows that pickup or the plan isn't confirmed, or there's no complexity label, I'd ask you before the move to In progress.\nImplementation, tests, push and draft PR follow from the ticket's content, so they aren't listed. If `gh` or the fetch fails, I'd stop and report it.",
+          "costUsd": 0.0646769,
+          "durationMs": 11274,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ir-backend-crud-module",
+      "skill": "sf-integration-rules",
+      "core": true,
+      "host": "claude-code",
+      "fixture": "full-monorepo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf agents delegation status",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-ticket task \"Bootstrap the repository\" --complexity low",
+            ".claude/skills/sf-workflow/workflow-cli.sh bootstrap 1",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-ticket story \"Add an invoices API module restricted to account administrators\" --complexity medium",
+            "git fetch origin",
+            "git worktree add ../fixture-mono-2 -b feature/2-invoices-api origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 2 \"In progress\"",
+            "npm --prefix ../fixture-mono-2 install",
+            "npm --prefix ../fixture-mono-2 run db:setup:dev",
+            "npm --prefix ../fixture-mono-2 run dev:api",
+            "npm --prefix ../fixture-mono-2 run codegen",
+            "npm --prefix ../fixture-mono-2 run format",
+            "npm --prefix ../fixture-mono-2 run build",
+            "npm --prefix ../fixture-mono-2 run lint",
+            "npm --prefix ../fixture-mono-2 run type-check",
+            "npm --prefix ../fixture-mono-2 run test:unit",
+            "npm --prefix ../fixture-mono-2 run test:e2e",
+            "git -C ../fixture-mono-2 add -A",
+            "git -C ../fixture-mono-2 commit -F /tmp/invoices-commit.txt",
+            "git -C ../fixture-mono-2 push -u origin feature/2-invoices-api",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 2 \"AI testing\"",
+            "gh issue comment 2 --body-file /tmp/invoices-test-plan.md",
+            "npm --prefix ../fixture-mono-2 run test:full",
+            "gh issue comment 2 --body-file /tmp/invoices-test-report.md",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-pr 2 --draft",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 2",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 2 \"In review\""
+          ],
+          "filesRead": [
+            ".claude/skills/sf-integration-rules/SKILL.md",
+            ".claude/skills/sf-integration-rules/backend.md",
+            ".claude/skills/sf-integration-rules/topology.md",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/statuses/2-in-progress.md",
+            ".git/config",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "1. **Blocker:** the repo has no commit and `.git/config` has no remote. Only the two status reads can run now; the rest assumes you provide the GitHub remote and board, and approve the bootstrap (ticket numbers 1 and 2 are placeholders).\n2. **Rules:** ticket before code, one worktree per ticket, files written after \"In progress\" (including shared-type mirrors, Prisma model, RBAC seed and tests). If the ticket tool or remote fails, I stop and report it.\n3. **Ask first:** may a background agent build this (delegation, if unrecorded)? Is `medium` right, or `complex` (which adds a review)? May `db:setup:dev` **wipe and reseed the dev database**? It force-resets it.\n4. **Also ask:** which invoice fields and statuses, hard or soft delete, and may platform admins access invoices too? I'd scope every route and row to the account, including `:id` routes and the account id in a create body.\n5. `dev:api` runs in the background until the OpenAPI snapshot is written. The `sf-integration-rules` skill call was denied, so I read its files directly; nothing was run or changed.",
+          "costUsd": 0.4119421,
+          "durationMs": 39707,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-ticket task \"Bootstrap the repository\" --complexity low",
+            ".claude/skills/sf-workflow/workflow-cli.sh bootstrap <B>",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-ticket story \"Add an invoices module to the API (account administrators only)\" --complexity medium",
+            "git fetch origin",
+            "git worktree add ../fixture-mono-<N> -b feature/<N>-invoices-module origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status <N> \"In progress\"",
+            "npm install",
+            "npm run services:up",
+            "npm run db:setup:dev",
+            "npm run dev:api",
+            "npm run codegen",
+            "npm run format",
+            "npm run build",
+            "npm run lint",
+            "npm run type-check",
+            "npm run test:unit",
+            "npm run test:e2e",
+            "git -C ../fixture-mono-<N> status",
+            "git -C ../fixture-mono-<N> add apps packages",
+            "git -C ../fixture-mono-<N> commit -F <commit-message-file>",
+            "git -C ../fixture-mono-<N> push -u origin feature/<N>-invoices-module",
+            "gh issue comment <N> --body-file <test-plan-file>",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status <N> \"AI testing\"",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-pr <N> --draft",
+            "npm run test:full",
+            ".claude/skills/sf-workflow/workflow-cli.sh ai-status <N> \"Local CI\" success \"npm run test:full on <sha>: pass\"",
+            "gh issue comment <N> --body-file <test-report-file>",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr <N>",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status <N> \"In review\""
+          ],
+          "filesRead": [
+            ".claude/skills/sf-integration-rules/SKILL.md",
+            ".claude/skills/sf-integration-rules/backend.md",
+            ".claude/skills/sf-integration-rules/topology.md",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/statuses/2-in-progress.md",
+            ".claude/skills/sf-workflow/statuses/3-ai-testing.md",
+            ".saasfoundry.json",
+            "apps/api/package.json",
+            "package.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "Rules: ticket before code, a worktree per ticket, and no commits yet, so `bootstrap` must run before any invoice file is written; the module files go in after `update-status \"In progress\"`, and npm runs inside the worktree (`dev:api` in the background, stopped once `openapi.json` is written).\nAsk first: may I create these tickets and let `bootstrap` commit the setup, and may `db:setup:dev` wipe the dev database (it force-resets it)?\nAsk too: delegation is unrecorded, so may a background agent build it? If yes, I record the answer and brief that agent instead of building it myself.\nConfirm: invoice fields; whether \"account administrators\" means `account-admin` on their own account only (platform admins too?); and `medium` versus `complex`, since this touches authorization.\nThis is plan-only, so nothing was run; the Skill call was denied, so I read the skill files directly. Later steps assume each earlier one passes.",
+          "costUsd": 0.4662932,
+          "durationMs": 37287,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf agents delegation status",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-ticket task \"Bootstrap the repository\" --complexity low",
+            ".claude/skills/sf-workflow/workflow-cli.sh bootstrap <B>",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-ticket story \"Add an invoices module to the API (account administrators only)\" --complexity medium",
+            "git fetch origin",
+            "git worktree add ../fixture-mono-invoices -b feature/<N>-invoices-module origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status <N> \"In progress\"",
+            "npm install",
+            "npx prisma db push --schema apps/api/prisma/schema",
+            "npm run db:setup:dev",
+            "npm run dev:api",
+            "npm run codegen",
+            "npm run format",
+            "npm run build",
+            "npm run lint",
+            "npm run type-check",
+            "npm run test:unit",
+            "npm run test:e2e",
+            "git add apps/api apps/web/src/shared-types apps/web/src/shared-validation packages",
+            "git commit -m \"feat(#<N>): add invoices module restricted to account administrators\"",
+            "git push -u origin feature/<N>-invoices-module",
+            "gh issue comment <N> --body-file <test-plan.md>",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status <N> \"AI testing\"",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-pr <N> --draft",
+            "npm run test:full",
+            ".claude/skills/sf-workflow/workflow-cli.sh ai-status <N> \"Local CI\" success \"npm run test:full green on <sha>\"",
+            "gh issue comment <N> --body-file <test-report.md>",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr <N>",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status <N> \"In review\""
+          ],
+          "filesRead": [
+            ".claude/skills/sf-integration-rules/SKILL.md",
+            ".claude/skills/sf-integration-rules/backend.md",
+            ".claude/skills/sf-integration-rules/topology.md",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/statuses/2-in-progress.md",
+            ".claude/skills/sf-workflow/statuses/3-ai-testing.md",
+            ".saasfoundry.json",
+            "apps/api/package.json",
+            "apps/api/scripts/setup-db-dev.sh",
+            "package.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "I have not run or changed anything. This repository has no commit yet, so there is no `develop` branch to start from. The ticket and bootstrap steps therefore come before any file is written. `<B>` is the bootstrap ticket, `<N>` the invoices ticket, and `<PR>` isn't needed.\n\n\nRules: ticket before code, one worktree per ticket, `bootstrap` for an empty repository, and `backend.md` for the module (RBAC seed, `@ScopeFrom` or a service-side scope check, three shared copies, codegen). Commands from `npm install` on run in the worktree; `dev:api` runs in the background until the OpenAPI snapshot is written, then is stopped.\nAsk first: may tickets be built by background agents (not recorded; if yes, I record it and delegate), and is `medium` right or should RBAC make it `complex` (adds `examine.sh`)?\nAlso ask: OK to bootstrap (commits the whole setup to `main`), and to run `db:setup:dev`, which **erases the dev database**? Which invoice fields and statuses do you want?\nI couldn't load `sf-integration-rules` as a skill (permission denied), so I read its files directly; I also haven't checked that a remote and board are configured.",
+          "costUsd": 0.3776462,
+          "durationMs": 30512,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ir-frontend-page-and-hook",
+      "skill": "sf-integration-rules",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "full-monorepo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "npm install",
+            "npm run test:impact:frontend",
+            "npm run test:unit -w apps/web",
+            "npm run test:e2e -w apps/web -- invoices",
+            "npm run test:full"
+          ],
+          "filesRead": [
+            ".claude/skills/sf-integration-rules/SKILL.md",
+            ".claude/skills/sf-integration-rules/frontend.md",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/statuses/3-ai-testing.md",
+            ".saasfoundry.json",
+            ".saasfoundry/validation.json",
+            "apps/web/package.json",
+            "package.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "Rules: ticket first and in its own worktree (hence `npm install`); affected checks while working, then `test:full` once, at the end of AI Testing (`sf-workflow`, `.saasfoundry/validation.json`). Nothing was run; the Skill call was denied, so I read the skill files directly.\nAsk first: I found no invoice endpoint, model or client in `apps/` or `packages/`. Should this ticket add the backend (then also `npm run codegen`), or does the API live elsewhere? Which fields and which RBAC module?\nAlso: is there a ticket number, or should I create one labelled `ui`? You'd approve an HTML mockup before I build the visuals.\nThe page would follow `frontend.md`: lazy route under `PrivateOnlyRoute`, `useFetchInvoices`, `en`/`fr` `invoices.yml`, and an `invoices.spec.ts` e2e test.",
+          "costUsd": 0.3715367,
+          "durationMs": 23741,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "git fetch origin",
+            "git worktree add ../fixture-mono-<N> -b feature/<N>-invoices-page origin/develop",
+            "npm ci",
+            "npm run test:impact:guards",
+            "npm run test:impact:frontend",
+            "npm run test:unit -w apps/web",
+            "npm run test:e2e -w apps/web -- tests/e2e/specs/invoices.spec.ts",
+            "npm run test:full"
+          ],
+          "filesRead": [
+            ".claude/skills/sf-integration-rules/SKILL.md",
+            ".claude/skills/sf-integration-rules/frontend.md",
+            ".claude/skills/sf-integration-rules/topology.md",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".saasfoundry.json",
+            ".saasfoundry/validation.json",
+            "apps/web/package.json",
+            "package.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "1. Ticket first: only `status` runs now. The rest waits for ticket `<N>` and runs in its worktree from `npm ci` on; `test:full` runs once, at the end of AI Testing, and its e2e part may need the API's test database.\n2. I found no \"invoice\" in `apps/` or `packages/` code. The `GET /invoices` in `frontend.md` is only an example, so should this ticket include the backend (model, endpoint, RBAC, codegen, plus backend checks), or does the API live elsewhere?\n3. May I create the ticket, or do you have a number? It would be a `ui` ticket, so you approve an HTML mockup before I build the visuals. Which module permission should guard the page?\n4. The git snapshot shows no commits and everything untracked, so `origin/develop` may not exist. If the fetch or worktree step fails, I'll stop and report it. If `status` says delegation is `not-asked`, I'll ask about that too.\n5. The `sf-integration-rules` skill call was denied, so I read its files directly. Nothing was run or changed.",
+          "costUsd": 0.3357204,
+          "durationMs": 26519,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "npm run build",
+            "npm run lint",
+            "npm run type-check",
+            "npm run test:unit -w apps/web",
+            "npm run test:e2e -w apps/web -- invoices.spec.ts",
+            "npm run test:full"
+          ],
+          "filesRead": [
+            ".claude/skills/sf-integration-rules/SKILL.md",
+            ".claude/skills/sf-integration-rules/frontend.md",
+            ".claude/skills/sf-integration-rules/topology.md",
+            ".claude/skills/sf-workflow/statuses/2-in-progress.md",
+            ".saasfoundry.json",
+            ".saasfoundry/validation.json",
+            "apps/web/package.json",
+            "package.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "Only the first command runs now. The rest check the finished page, with `test:full` run once at AI Testing; nothing has been run, and the `sf-integration-rules` skill call was denied, so I read its files directly.\nRules: ticket first, `frontend.md` (private page, hook, `en`/`fr` YAML, e2e spec), and the In Progress checks (build, lint, affected tests).\nBlockers: I found no invoice code or `GET /invoices` in `apps/` or `packages/`. Should the ticket include the API (model, permission, endpoint, `npm run codegen`), or do you have another data source?\nGit status shows no commits, so which ticket number should this use, or may I create one? The first ticket needs `workflow-cli.sh bootstrap <N>` before any worktree.\nAlso: may background agents build tickets (I saw no recorded answer in what I read)? As UI work, you'd see a one-file HTML mockup before the visual part.",
+          "costUsd": 0.2419053,
+          "durationMs": 27083,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ir-shared-type-monorepo",
+      "skill": "sf-integration-rules",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "full-monorepo",
+      "passed": true,
+      "passRuns": 2,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-integration-rules/SKILL.md", ".claude/skills/sf-integration-rules/topology.md", "packages/shared-types/README.md", "packages/shared-types/src/index.ts"],
+          "forbiddenHits": [],
+          "answer": "Nothing to run: this is a question. Add it in `packages/shared-types/src/invoice.ts` (canonical) with byte-identical copies in `apps/api/src/shared-types/` and `apps/web/src/shared-types/`, export it from all three `index.ts`, and import via `@shared-types/index` (`AGENTS.md`, \"Vendored mirrors\"; `topology.md`).\nKeep in step: later edits go to all three. A Zod schema for it goes in `shared-validation` (also three copies); if API DTOs or responses expose it, run `npm run codegen` and commit the OpenAPI snapshot with the generated client.\nDon't count on a guard: the guidance's drift tests belong to the SaaSFoundryAI CLI repo, and I found no local shared-types check, so compare the copies yourself.\nNothing to ask for this answer; to implement it, I'd need a ticket first. The `sf-integration-rules` skill call was denied, so I read its files directly.",
+          "costUsd": 0.1502189,
+          "durationMs": 17328,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-integration-rules/topology.md", ".saasfoundry.json", "packages/shared-types/README.md", "packages/shared-types/src/index.ts"],
+          "forbiddenHits": [],
+          "answer": "Nothing to run: this is a placement question, and the project's guidance answers it without changing anything.\nPut it in `packages/shared-types/src/invoice.ts` (canonical), with byte-identical copies in `apps/api/src/shared-types/` and `apps/web/src/shared-types/`, and add `export * from './invoice'` to all three `index.ts`. Both apps import it from `@shared-types/*`, not the package name (`AGENTS.md`, \"Vendored mirrors\"; `sf-integration-rules/topology.md`; your manifest says monorepo).\nDon't rely on a test to catch a missed copy: the drift test the docs cite belongs to the SaaSFoundryAI CLI repo, and I found no such test file here, so compare the three yourself.\nAlso: a Zod schema for it goes in `shared-validation` (three copies too); if an endpoint exposes it, run `npm run codegen` and commit the OpenAPI snapshot with the generated client; `npm run build` refreshes the package's `dist`.\nNothing to ask for this answer; before any code is written, there must be a ticket, with its own branch and worktree from `develop`.",
+          "costUsd": 0.1558442,
+          "durationMs": 17764,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": false,
+          "reasons": [
+            {
+              "code": "READ_MISSING",
+              "message": "none of sf-integration-rules/topology.md was read"
+            }
+          ],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-integration-rules/SKILL.md", "packages/shared-types/README.md", "packages/shared-types/src/index.ts"],
+          "forbiddenHits": [],
+          "answer": "1. Nothing to run: this is a question. Put `InvoiceStatus` in a domain file such as `packages/shared-types/src/invoice.ts`, since it's a hand-written type both apps use (`AGENTS.md` decision matrix; package README, which also allows enums).\n2. Keep three copies identical: that file and its `export * from './invoice'` line in `index.ts`, repeated in `apps/api/src/shared-types/` and `apps/web/src/shared-types/`. Apps import it from `@shared-types/*`, not from the workspace package.\n3. The README's drift test and `scaffolds/...` paths belong to the SaaSFoundryAI CLI repo, so don't count on them here. A Zod schema goes in `packages/shared-validation` (also mirrored); runtime constants, such as a list of statuses, go in `packages/shared-config` (no mirror).\n4. The `sf-integration-rules` skill call was denied and I didn't open its files, so this rests on `AGENTS.md`, the package README, `index.ts` and file listings.\n5. Nothing to ask for this answer. If you want it added, I need a ticket number first (\"Ticket first\"), and the work goes in its own worktree.",
+          "costUsd": 0.0352466,
+          "durationMs": 12796,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ir-shared-type-multirepo",
+      "skill": "sf-integration-rules",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "full-multirepo",
+      "passed": true,
+      "passRuns": 2,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network"],
+          "filesRead": [".claude/skills/sf-integration-rules/SKILL.md", ".claude/skills/sf-integration-rules/topology.md", ".saasfoundry.json", "src/shared-types/index.ts"],
+          "forbiddenHits": [],
+          "answer": "Put it in `src/shared-types/invoice.ts` here, add `export * from './invoice'` to `src/shared-types/index.ts`, and make an identical copy and export in the web repository's `src/shared-types/`. If you also need a Zod schema, it goes in `src/shared-validation/invoice.ts` in both repositories.\nThis is multirepo (`projection.kind: multirepo-child`, although `structure` reads `cli`), so there is no `packages/` or canonical copy (`AGENTS.md` \"Shared layers\"; `sf-integration-rules/topology.md`, read directly because the Skill call was denied).\nNothing keeps the two copies in step locally, so change them together; the command above only confirms the topology and has not been run.\nNothing to ask for this question. Before any edit, I'd need a ticket number for each repository's change (or the one that covers both), then work in a worktree off `develop`.",
+          "costUsd": 0.1595642,
+          "durationMs": 13138,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": false,
+          "reasons": [
+            {
+              "code": "ANSWER_MISSING",
+              "message": "the answer says none of inlined | inline | vendored | per side | each app | each repo | stand-alone | standalone"
+            }
+          ],
+          "commands": ["sf status --agent-friendly --no-network"],
+          "filesRead": [".claude/skills/sf-integration-rules/SKILL.md", ".claude/skills/sf-integration-rules/topology.md", ".saasfoundry.json", "src/shared-types/index.ts"],
+          "forbiddenHits": [],
+          "answer": "Put it in `src/shared-types/invoice.ts` here and an identical copy at the same path in the web repo, exporting it from each `index.ts` (`export * from './invoice'`); don't create `packages/` or import from it.\nRule: `AGENTS.md` \"Shared layers\" and `sf-integration-rules/topology.md`, multirepo case; `.saasfoundry.json` has `projection.kind: multirepo-child` (its `structure` says `cli`). The status command only confirms this.\nNothing keeps the two repos in sync locally, so change both together. A Zod schema, if needed, goes in `src/shared-validation/invoice.ts` in both.\nThe Skill call was denied, so I read the skill files directly. Before any edit I'd ask for the ticket number(s) for both repos and the status values; each change gets its own worktree from `develop`.",
+          "costUsd": 0.0890718,
+          "durationMs": 12838,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network"],
+          "filesRead": [".claude/settings.json", ".claude/skills/sf-integration-rules/SKILL.md", ".claude/skills/sf-integration-rules/topology.md", ".saasfoundry.json", "src/shared-types/index.ts"],
+          "forbiddenHits": [],
+          "answer": "Put it in `src/shared-types/<domain>.ts` (e.g. `invoice.ts`) here and in an identical copy in the web repo, exporting it from each `index.ts`. There is no `packages/` or canonical copy; a Zod schema for it would go in `src/shared-validation/` in both.\nBasis: `AGENTS.md` \"Shared layers\", `topology.md` \"Multirepo\" and the manifest (`multirepo-child`, app `api`). Nothing syncs the two repos locally, so drift can go unnoticed until runtime.\nThe command only confirms topology: no session-start report is visible here. The Skill call for `sf-integration-rules` was denied, so I read its files directly.\nBefore any edit, I'd ask for the ticket number (or to create one) and the web repo's location. Each repo needs its own branch from `develop`, in a worktree, and its own PR.",
+          "costUsd": 0.0972035,
+          "durationMs": 16733,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "srs-respawn-version",
+      "skill": "sf-srs",
+      "core": true,
+      "host": "claude-code",
+      "fixture": "harness-srs",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf srs browse --parent 00000000-0000-4000-8000-000000000000",
+            "gh issue view 10 --json title,state,milestone",
+            "sf srs spawn --epic <projects-feature-url> --version \"v1 — MVP\" --ticket 10 --dry-run",
+            "sf srs spawn --epic <projects-feature-url> --version \"v1 — MVP\" --ticket 10"
+          ],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Re-running `spawn` on the same version reuses existing Stories, including closed #14 (not reopened); `<projects-feature-url>` is the \"Projects\" page that `browse` returns.\nI run the real spawn only if the dry run shows exactly one new Story (FR-PRJ-005) under #10, with FR-PRJ-001 to 004 skipped; any `blocked` line or exit 10 means I stop and report it.\nBefore the real spawn I'd ask which release FR-PRJ-005 ships in: I'd add `--milestone <name>` (#10's current one is only a suggestion, and an existing Epic keeps its own).\nIf the FR page states no complexity, I'd also ask for one and add `--complexity <level>`. No reconciliation plan or `transition-drafting` is needed, since there is no drafting ticket.",
+          "costUsd": 0.19870929999999998,
+          "durationMs": 14366,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf srs browse --parent 00000000-0000-4000-8000-000000000000",
+            "sf srs spawn --ticket 10 --epic <Projects-feature-url-from-browse> --version https://notion.invalid/projects-v1 --dry-run",
+            "sf srs spawn --ticket 10 --epic <Projects-feature-url-from-browse> --version https://notion.invalid/projects-v1"
+          ],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rule: re-running `spawn` on the same version reuses existing Stories (closed #14 is not reopened) and creates only the missing one; `--ticket 10` keeps it under the existing Epic.\nI run the real spawn only if the dry run shows FR-PRJ-005 as the only new Story and FR-PRJ-001–004 as existing and skipped, with no relinking; on a `blocked` line (exit 10) or anything else, I stop and report.\nI omit `--milestone` because it would also assign the reused Stories to that milestone, which touches existing tickets.\nNothing to ask before the dry run. Afterwards, I'd ask whether the new Story belongs in a release, and which complexity to give it if its FR page states none (it needs one to leave Backlog).",
+          "costUsd": 0.14031180000000001,
+          "durationMs": 16703,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf srs spawn --ticket 10 --epic https://notion.invalid/projects-v1 --dry-run", "sf srs spawn --ticket 10 --epic https://notion.invalid/projects-v1"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Re-running spawn on the same version reuses existing Stories, including closed #14 (not reopened), so only FR-PRJ-005 should be created under #10; no reconciliation plan or manual ticket creation is needed.\nThe dry run must show 1 new (FR-PRJ-005) and 4 existing; on a `blocked` line, exit 10 or any other new Story, I stop and report it.\nBefore the real run, I'd ask which release the new Story ships in, if any; I'd add `--milestone <name>` to both commands and rerun the dry run, rather than guess the name.\nIf the FR page states no complexity, I'd also ask which level to pass as `--complexity <level>`.\nI haven't verified that `--epic` accepts the version URL directly; if refused, I'd use the feature page URL with `--version \"v1 — MVP\"`.",
+          "costUsd": 0.14412219999999998,
+          "durationMs": 15809,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "srs-spawn-with-milestone",
+      "skill": "sf-srs",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-srs",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf srs spawn --epic https://notion.invalid/projects --version \"v1 — MVP\" --milestone \"v1.0.0\" --dry-run",
+            "sf srs spawn --epic https://notion.invalid/projects --version \"v1 — MVP\" --milestone \"v1.0.0\""
+          ],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".claude/skills/sf-workflow/statuses/2c-spawning.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "I rely on `sf-srs`: `--version` picks one version of the feature, and `--milestone \"v1.0.0\"` puts its Stories (and a newly created Epic) in that release, so no ticket is assigned by hand. There's no `--ticket`, so spawn creates the version Epic or adopts the one from an earlier run; an adopted Epic keeps its existing milestone.\nThe real spawn runs only if the status has no blocking `fail` and the dry run is clean. On exit 10 (ambiguous match or reparenting) I stop and show you the blocked lines.\nNothing to ask up front. If this closes an `srs:*` drafting ticket, give me its number: I'd then use `workflow-cli.sh transition-drafting <N> spawning` with a verified `--reconciliation-plan`. Stories reported without a complexity need your level before they leave Backlog.",
+          "costUsd": 0.1924642,
+          "durationMs": 12418,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf srs spawn --epic https://notion.invalid/projects --version \"v1 — MVP\" --milestone \"v1.0.0\" --dry-run",
+            "sf srs spawn --epic https://notion.invalid/projects --version \"v1 — MVP\" --milestone \"v1.0.0\""
+          ],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rule: `sf-srs` spawns one version, never the whole feature; `--milestone \"v1.0.0\"` creates or reuses the release, and spawn creates or adopts the Epic « Projects - v1 — MVP » (no `--ticket`, no hand-made tickets).\nThe real run follows only if status has no blocking `fail` or `warn` and the dry run shows no `blocked` line (exit 10); a ticket tool or Notion error stops the work and I report it.\nNothing to ask up front. If this closes an `srs:drafting` ticket, I would use `workflow-cli.sh transition-drafting <N> spawning` with a verified `--reconciliation-plan` instead; the same applies if existing work may already cover some FRs.\nAn adopted, existing Epic keeps its own milestone (the Stories still join v1.0.0). I would report that, plus any Story left without a complexity label, and ask you for its level.",
+          "costUsd": 0.15513739999999998,
+          "durationMs": 13102,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf srs spawn --epic https://notion.invalid/projects --version \"v1 — MVP\" --milestone \"v1.0.0\" --dry-run",
+            "sf srs spawn --epic https://notion.invalid/projects --version \"v1 — MVP\" --milestone \"v1.0.0\""
+          ],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "I rely on Rule 8 and the `sf-srs` spawn rules: tickets come only from the spawner, and `--milestone` assigns the release, so there is no hand-made ticket or later assignment.\nThe real run follows only if status has no blocking `fail` and the dry run shows no `blocked` line (exit 10) or surprise; otherwise I stop and report, with no bypass.\nNothing to ask up front, since you named the release. I omit `--ticket`, so spawn creates the version Epic or adopts its earlier one; if you have a hand-made Epic or an `srs:*` drafting ticket for this, tell me its number.\nA drafting ticket would go through `workflow-cli.sh transition-drafting <N> spawning` with a verified reconciliation plan instead; any Story reported without a complexity gets flagged to you.",
+          "costUsd": 0.1469097,
+          "durationMs": 10791,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "srs-new-version-of-existing-feature",
+      "skill": "sf-srs",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-srs",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs next-ids --feature https://notion.invalid/reports", "sf srs validate --spec ./spec.json", "sf srs write --spec ./spec.json"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2a-ai-drafting.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rules: take the version number and FR ids from `next-ids` just before writing `spec.json`: one `epic` candidate \"v3 — Exports\" (`parentId` = the feature URL, with `version.changes`) and two `fr` candidates (`parentEpicId` = its logical id), in `language.srs` = `en`.\nAsk first: what are the two requirements (behaviour, acceptance criteria, priority, complexity)? I would not invent them.\n`write` publishes to Notion, so it runs only after you approve the draft; if `next-ids` shows v3 or those ids are taken, I stop and tell you.\nAlso ask: is there an `srs:*` drafting ticket? If so, `.claude/skills/sf-workflow/workflow-cli.sh transition-drafting <ticket> ai-draft --spec ./spec.json` replaces the `write` line, and I post the page links on the ticket.",
+          "costUsd": 0.2234317,
+          "durationMs": 14838,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs next-ids --feature https://notion.invalid/reports", "sf srs write --spec ./spec.json"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- **Ask first:** what are the two requirements (behaviour, acceptance criteria, priority, complexity), and what does v3 change compared with v2? I won't invent them, and `write` waits until you've approved the drafted spec.\n- **Spec shape:** one `epic` version candidate (`parentId` = the Reports URL, title `v3 — Exports`, `version.changes`), then two `fr` candidates pointing to it through `parentEpicId`, all written in English (`language.srs`).\n- **Ids:** the version number and UR/FR/DS/TC/NFR ids come from `next-ids`, run right before writing the spec. If it shows `v3` is already taken, or `write` refuses the batch (exit 2), I stop and tell you.\n- **Not included:** no `spawn`, since you didn't ask for tickets or a milestone. If `write` fails partway (exit 6), I report the pages in `rollbackHint` before retrying.",
+          "costUsd": 0.13326860000000001,
+          "durationMs": 10686,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs next-ids --feature https://notion.invalid/reports", "sf srs write --spec ./spec.json"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Per `sf-srs`: take the version number and UR/FR/DS/TC/NFR ids from `next-ids` just before writing `spec.json`; `write` exits 2 if the feature already holds one (including `v3`).\nThe spec is a `version` epic (`epic.parentId` = the feature URL, `version.changes`) plus two `fr` candidates with `parentEpicId` set to its logical id, all in English (`language.srs`).\nBefore writing the spec, I'd ask what the two FRs are (title, behaviour, acceptance criteria, priority, complexity) and what v3 changes; I won't invent them.\nI'd show you the draft and run `write` only on your approval, since it publishes to Notion; no `spawn`, as you didn't ask for tickets.",
+          "costUsd": 0.1330522,
+          "durationMs": 10022,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "srs-conformance-normalize",
+      "skill": "sf-srs",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-srs",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf srs normalize --feature https://notion.invalid/billing"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "This relies on the `sf-srs` rule for `feature-without-version`: `normalize` writes nothing without `--apply`, so this command is only the dry run, on « Billing » alone.\nI would then read you the planned moves and ask: \"Do you approve applying this to « Billing »?\"\nOnly on your yes would I re-run it with `--apply`; that command is left out of the plan until then. Pages are moved, not recreated, so ids, URLs and comments are kept.\nNothing was run here; the manifest confirms the SRS module is enabled with the Notion backend.",
+          "costUsd": 0.1750161,
+          "durationMs": 7143,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs normalize --feature https://notion.invalid/billing"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- **Rule:** sf-srs, \"Answering a conformance finding\": for `feature-without-version`, run `normalize` as a dry run first. It writes nothing without `--apply`.\n- **Then ask:** I'd show you the planned page moves and ask: \"Apply this to « Billing » only?\" Only on your yes would I run the same command with `--apply`.\n- **If it fails:** if a precondition fails or Notion is unreachable, I'd stop and report the command and its error, with no workaround.",
+          "costUsd": 0.1293357,
+          "durationMs": 8496,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs normalize --feature https://notion.invalid/billing"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "I rely on the `sf-srs` rule for `feature-without-version`: `normalize` writes nothing without `--apply`, so the second command is a dry run, limited to « Billing ».\nI would then read you its plan (the existing pages are moved, so ids, URLs and comments are kept) and ask: \"Do you approve applying this to « Billing »?\"\nOnly after your yes would I run `sf srs normalize --feature https://notion.invalid/billing --apply`.\nIf `sf status` reports a failed SRS precondition, such as Notion access, I would stop and report it before running `normalize`.",
+          "costUsd": 0.1300771,
+          "durationMs": 9009,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "srs-update-fr-in-place",
+      "skill": "sf-srs",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-srs",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs apply-update --patch .srs-audit/fr-aex-014.json --dry-run"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Before the dry run, I would write this patch file: `{\"kind\":\"update-fr\",\"frId\":\"FR-AEX-014\",\"changes\":{\"acceptanceCriteria\":{\"add\":[\"The duration is rounded up to the next whole minute.\"]}},\"change\":\"Amends FR-AEX-014 — duration rounded up to the minute\"}`.\nRule (`sf-srs`, \"Changing an existing FR\"): amend the FR in place with `update-fr`, in English, never as an appended item; adding a criterion leaves the existing text untouched.\nI would then show you the old → new plan and ask: accept, edit or reject? Only on accept would I run the same command without `--dry-run`.\nI would also ask whether an exact minute stays unchanged (my assumption) and whether the description or a later version should record this. The Story already spawned keeps its old text, so I would name it for you to edit.",
+          "costUsd": 0.19291179999999997,
+          "durationMs": 15037,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", ".claude/skills/sf-srs/scripts/detect-eval-signals.sh --rules", "sf srs apply-update --dry-run < /tmp/fr-aex-014-update.json"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rule: this is an `update-fr` on FR-AEX-014 (`acceptanceCriteria.add`: \"The duration is rounded up to the next whole minute\", written in English), never an appended design item; the patch file is written with the Write tool.\nI stop after the dry run and show you the old → new plan and change line; only on your `accept` would I run `sf srs apply-update < /tmp/fr-aex-014-update.json` (edit or reject also possible).\nI'd ask: which duration is rounded, and before or after any comparison that uses it? Should a later version than the FR's own record the change (`versionPageId`)?\nA Story already spawned from this FR keeps its old text; I'd name it from `followUps` for you to edit by hand. Nothing has been run or verified here, including the FR's current wording.",
+          "costUsd": 0.1301984,
+          "durationMs": 11707,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", ".claude/skills/sf-srs/scripts/detect-eval-signals.sh --rules", "sf srs apply-update --patch /tmp/fr-aex-014.json --dry-run"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "1. This is an `update-fr` on FR-AEX-014, never a new item. Before the dry run, I'd write the patch file in English: `acceptanceCriteria: {add: [\"The duration is rounded up to the next whole minute\"]}`, plus a `change` line.\n2. Guard (sf-srs): I'd show you the dry run's old → new plan and wait for `accept / edit / reject`. Only on accept would I run `sf srs apply-update --patch /tmp/fr-aex-014.json`, so it isn't listed above.\n3. I'd ask: should the change be recorded on the version that holds the FR (the default) or on a later one (`versionPageId`)? If the dry run shows the description contradicts the new rounding, I'd amend it too.\n4. A Story already spawned from this FR keeps its old text; I'd name it from `followUps` for you to edit by hand. Nothing has been run or verified, including the FR's current text.",
+          "costUsd": 0.1428606,
+          "durationMs": 12969,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "srs-eval-freshness",
+      "skill": "sf-srs",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-srs",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs eval --review-packet .srs-audit/review-packet.json"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rule: `sf-srs` freshness eval. It compares the Notion FR pages with the code, and I would then review the packet by hand, reading the code for stacks the scanner doesn't parse. Exit 1 means drift, not a crashed run.\nI'd ask nothing first. The check leaves the SRS untouched (it only writes the local packet); any fix via `sf srs apply-update` gets a dry run and waits for your accept.\nIf `status` fails a precondition, or eval can't reach Notion (the root URL is `notion.invalid`, which looks like a placeholder), I'd stop and report the error, not judge freshness.\nThe score covers FRs only, not UR/DS/TC/NFR. I saw no application source in the partial file listing, so a low or empty score may say little about real drift.",
+          "costUsd": 0.19426939999999998,
+          "durationMs": 10025,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs eval --review-packet .srs-audit/review-packet.json"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "`.saasfoundry.json` has the SRS enabled on Notion with a root page, so I use `sf srs eval` per the `sf-srs` skill; a `fail` precondition from `sf status` gets fixed first.\nExit 0 means the score met the 80% threshold and 1 means drift; any other code is a failed check, which I'd report with its message, not call \"up to date\". The root URL (`notion.invalid`) looks like a placeholder, so that failure is likely.\nI'd then review the packet against the code for semantic mismatches and thin scanner coverage; UR, DS, TC and NFR are not scored. The packet file is the only local write.\nI'd ask nothing up front. Any SRS update (`sf srs apply-update`, dry run first) or ticket would wait for your approval.",
+          "costUsd": 0.1298029,
+          "durationMs": 9215,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs eval --review-packet .srs-audit/review-packet.json"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "I rely on `sf-srs` \"Freshness eval\": the manifest declares SRS enabled on Notion, so after a clean preflight, `eval` checks drift, and I then review the packet for matches or mismatches the script misses.\nIt changes nothing in the SRS or on the board, but writes the local packet file. Any `apply-update` or `normalize --apply` waits for your approval.\nNothing to ask first. If `sf status` shows a failing precondition, or Notion is unreachable (the root URL is `notion.invalid`), I stop and report the command and its error.\nExit 1 means drift. Exit 0 can also mean there were no FRs to evaluate, so I won't call the SRS up to date without checking the FR count; UR, DS, TC and NFR are not scored.",
+          "costUsd": 0.05382579999999999,
+          "durationMs": 10233,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "a77437591a5d23b938c0161a669df540d625ffad"
+    },
+    {
+      "id": "srs-draft-from-codebase",
+      "skill": "sf-srs",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-srs",
+      "passed": true,
+      "passRuns": 2,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs validate", "sf srs draft --from codebase --path src"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".claude/skills/sf-srs/data/clustering-rules.json", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "**Check first:** my file search showed no `src/` folder or application code here (the listing was truncated), so I'd ask where the code is before running the third command.\n**Rule:** `sf-srs` and `clustering-rules.json` require reviewing one Epic at a time (`accept / edit / reject / skip-area`), and nothing is written to Notion without your approval.\n**After the scan:** I'd read the source myself to fill scanner gaps, then propose the first feature → version → FRs, in English, with NFRs marked as needing your validation.\n**Later:** `sf srs write --spec <file>` runs only once you accept a cluster, so it isn't listed; no tickets are spawned.",
+          "costUsd": 0.2358201,
+          "durationMs": 19106,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs browse --parent 00000000-0000-4000-8000-000000000000", "sf srs draft --from codebase --path src"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".claude/skills/sf-srs/data/clustering-rules.json", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- **Check first:** I found no `src/` folder and no source files with the common code extensions I searched, so where is the code? The draft would exit 2 on a missing `src/`, so I'd stop there rather than invent requirements or scan another folder.\n- **Preconditions:** the backend and root page come from `.saasfoundry.json`, so I won't ask for them again or reinstall. A `fail` from status, or a failed browse (the URL is `notion.invalid`), stops the run and gets reported to you.\n- **Review rule:** if findings come back, I cluster them with `data/clustering-rules.json` (reading the code myself if the scan is thin) and show one Epic at a time: `accept / edit / reject / skip-area`.\n- **No write yet:** `sf srs write` runs only after you accept a cluster, with pages in English as feature → version → FR. I'd spawn no tickets unless you ask.",
+          "costUsd": 0.1728555,
+          "durationMs": 15117,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": false,
+          "reasons": [
+            {
+              "code": "STEP_MISSING",
+              "message": "no planned command, in order, matches {\"all\":[\"draft\",\"--from codebase\"]}"
+            }
+          ],
+          "commands": ["sf status --agent-friendly --no-network"],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "1. **There is no `src/` here:** my file searches found only harness files (skills, docs, config) and no application source, so I would not run `sf srs draft --from codebase --path src` yet.\n2. **First question:** where is the code (another checkout, branch or folder), and should this folder contain it? Please also confirm the Notion root, since `https://notion.invalid/fixture-srs` and its all-zero ID look like placeholders.\n3. **Once the code is there:** I would run `sf srs draft --from codebase --path src` (`sf-srs` skill), reading the source myself if the scanner doesn't cover its stack.\n4. **Guard:** I'd propose one Epic at a time (feature → version → FR, in English) and run no `sf srs write` until you accept it; nothing is inferred from the harness files.",
+          "costUsd": 0.17951299999999998,
+          "durationMs": 13878,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ghp-create-ticket-srs-project",
+      "skill": "sf-tool-github-projects",
+      "core": true,
+      "host": "claude-code",
+      "fixture": "harness-srs",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network", "sf srs browse --parent 00000000-0000-4000-8000-000000000000", "gh issue list --state all --search \"CSV export\""],
+          "filesRead": [
+            ".claude/skills/sf-srs/SKILL.md",
+            ".claude/skills/sf-tool-github-projects/SKILL.md",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/statuses/1-backlog.md",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "1. The project has an SRS backend, so a feature ticket is spawned from its FR page (workflow Rule 8). I won't hand-write it with `create-ticket`, and `--bypass-srs` is not for feature requirements.\n2. These commands only read: they check preconditions and look for an existing feature page or ticket. Nothing is written to Notion or GitHub yet.\n3. Next I'd draft the FR in English in the conversation, as a new version of the project-list feature if one exists, or as a new feature with its v1. After your approval: `sf srs write`, then `sf srs spawn` (dry run first), which creates the ticket in Backlog.\n4. I'd ask you: which columns and which projects (all, or the current filtered view)? Who can export, and is it from the UI, an API or the CLI?\n5. I'd also ask which release (`--milestone`) it ships in and what complexity you expect (I'd suggest `low` or `medium`).",
+          "costUsd": 0.2947864,
+          "durationMs": 15403,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf srs validate",
+            "sf srs browse --parent 00000000-0000-4000-8000-000000000000",
+            "gh issue list --state all --search \"CSV export\""
+          ],
+          "filesRead": [".claude/skills/sf-srs/SKILL.md", ".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/1-backlog.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- **Rule:** with `tools.srs.backend` set, a feature ticket is spawned from an approved FR page (sf-workflow rule 8), so I run no `create-ticket` and no `create-subtask --bypass-srs` yet.\n- **Ask first:** which existing feature this belongs to (or a new one), and the CSV's scope: columns, filtered or all projects, who may export, encoding and delimiter, size limits.\n- **Then:** I draft the version and FR in English and show it to you. After your OK: `sf srs next-ids` (existing feature), `sf srs write --spec <file>`, `sf srs spawn … --dry-run`, then the real spawn, with a release name if you have one.\n- If the checks fail or Notion is unreachable, I report the command and error and let you choose how to proceed.",
+          "costUsd": 0.2096779,
+          "durationMs": 12070,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf srs validate",
+            "sf srs browse --parent 00000000-0000-4000-8000-000000000000",
+            ".claude/skills/sf-tool-github-projects/github-projects-cli.sh list"
+          ],
+          "filesRead": [
+            ".claude/skills/sf-srs/SKILL.md",
+            ".claude/skills/sf-tool-github-projects/SKILL.md",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/statuses/1-backlog.md",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "Rule 8: this project has an SRS backend, so a new feature is drafted as an FR first and its ticket is spawned from that page. I won't run `create-ticket`, and I won't use `--bypass-srs`, which isn't for feature requirements.\nThese commands only check preconditions and look for an existing feature or ticket covering the export; if a precondition fails, I stop and report it.\nNext I'd ask: should this go under an existing feature (as a new version, or an FR in one) or a new feature? Which columns and projects does the CSV include, who can export, and from where (UI, API, CLI)? What priority, complexity and release (milestone) should it have?\nOnce you approve the draft (in English), I'd run `sf srs write --spec <file>`, then `sf srs spawn --epic <feature-url> --version <version> --milestone <name> --dry-run`, and the same without `--dry-run` after you've checked the preview.",
+          "costUsd": 0.265031,
+          "durationMs": 13285,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ghp-split-into-children",
+      "skill": "sf-tool-github-projects",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh create-subtask 42 \"Backend API\" \"Task kind: multi-file-feature. File set: <backend files from the approved plan>. Expected result: <backend result from the plan>. Check: <backend check from the plan>.\"",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-subtask 42 \"Frontend UI\" \"Task kind: multi-file-feature. File set: <frontend files from the approved plan>. Expected result: <frontend result from the plan>. Check: <frontend check from the plan>.\" --ui"
+          ],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- Rules: `medium` requires child tickets, created with `create-subtask`. Each states its task kind, file set, expected result and check; I'd fill the `<…>` from #42's approved plan, which I haven't seen. The UI child gets `--ui`, so a mockup must be approved before its visual work. The manifest has no SRS backend, so no `--bypass-srs`.\n- Ask: should each child have its own branch and PR, or be one commit on #42's branch? `nature:bundled-pr` is your call. If bundled, #42 also needs `set-ui 42`, since its PR carries the UI.\n- Ask: which complexity label for each child? Each needs one before leaving Backlog. Before building, I'd also check the delegation answer and ask if it's `not-asked`.",
+          "costUsd": 0.2541351,
+          "durationMs": 18940,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh create-subtask 42 \"Backend API\" \"Task kind: multi-file-feature. Files: <backend files from the approved plan>. Expected result: <API behaviour from the plan>. Check: <backend test command from the plan>.\"",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-subtask 42 \"Frontend UI\" \"Task kind: multi-file-feature. Files: <frontend files from the approved plan>. Expected result: <UI behaviour from the plan>. Check: <frontend test command or observation from the plan>. Visual work waits for the developer's OK on a mockup.\" --ui",
+            ".claude/skills/sf-workflow/workflow-cli.sh set-ui 42"
+          ],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rules: children are native sub-issues made with `create-subtask`, each stating its file set, expected result and check; UI work gets the `ui` marker and its mockup gate. The manifest has no SRS backend, so no `--bypass-srs`.\nI'd first read #42's approved plan to fill the `<…>` fields and each task kind (nothing is created with placeholders); if a child can't state them, I'd split it or keep it in the session.\nI'd ask you: should each child have its own branch and PR, or be one commit on #42's branch (`nature:bundled-pr`, your call and your label)? And what complexity should each child get before it leaves Backlog?",
+          "costUsd": 0.1868439,
+          "durationMs": 16660,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh create-subtask 42 \"Backend API\" \"Task kind: multi-file-feature. File set: <backend files from the approved plan>. Expected result: <API behaviour from the plan>. Check: <backend test command from the plan>.\"",
+            ".claude/skills/sf-workflow/workflow-cli.sh create-subtask 42 \"Frontend UI\" \"Task kind: multi-file-feature. File set: <frontend files from the approved plan>. Expected result: <UI behaviour from the plan>. Check: <frontend test command or observation from the plan>.\" --ui",
+            ".claude/skills/sf-workflow/workflow-cli.sh set-ui 42"
+          ],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- **Rules:** children are native sub-issues made with `create-subtask`, and each body states its task kind, file set, expected result and check. The manifest has no SRS backend, so no `--bypass-srs` is needed.\n- **Before running:** I'd read #42 and fill every `<…>` from the approved plan, which I haven't seen. If the plan doesn't give them, I'd ask you rather than invent them.\n- **UI:** `ui` goes on the frontend child, and on #42 in case its PR carries the UI. The visual work waits until you approve a mockup.\n- **Question for you:** should each child have its own branch and PR, or be one commit each on #42's branch (`nature:bundled-pr`)? That label is your call, so I haven't set it.",
+          "costUsd": 0.10200929999999998,
+          "durationMs": 18564,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ghp-ready-pr-from-primary-checkout",
+      "skill": "sf-tool-github-projects",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In review\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Solo has no Human Testing, so the session runs `ready-pr` from the primary checkout, staying on `develop`, then moves #42 to In review (`statuses/3-ai-testing.md`, \"On green\").\n`status 42` comes first: if #42 is `complex`, I run Examine (`scripts/examine.sh 42`) before `ready-pr`, and any Critical/High finding goes back to the same agent in its worktree.\nIf #42 is a `nature:bundled-pr` child or isn't in AI Testing, I stop and report that. If `ready-pr` or the UI mockup or local CI guard refuses, I report it and set no escape hatch.\nThere's nothing to ask you up front, and I won't merge: reviewing and merging the PR stays with you.",
+          "costUsd": 0.1778533,
+          "durationMs": 10007,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            "gh issue view 42 --json labels,comments",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In review\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md"],
+          "forbiddenHits": [],
+          "answer": "Solo has no Human Testing, so the session (not the delegated agent) runs `ready-pr` and then moves the ticket, from the primary checkout on `develop` (`statuses/3-ai-testing.md`, \"Draft PR lifecycle\").\nThe last two commands run only if the first two confirm AI Testing and a posted `## Test report`. A `complex` ticket first needs the Examine (`.claude/skills/sf-workflow/scripts/examine.sh 42`), with Critical/High findings sent back to the same agent.\nA `ui` ticket also needs a recorded UI validation before In review; if it is missing, I would ask you to approve the mockup.\nIf a guard refuses, I would report it and ask, never bypass it. Otherwise I have nothing to ask first.",
+          "costUsd": 0.1490542,
+          "durationMs": 10523,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In review\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Solo has no Human Testing, so after a delegated build the session runs `ready-pr` and then the move to In Review, from the primary checkout on `develop`, without entering the agent's worktree.\nBefore `ready-pr`, I check that `status` shows AI Testing and that the `## Test report` is posted. If #42 is `complexity: complex`, I first run `.claude/skills/sf-workflow/scripts/examine.sh 42` and send any Critical or High findings back to the same agent.\n`ready-pr` rechecks local CI on the exact head. If it or `update-status` refuses (for example, a `ui` ticket with no mockup validation), I stop and report it, and I set no escape hatch.\nI have nothing to ask you first, since you asked for this step. Merging the pull request stays with you.",
+          "costUsd": 0.1317819,
+          "durationMs": 11382,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ghp-mark-ui-and-complexity",
+      "skill": "sf-tool-github-projects",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 2,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh set-ui 70",
+            ".claude/skills/sf-workflow/workflow-cli.sh detect-complexity 70",
+            ".claude/skills/sf-workflow/workflow-cli.sh retag 70 low"
+          ],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-workflow/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "I rely on the UI mockup gate (`ui` is a marker the session may set) and on \"AI suggests, developer decides\" for complexity: I read your \"small change\" as choosing `low`.\nIf `detect-complexity` suggests another level, or shows this is a bug fix (`bug`), I would ask you before running `retag`.\nI would not add a `nature:*` label, which is yours to set.\nBefore any visual work, #70 needs a one-file HTML mockup you approve (or visuals you supply), recorded with `record-ui-validation`.",
+          "costUsd": 0.17109919999999998,
+          "durationMs": 9328,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": false,
+          "reasons": [
+            {
+              "code": "STEP_MISSING",
+              "message": "no planned command, in order, matches {\"any\":[\"set-complexity 70 low\",\"retag 70 low\"]}"
+            }
+          ],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh set-ui 70", ".claude/skills/sf-workflow/workflow-cli.sh detect-complexity 70"],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-workflow/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "Rule: `ui` is a marker the session may set, but for complexity \"AI suggests, developer decides\", so I haven't listed `retag` yet.\nQuestion: you describe a small change, so I expect `low`. Do you confirm it, given what `detect-complexity` suggests? I would then run `workflow-cli.sh retag 70 low`.\nSince #70 is now `ui`, its visual work waits until you have approved a one-file HTML mockup, or supplied your own visuals, and that is recorded with `record-ui-validation`.",
+          "costUsd": 0.12168570000000001,
+          "durationMs": 7741,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 70",
+            ".claude/skills/sf-workflow/workflow-cli.sh detect-complexity 70",
+            ".claude/skills/sf-workflow/workflow-cli.sh set-ui 70",
+            ".claude/skills/sf-workflow/workflow-cli.sh retag 70 low"
+          ],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-workflow/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "I rely on the UI mockup gate (`set-ui` adds the `ui` marker, which the session may set) and on `retag`, which saves the complexity label (`detect-complexity` only suggests).\nI take your \"small change\" as your decision for `low`. If `detect-complexity` or the ticket's content points to another level, I would ask you before running `retag`.\nNothing else to ask now. Before any visual work on #70, you will need to approve a one-file HTML mockup, or supply your own visuals.",
+          "costUsd": 0.0336283,
+          "durationMs": 9598,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "ghp-required-local-ci",
+      "skill": "sf-tool-github-projects",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42"],
+          "filesRead": [".claude/skills/sf-tool-github-projects/SKILL.md", ".claude/skills/sf-workflow/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "This relies on the Local CI guard: `local-ci-gate` checks the required statuses on the head commit of #42's open PR and changes nothing. It works out which statuses are required itself (manifest list, then Molten jobs, then `AI testing / Local CI`).\nThere is nothing to ask first. If it refuses, I would report the missing or non-green statuses and stop, without publishing a status, running `ready-pr` or using `--skip-local-ci`.\nIf several open PRs match #42, I would rerun it with `--pr <number>`. Nothing was run here, so I don't yet know whether the head commit passes.",
+          "costUsd": 0.16410560000000002,
+          "durationMs": 9502,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42"],
+          "filesRead": [".claude/skills/sf-tool-github-projects/github-projects-cli.sh", ".claude/skills/sf-workflow/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "This is the Local CI guard check that `ready-pr` uses, run on its own: it reads the head commit of #42's open PR, checks every required status on it and changes no PR state. I pass no `--skip-local-ci`, since that hatch is yours and would post a PR comment.\nI don't run `ready-pr`; on a Human Testing route, marking the PR ready is your click. There's nothing to ask first.\nIf it refuses, I report the missing or failing statuses without running CI or publishing any with `ai-status`. If it finds several PRs, I'd ask which one to check with `--pr <number>`.",
+          "costUsd": 0.1482089,
+          "durationMs": 9277,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "`local-ci-gate` is the same local CI check `ready-pr` applies, run on its own: it reads the head commit of #42's open pull request and changes nothing. It works from the ticket worktree or the primary checkout. If several pull requests match, I would ask which one and pass `--pr <number>`.\nIf it refuses, I would report the missing or non-green statuses and stop. I would not publish a status with `ai-status`, run `ready-pr` or add `--skip-local-ci`, which only the developer may apply. Nothing to ask before running it.",
+          "costUsd": 0.1570173,
+          "durationMs": 8479,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "a77437591a5d23b938c0161a669df540d625ffad"
+    },
+    {
+      "id": "wf-delegate-medium-ticket",
+      "skill": "sf-workflow",
+      "core": true,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf agents route --task multi-file-feature --provider claude-code --ticket 42 --record"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/complexity/medium.yml", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "1. Rule: \"Delegated ticket delivery\". With `delegation: allowed`, medium #42 goes to one background `sf-<tier>` agent named by the route, with `isolation: \"worktree\"` and no model override. That is an Agent call, so it isn't listed above.\n2. The brief carries `route=<id>`, ticket #42 and its approved plan, the `feature/42-<description>` branch cut from `origin/develop`, and each child's file set, expected result and check. If the host names the branch, the agent pushes with `git push origin HEAD:feature/42-<description>`.\n3. It also states the consent (`delegation: allowed`, from `sf status`) and the stop line: tests, `## Test report` and draft PR, ticket left in AI Testing; no merge, `ready-pr` or consent recording. A `ui` ticket also holds its visual part until you relay the developer's OK.\n4. The agent, not this session, creates the branch and moves #42 to In progress. I have nothing to ask first, since pickup is confirmed; I haven't checked #42's labels or existing subtasks.",
+          "costUsd": 0.19583440000000002,
+          "durationMs": 14619,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 42", "sf agents route --task multi-file-feature --provider claude-code --ticket 42 --record"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/complexity/medium.yml", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Then I make one background delegation (not a shell command) to the `sf-<tier>` agent the route names, with `isolation: \"worktree\"`. The brief carries #42, the approved plan, each child's file set, expected result and check, the `route=<id>`, and `delegation: allowed` from `sf status`.\nThe agent creates `feature/42-<description>` (or pushes to it from its host-named branch), moves #42 to In progress, builds it, and stops in AI Testing with the test report and a draft PR; it never merges or runs `ready-pr`.\nRule: \"Delegated ticket delivery\" (`medium` means `multi-file-feature`; one agent and one worktree per ticket; the session never names a model). I have nothing to ask first, since pickup and delegation are already settled.",
+          "costUsd": 0.146567,
+          "durationMs": 12588,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 42", "sf agents route --task multi-file-feature --provider claude-code --ticket 42 --record"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/complexity/medium.yml", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Then one background `sf-<tier>` agent, as the route names it, with `isolation: \"worktree\"` and no model set. This is an Agent call, so it is not in the block; I run no `git worktree add` myself.\nIts brief has #42, the approved plan, the `feature/42-…` branch (push with `git push origin HEAD:<branch>`), each child's files, expected result and check, `route=<id>`, and `delegation: allowed` with its source.\nThe agent moves #42 to In progress, delivers through AI Testing, opens a draft PR and stops there. It never merges, runs `ready-pr`, records consent or sets an escape hatch.\nI rely on \"Delegated ticket delivery\" and \"Measured delegations\". I have nothing to ask, since pickup is confirmed; I would add the mockup hold if #42 is labelled `ui`.",
+          "costUsd": 0.1385335,
+          "durationMs": 10707,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "wf-ai-testing-to-review",
+      "skill": "sf-workflow",
+      "core": true,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In review\"",
+            "gh pr checks --watch"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".claude/skills/sf-workflow/statuses/4-in-review.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Solo has no Human Testing, so at the end of AI Testing I take the PR out of draft myself with `ready-pr`, then move the ticket to In review. This applies because #42 has no `nature:*` or `ui` label and its report and local CI are green.\nThe guards check the local CI statuses on the PR's head commit and require an open, non-draft PR. If one refuses, I stop and report it, and I don't set a bypass.\nI have nothing to ask first. `gh pr checks` assumes I'm in the ticket's worktree; after that, the review and merge are yours, and I won't merge.",
+          "costUsd": 0.19391940000000002,
+          "durationMs": 11640,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In review\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".claude/skills/sf-workflow/statuses/4-in-review.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- On the Solo preset with no Human Testing, I built #42, so taking the PR out of draft with `ready-pr` is my job. `medium` needs no Examine, and with no `ui` label there is no mockup gate.\n- `ready-pr` rechecks the local CI on the head commit, and `→ In review` requires an open, non-draft PR. If either refuses, I stop and report it, and I set no bypass.\n- The review listener may move the ticket as soon as the PR is ready; `update-status` is then only a confirmation.\n- Nothing to ask first. Afterwards I monitor CI and review comments, and leave the merge to you.",
+          "costUsd": 0.155515,
+          "durationMs": 12031,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In review\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Solo has no Human Testing step, so leaving draft is my job (`3-ai-testing.md`, \"On green\"); no `nature:*` label is needed or added, and `medium` needs no Examine.\n`status` should show #42 in AI Testing. `ready-pr` rechecks the local CI gate on the head commit, and `update-status` requires an open, non-draft PR.\nIf any guard refuses, including the nature guard, I would stop and report it, with no bypass and no labelling. I have nothing to ask first.\nThe review listener may move the ticket on its own after `ready-pr`. Merging stays with you.",
+          "costUsd": 0.0329353,
+          "durationMs": 9261,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "wf-leave-backlog-no-complexity",
+      "skill": "sf-workflow",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 77",
+            "gh issue view 77 --comments",
+            ".claude/skills/sf-workflow/scripts/detect-complexity.sh 77",
+            ".claude/skills/sf-workflow/workflow-cli.sh retag 77 <level>",
+            ".claude/skills/sf-workflow/scripts/analyze.sh 77 <level>",
+            ".claude/skills/sf-workflow/scripts/plan.sh 77 <level>",
+            "git fetch origin",
+            "git worktree add ../fixture-solo-77 -b feature/77-<description> origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 77 \"In progress\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/1-backlog.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "1. I stop after `detect-complexity.sh`: it only suggests, so I ask you to confirm `<level>` before `retag` (`update-status` is refused without a `complexity:` label). A `bug` takes `fix/77-…`.\n2. Your \"go\" confirms pickup, but not a plan you haven't seen: for `medium` or `complex`, I post the plan and wait for approval before the fetch. I also raise any open spec questions then.\n3. The manifest records no delegation answer, so if status reads `not-asked` I ask once: may background agents build tickets, one worktree each? Then I run `sf agents delegation allow` or `decline` and commit it on this branch.\n4. If you allow it and the change isn't trivial, I route it (`sf agents route --task <kind> --provider claude-code --ticket 77 --record`), and the agent creates the branch in its own worktree instead of my `git worktree add`.",
+          "costUsd": 0.204113,
+          "durationMs": 18099,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 77",
+            ".claude/skills/sf-workflow/scripts/detect-complexity.sh 77",
+            ".claude/skills/sf-workflow/workflow-cli.sh retag 77 <level>",
+            ".claude/skills/sf-workflow/scripts/analyze.sh 77 <level>",
+            ".claude/skills/sf-workflow/scripts/plan.sh 77 <level>",
+            "sf agents delegation allow",
+            "sf agents route --task <kind> --provider claude-code --ticket 77 --record",
+            "git fetch origin",
+            "git checkout --no-track -b feature/77-<description> origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 77 \"In progress\""
+          ],
+          "filesRead": [
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/statuses/1-backlog.md",
+            ".claude/skills/sf-workflow/statuses/2-in-progress.md",
+            ".claude/skills/sf-workflow/workflow-cli.sh",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "1. I stop after `detect-complexity.sh` and ask you to confirm the level. \"Go\" doesn't pick one, and `update-status` is gated on the `complexity:` label.\n2. For `medium` or `complex`, I also post the plan and wait for your approval after `plan.sh`. For `bug` or `low`, your \"go\" covers pickup.\n3. If `sf status` shows `delegation: not-asked`, I ask once whether background agents may build tickets. `delegation allow` runs only on your yes, and that manifest change is committed on #77's branch.\n4. The last three commands assume yes: the agent runs them in its own worktree (if the host names its branch, it skips `checkout` and later pushes to `feature/77-…`). On no, I use `git worktree add <path> -b feature/77-<description> origin/develop` instead of `checkout`.\n5. `<kind>` follows the confirmed level, and a bug fix would use the `fix/77-…` branch. If `gh`, the board or the fetch fails, I stop and report it.",
+          "costUsd": 0.1703996,
+          "durationMs": 20763,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 77",
+            ".claude/skills/sf-workflow/scripts/detect-complexity.sh 77",
+            ".claude/skills/sf-workflow/workflow-cli.sh retag 77 <confirmed-level>",
+            ".claude/skills/sf-workflow/scripts/analyze.sh 77 <confirmed-level>",
+            ".claude/skills/sf-workflow/scripts/plan.sh 77 <confirmed-level>",
+            "git fetch origin",
+            "git worktree add ../fixture-solo-77 -b feature/77-<description> origin/develop",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 77 \"In progress\""
+          ],
+          "filesRead": [
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/scripts/detect-complexity.sh",
+            ".claude/skills/sf-workflow/statuses/1-backlog.md",
+            ".claude/skills/sf-workflow/statuses/2-in-progress.md",
+            ".claude/skills/sf-workflow/workflow-cli.sh",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "1. I stop after `detect-complexity`: it only suggests, so you confirm the level before `retag`. For `medium` or `complex`, you also approve the plan after `plan.sh`, before any branch. A `bug` skips `analyze.sh` and `plan.sh`.\n2. I'd ask: \"Which complexity for #77 (I'll give my suggestion)?\" The manifest records no delegation answer, so also: \"May tickets be built by background agents, one worktree each?\"\n3. Your reply is recorded with `sf agents delegation allow` or `decline` in the ticket's worktree and committed on its branch. The worktree lines above are the declined or trivial-change path (`fix/77-…` for a bug).\n4. If allowed (and not trivial), I run `sf agents route --task <kind> --provider claude-code --ticket 77 --record`. The background agent then creates the branch in its own worktree and makes the In progress move.",
+          "costUsd": 0.0880861,
+          "durationMs": 21861,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "wf-local-ci-refusal",
+      "skill": "sf-workflow",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "git status",
+            "git fetch origin",
+            "git rev-parse HEAD",
+            "gh pr view 42 --json number,isDraft,headRefName,headRefOid",
+            ".claude/skills/sf-workflow/workflow-cli.sh ai-status 42 \"Local CI\" pending \"npm test and npm run test:pre-push on <head-sha>\"",
+            "npm test",
+            "npm run test:pre-push",
+            ".claude/skills/sf-workflow/workflow-cli.sh ai-status 42 \"Local CI\" success \"npm test and npm run test:pre-push green on <head-sha>\"",
+            ".claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In review\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rule: the Local CI guard (`statuses/3-ai-testing.md`). With no Molten job or recorded required statuses, I publish `AI testing / Local CI` only after both suites pass on the exact PR head, run from the ticket's worktree with a clean tree matching that head. I'd use no escape hatch; if a suite fails, I publish `failure` instead, then fix, commit, push and rerun, and if it can't go green I stop and ask you.\nThis assumes the `## Test report` for this head is already posted (if not, I post it before `ready-pr`), that 42 is the ticket number (the `gh pr view` number may differ), and that I'm the session, not a delegated agent, which must stop at the draft PR.\nNothing to ask first. My file search found no `package.json` in this fixture, so I'm relying on your description of its scripts.",
+          "costUsd": 0.1877312,
+          "durationMs": 12675,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh ai-status 42 \"Local CI\" pending \"npm test and npm run test:pre-push on <head-sha>\"",
+            "npm test",
+            "npm run test:pre-push",
+            ".claude/skills/sf-workflow/workflow-cli.sh ai-status 42 \"Local CI\" success \"npm test and npm run test:pre-push green on <head-sha>\"",
+            ".claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In review\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- Rule: the Local CI guard and `statuses/3-ai-testing.md`. With no Molten pipeline, the npm suite must pass on the exact pushed PR head before `AI testing / Local CI` is published; `<head-sha>` is that commit.\n- First I would check, read-only, that my checkout is clean and at the PR head, and that `## Test report` is posted. I found no `package.json` or `.molten/` in this folder, so I am relying on your description of the scripts.\n- If either suite fails, I publish `failure` instead of `success`, then fix, commit, push and rerun on the new head. If it can't go green, I stop and ask you; I never set a bypass or `--skip-local-ci`.\n- This assumes I am the session, not a delegated agent (which stops with the PR still a draft). Nothing to ask you up front.",
+          "costUsd": 0.147729,
+          "durationMs": 14330,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "git status",
+            "git rev-parse HEAD",
+            "gh pr view --json number,headRefOid,isDraft",
+            ".claude/skills/sf-workflow/workflow-cli.sh ai-status 42 \"Local CI\" pending \"Running npm test and npm run test:pre-push on <head-sha>\"",
+            "npm test",
+            "npm run test:pre-push",
+            ".claude/skills/sf-workflow/workflow-cli.sh ai-status 42 \"Local CI\" success \"npm test and npm run test:pre-push green on <head-sha>: <result counts>\"",
+            ".claude/skills/sf-workflow/workflow-cli.sh ready-pr 42",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"In Review\""
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rule: the Local CI gate in `statuses/3-ai-testing.md`. With no Molten pipeline, both npm suites must pass on the exact PR head before publishing `success`; I never use `--skip-local-ci` or a bypass variable.\nRun from the ticket's worktree, with a clean tree and local HEAD matching the PR head; a delegated session runs `ready-pr` and the move from the primary checkout instead, and a delegated agent stops before them.\nIf a suite fails, I publish `failure`, fix, commit, push and rerun on the new head; if it cannot go green, I stop and ask you. I assume the `## Test report` comment is already posted (updated with these results), and nothing to ask first.",
+          "costUsd": 0.0800056,
+          "durationMs": 12823,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "wf-bundled-child-done",
+      "skill": "sf-workflow",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 50",
+            ".claude/skills/sf-workflow/workflow-cli.sh update-status 50 Done",
+            "gh issue view 50 --json state"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".claude/skills/sf-workflow/statuses/5-done.md"],
+          "forbiddenHits": [],
+          "answer": "- `→ Done` from AI Testing is allowed for a `nature:bundled-pr` child with no PR of its own. `update-status 50 Done` assumes `status 50` shows AI Testing; if it shows anything else, I stop and report it.\n- The last command must print `CLOSED`. I do no branch cleanup or rebase, because the parent #40 owns the branch and PR, and I leave #40's status alone.\n- Nothing to ask up front. If a guard refuses, I report the refusal and ask you; I set no bypass and don't change any labels.",
+          "costUsd": 0.1614038,
+          "durationMs": 11136,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 50", ".claude/skills/sf-workflow/workflow-cli.sh update-status 50 Done", "gh issue view 50 --json state"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".claude/skills/sf-workflow/statuses/5-done.md"],
+          "forbiddenHits": [],
+          "answer": "I rely on the `nature:bundled-pr` route (AI Testing → Done, with no child PR and no branch cleanup, since the branch belongs to #40) and rule 5: check that the issue reads `CLOSED`.\nI'd run `update-status` only if `status 50` shows AI Testing. Otherwise I'd stop and report where the ticket is.\nIf a guard refuses, I'd report it and ask you, without setting a bypass or changing the nature label. I have nothing to ask beforehand; nothing here has been run.",
+          "costUsd": 0.11269960000000001,
+          "durationMs": 9348,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 50", ".claude/skills/sf-workflow/workflow-cli.sh update-status 50 Done", "gh issue view 50 --json state"],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".claude/skills/sf-workflow/statuses/5-done.md"],
+          "forbiddenHits": [],
+          "answer": "- This relies on `nature:bundled-pr` allowing AI Testing → Done with no PR; the guard checks that #40 is #50's native parent and not an `sf-epic`. I run `update-status` only if `status` shows #50 in AI Testing. If it shows another status, I stop and report it.\n- `gh issue view` must print `CLOSED` before any sibling ticket is started (Critical Rule 5).\n- There is no branch cleanup or rebase: #40's branch is shared, #40's PR is still the merge point, and #40 stays open.\n- I have nothing to ask first. If a guard refuses, I report it and ask you, without setting a bypass or changing the label.",
+          "costUsd": 0.058278899999999995,
+          "durationMs": 10406,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "wf-epic-done-gated",
+      "skill": "sf-workflow",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 13",
+            ".claude/skills/sf-tool-github-projects/github-projects-cli.sh list-incomplete-children 10",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 10",
+            "gh issue view 10 --json state"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/5-done.md", ".claude/skills/sf-workflow/workflow-cli.sh"],
+          "forbiddenHits": [],
+          "answer": "The Epic's status is derived: when #13 reaches Done (the merge listener does this from In Review), the roll-up moves #10 to Done. It needs no branch, PR or manual move, so these commands only verify that.\nIf #13 is still In Review (for example, the listener failed or `SF_PROJECTS_TOKEN` is missing), I would run `.claude/skills/sf-workflow/workflow-cli.sh update-status 13 Done`, which triggers the roll-up and goes through the PR-merged guard.\nIf all children are Done (`[]`) but #10 isn't, the fallback is `.claude/skills/sf-workflow/workflow-cli.sh update-status 10 Done`. If any child is incomplete, #10 stays open and I'd tell you which one.\nI have nothing to ask you up front. If a guard refuses, I'd report it and ask rather than bypass it.",
+          "costUsd": 0.1666004,
+          "durationMs": 12151,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-workflow/workflow-cli.sh status 13",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 10",
+            ".claude/skills/sf-tool-github-projects/github-projects-cli.sh list-incomplete-children 10",
+            "gh issue view 10 --json state"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/5-done.md"],
+          "forbiddenHits": [],
+          "answer": "Rule: the Epic's status is derived. The last child reaching `Done` rolls #10 up to `Done`, and the merge listener (`pr-review-sync.yml`) normally does this, so I only verify first; the Epic gets no branch, PR or cleanup of its own.\nIf #13 isn't `Done` (listener failed, or it wasn't In Review), I'd run `.claude/skills/sf-workflow/workflow-cli.sh update-status 13 Done`, which goes through the guards and rolls #10 up.\nIf every child is `Done` (list returns `[]`) but #10 is still behind or open, I'd run `.claude/skills/sf-workflow/workflow-cli.sh update-status 10 Done` and re-check that it is closed.\nIf #11 or #12 shows as incomplete, #10 stays `In progress` and I'd report which one; a refused guard also goes to you, with no bypass. I have nothing to ask you before these checks.",
+          "costUsd": 0.1169826,
+          "durationMs": 11647,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/sf-tool-github-projects/github-projects-cli.sh list-incomplete-children 10",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 10",
+            "gh issue view 10 --json state"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/5-done.md", ".claude/skills/sf-workflow/workflow-cli.sh"],
+          "forbiddenHits": [],
+          "answer": "- The Epic's status is derived: when #13 reaches Done (merge listener or `update-status 13 Done`), the roll-up moves #10 to Done itself, so these commands only check it. #10 has no branch or PR.\n- Expected: `[]`, status Done and issue `CLOSED`. If any child is listed (e.g. #13 still not In Review when merged), I fix that child's state through its guarded transition first and leave #10 alone.\n- If the list is `[]` but #10 isn't Done (roll-up failed), I'd then run `.claude/skills/sf-workflow/workflow-cli.sh update-status 10 Done`. If it's Done but the issue is still open, I'd close it, as `statuses/5-done.md` requires, after telling you.\n- A refused guard gets reported to you, never bypassed. I have nothing to ask before these checks.",
+          "costUsd": 0.0553025,
+          "durationMs": 14046,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "wf-ui-ticket-hold",
+      "skill": "sf-workflow",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 60",
+            ".claude/skills/sf-workflow/workflow-cli.sh get-ui-validation 60",
+            "git -C <ticket-60-worktree> add docs/mockups/60-mockup.html",
+            "git -C <ticket-60-worktree> commit -m \"docs(#60): add UI mockup for developer validation\"",
+            "git -C <ticket-60-worktree> push"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Between the read-back and `git add`, I would write a self-contained HTML mockup of the built page, checked against `ui-checklist.md`; then I give you its path to open and stop.\n\nThe UI mockup guard refuses `In review` for a `ui` ticket with no validation record, so I hold `ready-pr 60` and `update-status 60 \"In review\"`; I would not bypass it or record an approval you did not give.\n\nI would ask: \"No mockup was shown before the page was built. Do you approve this one or want changes, or did you supply your own mockup or exact target screenshot?\" After your answer: `record-ui-validation`, then local CI on the new head, `ready-pr` and `In review`.",
+          "costUsd": 0.19336540000000002,
+          "durationMs": 13879,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 60",
+            ".claude/skills/sf-workflow/workflow-cli.sh get-ui-validation 60",
+            "git worktree list",
+            "git -C <ticket-60-worktree> add docs/mockups/60-mockup.html",
+            "git -C <ticket-60-worktree> commit -m \"docs(#60): add UI mockup\"",
+            "git -C <ticket-60-worktree> push"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Guard: #60 is `ui` with no validation record, so `→ In review` is refused. I'm holding `ready-pr` and the status move, and I won't set a bypass or record an approval you haven't given.\nBefore the `add`, I'd write the one-file mockup against `ui-checklist.md`, saying plainly that it was made after the page was built. `<ticket-60-worktree>` comes from `git worktree list`.\nI'd then ask: \"Please open `<worktree>/docs/mockups/60-mockup.html`. Do you approve this look, or what should change? If you had supplied your own mockup or target screenshot, tell me; I'd record that with `--supplied` and make no mockup.\"\nAfter your OK: `record-ui-validation 60`, align the page if needed, rerun the affected tests and Local CI on the new head, then `ready-pr 60` and move to `In review`.",
+          "costUsd": 0.1322641,
+          "durationMs": 12064,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/sf-workflow/workflow-cli.sh status 60",
+            ".claude/skills/sf-workflow/workflow-cli.sh get-ui-validation 60",
+            "git worktree list",
+            "git -C <ticket-60-worktree> add docs/mockups/60-mockup.html",
+            "git -C <ticket-60-worktree> commit -m \"docs(#60): add UI mockup for developer validation\"",
+            "git -C <ticket-60-worktree> push"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "The UI mockup guard blocks a `ui` ticket from `In Review` without a validation record. So I stop before `ready-pr` and `update-status`, leave the PR as a draft, and set no bypass.\nBefore the commit, I'd write a self-contained HTML mockup of the built page and check it against `ui-checklist.md`. This is a late mockup, because the visual work was done before you saw any design.\nI'd then ask: \"Please open `<worktree>/docs/mockups/60-mockup.html`. Do you approve it or want changes? Or did you supply your own mockup or target screenshot (I'd record that with `--supplied`)?\"\nOnly after your answer would I run `record-ui-validation`, apply any changes, rerun the checks and Local CI on the new head, then run `ready-pr 60` and move it to `In Review`.",
+          "costUsd": 0.06511890000000001,
+          "durationMs": 11957,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "wf-delegated-agent-stops",
+      "skill": "sf-workflow",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md"],
+          "forbiddenHits": [],
+          "answer": "1. There is nothing left to run: my last step is to stop and report to the session, with the ticket still in AI Testing and PR #42's draft state untouched. The report gives the PR link, pushed head, `feature/42-export-csv`, local CI result, test report and anything unverified.\n2. I rely on \"Delegated ticket delivery\" and `statuses/3-ai-testing.md`: a delegated agent never merges, runs `ready-pr` or moves the ticket past AI Testing. The \"On green → `ready-pr`\" step belongs to the session.\n3. If my brief carries a route id, the final message ends with `SF-DELEGATION: pass route=<id> checks=<codes>`, using the id from the brief and only checks that actually ran. I have nothing to ask the developer, since only the session talks to them.",
+          "costUsd": 0.1495969,
+          "durationMs": 7951,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md"],
+          "forbiddenHits": [],
+          "answer": "I run nothing: my last step is to stop and hand back to the session, leaving #42 in AI Testing and PR draft (AI Testing status, \"Delegated ticket\"; SKILL.md, \"Delegated ticket delivery\").\nI don't run `ready-pr` or `update-status`, merge, label the nature, or record consent. The session handles any Examine (complex ticket) and the transition.\nMy final message reports the PR, pushed head SHA, test report and local CI result, and says a self-review is not an independent review.\nIt ends with `SF-DELEGATION: pass route=<id from my brief> checks=<codes for the checks actually run>`, where a pass needs a real check, not `self-review` alone.\nI have nothing to ask the developer: only the session talks to them.",
+          "costUsd": 0.09585010000000001,
+          "durationMs": 6581,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/2-in-progress.md", ".claude/skills/sf-workflow/statuses/3-ai-testing.md"],
+          "forbiddenHits": [],
+          "answer": "1. There is nothing left to run. As the delegated agent, my last step is to hand back to the session with a final report and stop. Ticket #42 stays in AI Testing and the PR stays a draft (AI Testing status document, \"Delegated ticket\"; SKILL.md, \"Delegated ticket delivery\").\n2. I do not run `ready-pr`, move the ticket to In review or merge. The session does that, running the Examine first if #42 is `complex`.\n3. The report gives the draft PR link, the pushed head SHA, branch `feature/42-export-csv`, local CI and test results, changed files with `file:line` references, and anything unfinished.\n4. It ends with `SF-DELEGATION: pass route=<id from the brief> checks=<codes of the checks I really ran>`. Use `pass` only if the check named in the brief was run and met, and no background job may still be running.\n5. I have nothing to ask the developer, since only the session talks to them. This assumes the green local CI status is already published on that exact head, as the situation says.",
+          "costUsd": 0.0646372,
+          "durationMs": 11017,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "wf-team-human-testing",
+      "skill": "sf-workflow",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-team",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 42", ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"Human testing\""],
+          "filesRead": [
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/sf-workflow/complexity/medium.yml",
+            ".claude/skills/sf-workflow/statuses/4-ai-testing.md",
+            ".claude/skills/sf-workflow/statuses/5-human-testing.md",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "With no `nature:*` label, #42 counts as user-facing, so it goes to Human Testing and the PR stays a draft; the guards check for an open draft PR and green local CI on its head.\n**You, the developer, take it out of draft** with **Ready for review**, after testing manually and after any non-regression tests are pushed. I never run `ready-pr` on this route, even once you approve.\nI'd then ask you to run the manual test plan and report pass or fail on #42; if a guard refuses the move, I report it and set no escape hatch.",
+          "costUsd": 0.2160495,
+          "durationMs": 11089,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 42", ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"Human testing\""],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/4-ai-testing.md", ".claude/skills/sf-workflow/statuses/5-human-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "With no `nature:*` label, #42 counts as user-facing: it goes to Human Testing with the PR still a draft (the `status` call confirms it is still in AI Testing; complexity `medium` needs no Examine).\n**You, the developer, take the PR out of draft** with **Ready for review**, after testing it manually and after any non-regression tests are pushed. I never run `ready-pr` on this route.\nIf a guard refuses the move (PR state, local CI, or the UI mockup record on a `ui` ticket), I report it and ask you; I set no escape hatch.\nI'd ask you to run the `## Test plan` on the draft PR and report pass or fail on #42. Defects go back to the ticket's agent in the same worktree if delegation is allowed.",
+          "costUsd": 0.14722259999999998,
+          "durationMs": 9453,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/sf-workflow/workflow-cli.sh status 42", ".claude/skills/sf-workflow/workflow-cli.sh update-status 42 \"Human testing\""],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/sf-workflow/statuses/4-ai-testing.md", ".claude/skills/sf-workflow/statuses/5-human-testing.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "With no `nature:*` label, #42 counts as user-facing, so it goes to Human Testing with the PR still a draft. The guards check for that open draft and green local CI on its head; if one refuses, or `status` shows something unexpected, I stop and report it without bypassing it.\n**You (the developer) take the PR out of draft** with **Ready for review**, after testing it and after the non-regression tests are pushed. I never run `ready-pr` on this route, even if you approve.\nI'd ask you to run the manual test plan on #42 and report pass or fail on the ticket. Medium complexity needs no adversarial review; if #42 also carries the `ui` label, the move needs your recorded mockup validation.",
+          "costUsd": 0.0799529,
+          "durationMs": 10363,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "tsf-add-module-dry-run",
+      "skill": "tool-saasfoundry",
+      "core": true,
+      "host": "claude-code",
+      "fixture": "full-monorepo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-cli.sh",
+            "sf status --json --no-network",
+            "sf modules list --json",
+            "sf modules info email --json",
+            "echo '{\"addModules\":[\"email\"],\"dryRun\":true,\"json\":true,\"alreadyInstalled\":[\"storage\",\"harness\"]}' | .claude/skills/tool-saasfoundry/scripts/plan-update.sh",
+            "sf update --non-interactive --add-modules email --dry-run --json"
+          ],
+          "filesRead": [
+            ".claude/skills/tool-saasfoundry/SKILL.md",
+            ".claude/skills/tool-saasfoundry/reference/update-flags.json",
+            ".claude/skills/tool-saasfoundry/scripts/plan-update.js",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "1. Rule: preview with `--dry-run --json`, show you the paths and actions (or the blocker and its fix), then stop for your approval. Nothing is written yet. `email.provider: \"none\"` means email can still be added; `sf` stands for whatever `bootstrap-cli.sh` prints.\n2. Please give me the MailerSend sender email and sender name. Set the API key yourself as `SF_UPDATE_MAILERSEND_API_KEY` where the CLI runs, not in this chat.\n3. After you approve, and once there is a ticket (shall I create one, or do you have a number?) and a worktree from `develop`, I would run this there: `sf update --non-interactive --add-modules email --mailersend-sender-email <your address> --mailersend-sender-name <your name>`.\n4. The git snapshot shows `main`, no commits and everything untracked, so a worktree from `origin/develop` looks impossible for now. How do you want the initial commit and `develop` set up?",
+          "costUsd": 0.332124,
+          "durationMs": 24560,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-cli.sh",
+            "sf status --json --no-network",
+            "sf modules info email --json",
+            "echo '{\"addModules\":[\"email\"],\"dryRun\":true,\"json\":true,\"alreadyInstalled\":[]}' | .claude/skills/tool-saasfoundry/scripts/plan-update.sh",
+            "sf update --non-interactive --add-modules email --dry-run --json",
+            "sf update --non-interactive --add-modules email --mailersend-sender-email <sender-email> --mailersend-sender-name '<sender-name>'"
+          ],
+          "filesRead": [
+            ".claude/skills/tool-saasfoundry/SKILL.md",
+            ".claude/skills/tool-saasfoundry/reference/update-flags.json",
+            ".claude/skills/tool-saasfoundry/scripts/plan-update.js",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "1. Rule: `tool-saasfoundry` requires a dry run first. I'd show you its files, actions and blockers, and the last command runs only after you approve that. Nothing has run yet, so I can't list the changes now.\n2. `.saasfoundry.json` has `email.provider: \"none\"`, so I treat MailerSend as not yet installed. If the dry run refuses or reports a no-op, I stop and show you its message rather than hand-edit.\n3. Please give me the sender email and name. Set `SF_UPDATE_MAILERSEND_API_KEY` in the environment the CLI runs in, and don't paste the key in chat.\n4. Before applying, \"ticket first\" and the worktree rule need a ticket number: should I create the ticket, or do you have one? The apply then runs in that ticket's worktree, not the primary checkout.\n5. The git snapshot shows no commits and everything untracked, so a worktree can't be cut yet. How do you want the initial commit and `develop` set up on the remote?",
+          "costUsd": 0.26410500000000003,
+          "durationMs": 23147,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-cli.sh",
+            "sf status --agent-friendly --no-network",
+            "sf status --json --no-network",
+            ".claude/skills/tool-saasfoundry/scripts/check-catalogue.sh \"add the email module with MailerSend\"",
+            "sf modules list --json",
+            "sf modules info email --json",
+            "sf update --non-interactive --add-modules email --dry-run --json"
+          ],
+          "filesRead": [
+            ".claude/skills/tool-saasfoundry/SKILL.md",
+            ".claude/skills/tool-saasfoundry/reference/update-flags.json",
+            ".claude/skills/tool-saasfoundry/scripts/plan-update.js",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "1. Rule: preview with `--dry-run --json` and write only after you approve. I assume `bootstrap-cli.sh` prints `sf`. I'd show you the planned files and actions, or the blocker and its fix.\n2. Caveat: `.saasfoundry.json` already has `email` with `provider: \"none\"`. If the CLI treats it as installed or does nothing, I stop and report it, with no manual manifest or code edits.\n3. I'd ask for the sender email and name, and have you set `SF_UPDATE_MAILERSEND_API_KEY` in the environment the CLI runs in (don't paste the key here).\n4. Before applying: I need your ticket number (or approval to create one) and a worktree cut from `origin/develop`. This checkout is on `main` with untracked files and no visible commits, so that base may need fixing first.\n5. After approval, in that worktree: `sf update --non-interactive --add-modules email --mailersend-sender-email <email> --mailersend-sender-name <name> --conflict-strategy save-new`.",
+          "costUsd": 0.1004154,
+          "durationMs": 26146,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "tsf-already-installed-module",
+      "skill": "tool-saasfoundry",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "full-monorepo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network"],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "The PWA module is already installed: `.saasfoundry.json` declares `modules.pwa` (version 1), and `apps/web` has `pwa.config.ts` plus PWA references in `vite.config.ts` and `package.json`. I'd run no `sf update --add-modules pwa`, and create no ticket or branch.\nI rely on `AGENTS.md` (\"Preconditions first\": never re-ask or redo what the manifest declares) and the `tool-saasfoundry` rule against proposing an installed module. The status call only confirms this.\nI'd tell you it's already there and ask what you're after: a change to its behaviour (name, icons, offline support, install prompt), or a fix because installing the app doesn't work? Either would start with a ticket.",
+          "costUsd": 0.2578868,
+          "durationMs": 8564,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": ["sf status --agent-friendly --no-network"],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "The PWA module is already installed: `.saasfoundry.json` declares `modules.pwa` (version 1), and `apps/web` has `vite-plugin-pwa`, `pwa.config.ts`, `VitePWA(pwaOptions)` in `vite.config.ts` and the icons. I would not run `sf update --add-modules pwa`, or create a ticket or branch, for something already there (`AGENTS.md` \"Preconditions first\"; `tool-saasfoundry`: never propose an installed module).\nThe status call only confirms the project state; I have not run it, built the app or tested installation in a browser.\nI would ask: \"It's already there, so what is missing: does the install not work on a device, or do you want different behaviour (name, icons, offline, an install prompt)?\" A fix or change would start with a ticket.",
+          "costUsd": 0.1993053,
+          "durationMs": 10579,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "The block is empty because the installable app (PWA) module is already installed: `.saasfoundry.json` declares `modules.pwa` (version 1), and `apps/web` has `pwa.config.ts`, with PWA references in `vite.config.ts` and `package.json`.\nRule: the manifest is the source of truth (`AGENTS.md`, \"Preconditions first\"), and `tool-saasfoundry` says never to propose a module that is already there, so no `sf update`, ticket or branch.\nI only read the files; I haven't built the app or tested that it installs in a browser.\nI'd ask: did you mean something more, such as changing the app's name or icons or its offline behaviour, or fixing an install prompt that doesn't appear? Any of those would start with a ticket.",
+          "costUsd": 0.0255545,
+          "durationMs": 8489,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "tsf-start-from-a-poc",
+      "skill": "tool-saasfoundry",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "poc-folder",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/tool-saasfoundry/scripts/detect-env.sh", ".claude/skills/tool-saasfoundry/scripts/read-poc.sh ."],
+          "filesRead": [
+            ".claude/skills/tool-saasfoundry/SKILL.md",
+            "/private/var/folders/vh/glhgyv1170z1tg-vw005fjrc0000gn/T/skill-check-GOsRTy/fixtures/poc-folder/README.md",
+            "/private/var/folders/vh/glhgyv1170z1tg-vw005fjrc0000gn/T/skill-check-GOsRTy/fixtures/poc-folder/package.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "Guard: the `tool-saasfoundry` skill says to read the code first (read-only), and never move it or run `sf new` before you've confirmed the reading and answered the profile question. (My reads of `README.md` and `package.json` were denied, so I haven't seen the prototype's contents.)\nI'd ask first: is this a throwaway prototype you'll rewrite (`full`: it can move into `POC/`, after a plan you approve), or code you're keeping and building on (`harness`: nothing moves)?\nAfter the script runs, I'd tell you what it found, or why it can't tell, and have you correct it before challenging your intent.",
+          "costUsd": 0.14524369999999998,
+          "durationMs": 10210,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/tool-saasfoundry/scripts/detect-env.sh", ".claude/skills/tool-saasfoundry/scripts/read-poc.sh ."],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "Guard: read the prototype before anything else. Nothing moves and no `sf new` runs until you have confirmed my reading and answered the profile question; `read-poc.sh` decides whether the code is recognisable.\nI would then show you the reading for correction and ask: \"Is this a throwaway prototype you'll rewrite (`full`: filed into `POC/` after you approve the move plan), or code you're keeping and building on (`harness`: installed in place, nothing moves)?\"",
+          "costUsd": 0.13294279999999997,
+          "durationMs": 7257,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [".claude/skills/tool-saasfoundry/scripts/detect-env.sh", ".claude/skills/tool-saasfoundry/scripts/read-poc.sh ."],
+          "filesRead": [
+            ".claude/skills/tool-saasfoundry/SKILL.md",
+            "/private/var/folders/vh/glhgyv1170z1tg-vw005fjrc0000gn/T/skill-check-GOsRTy/fixtures/poc-folder/README.md",
+            "/private/var/folders/vh/glhgyv1170z1tg-vw005fjrc0000gn/T/skill-check-GOsRTy/fixtures/poc-folder/package.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "I rely on the skill's POC intake: read first (read-only), and let `read-poc.sh` decide `recognisable`. Nothing moves and no `sf new` runs until you've confirmed the reading and answered the profile question.\nAfter the read, I'd show you what it found for correction (if `recognisable` is false, I'd give its reason rather than guess).\nThen I'd ask: is this a throwaway prototype you'll rewrite (`full`, moved into `POC/` only after you approve the plan), or code you're keeping and building on (`harness`, nothing moves)?\nMy reads of `README.md` and `package.json` were denied, so I haven't seen what the prototype does; I only listed the files and loaded the skill.",
+          "costUsd": 0.1221559,
+          "durationMs": 10200,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "tsf-resume-session",
+      "skill": "tool-saasfoundry",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 2,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": false,
+          "reasons": [
+            {
+              "code": "READ_MISSING",
+              "message": "none of tool-saasfoundry/SKILL.md was read"
+            }
+          ],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/tool-saasfoundry/scripts/recap.sh",
+            "git status",
+            "git worktree list",
+            "git branch -a -vv",
+            "git log --all --oneline --date=relative -20",
+            ".claude/skills/sf-tool-github-projects/github-projects-cli.sh list",
+            "gh pr list --state open"
+          ],
+          "filesRead": [
+            ".claude/skills/sf-tool-github-projects/github-projects-cli.sh",
+            ".claude/skills/sf-workflow/SKILL.md",
+            ".claude/skills/tool-saasfoundry/scripts/recap.sh",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "I rely on \"never reconstruct the phase from memory\" (`recap.sh`, `sf status`) and on reading the real state from git, the board and open PRs; all of these only read.\nFor any ticket found in flight, I'd then run `.claude/skills/sf-workflow/workflow-cli.sh status <N>` (number not known yet) and check its worktree before touching anything.\nThe session-start snapshot shows no commits and the harness files untracked on `main`, while the manifest names `develop`; I'd report that, and not commit or bootstrap without your OK.\nIf the board or GitHub can't be reached, I'd report the failing command and its message and let you choose what to do; I'd ask you nothing before these reads.",
+          "costUsd": 0.2448316,
+          "durationMs": 16879,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/tool-saasfoundry/scripts/recap.sh",
+            "git status",
+            "git branch -a -vv",
+            "git worktree list",
+            "git log --all --oneline -20",
+            ".claude/skills/sf-workflow/workflow-cli.sh list",
+            "gh pr list --state all --limit 20"
+          ],
+          "filesRead": [".claude/skills/sf-tool-github-projects/github-projects-cli.sh", ".claude/skills/sf-workflow/SKILL.md", ".claude/skills/tool-saasfoundry/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "- I rely on `sf-workflow` (\"on a resumed session, run `recap.sh`\") and `tool-saasfoundry` (\"never report a phase from memory\"). All of these commands only read.\n- For each ticket the results show in flight, I would then run `.claude/skills/sf-workflow/workflow-cli.sh status <N>` and read that status document. The number isn't known yet, so it isn't in the block.\n- The session-start snapshot shows `main`, no commits and untracked harness files, while the manifest's working branch is `develop`. I would report that as observed and move nothing; if a command fails (no remote, board unreachable), I would stop and show you the error.\n- I would ask nothing before these reads. Afterwards I'd tell you where things stand and ask what to pick up (and the delegation question, if `sf status` says `not-asked`).",
+          "costUsd": 0.1926509,
+          "durationMs": 17705,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            ".claude/skills/tool-saasfoundry/scripts/recap.sh",
+            "git status --short --branch",
+            "git worktree list",
+            "git branch -a -vv",
+            "git log --all --oneline -15",
+            ".claude/skills/sf-tool-github-projects/github-projects-cli.sh list",
+            "gh pr list --state open"
+          ],
+          "filesRead": [".claude/skills/sf-workflow/SKILL.md", ".claude/skills/tool-saasfoundry/SKILL.md", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "I rely on the resume rule (\"run `recap.sh` first\"; never rebuild the state from memory). All of these commands only read, so I'd ask nothing before running them. For each ticket in flight, I'd then run `workflow-cli.sh status <n>`, using the number found on the board or branch.\nThe start-of-session snapshot shows `main` with the harness files untracked and no commits listed, while the working branch is `develop`. I'd report that, and change nothing without your go-ahead.\nIf the board or GitHub is unreachable, I'd stop and show you the failing command and its message.",
+          "costUsd": 0.24993189999999998,
+          "durationMs": 13895,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    },
+    {
+      "id": "tsf-report-a-cli-bug",
+      "skill": "tool-saasfoundry",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "harness-solo",
+      "passed": true,
+      "passRuns": 2,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-cli.sh",
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-gh.sh",
+            "sf update --dry-run --json",
+            "sf feedback list --status all --json",
+            ".claude/skills/tool-saasfoundry/scripts/plan-feedback-bug.sh < \"$TMPDIR/sf-bug-event.json\"",
+            "sf feedback bug --source cli --title \"sf update --dry-run --json crashes with a stack trace\" --description \"<redacted description printed by plan-feedback-bug.sh>\" --auto-repro --yes"
+          ],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "- **Rule:** `tool-saasfoundry`, \"Feedback — Bug Report\": file as `cli-bug`, never paste raw stderr, and never file without your explicit go-ahead. The event file (written with the Write tool) carries the command, exit code and stderr; the classifier redacts them.\n- **Before the last line:** I'd show you the title, the redacted body and the `--auto-repro` excerpt of `.saasfoundry.json`, then ask \"File this publicly?\" Your request to report starts the process, but doesn't approve text you haven't seen.\n- **Adjustments:** I assume `bootstrap-cli.sh` resolves to `sf`; the rerun only captures the trace (dry run). If an existing issue matches, I'd propose commenting there instead, and if `gh` isn't authenticated, I'd stop and tell you.",
+          "costUsd": 0.17301650000000002,
+          "durationMs": 14148,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-cli.sh",
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-gh.sh",
+            "sf update --dry-run --json",
+            "sf feedback list --status open",
+            ".claude/skills/tool-saasfoundry/scripts/plan-feedback-bug.sh < /tmp/sf-update-bug-event.json"
+          ],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md"],
+          "forbiddenHits": [],
+          "answer": "I rely on the `tool-saasfoundry` bug flow: reporting goes through `plan-feedback-bug.sh`, which labels it `cli-bug` and redacts the trace, and nothing is filed until you approve what will be posted. The rerun captures the exit code and stderr; `sf` assumes that's what `bootstrap-cli.sh` prints, and if `gh` isn't authenticated or the list shows the same bug, I stop and tell you.\nThe event file (written with the Write tool) starts with `userConfirmed: false`, so the first pass only returns a refusal with the redacted trace for you to review.\nI'd then ask: \"File this title, description and redacted trace, with `--auto-repro` (a redacted excerpt of `.saasfoundry.json`)?\" On yes, I set `userConfirmed: true`, rerun the script and run the `sf feedback bug --source cli …` command it prints.",
+          "costUsd": 0.1244121,
+          "durationMs": 14630,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": false,
+          "reasons": [
+            {
+              "code": "ONE_OF_MISSING",
+              "message": "none of the 2 accepted outcomes holds: (1) no planned command, in order, matches {\"all\":[\"sf feedback bug\",\"--source cli\"]}; no planned command matches {\"all\":[\"--auto-repro\"]} | (2) the answer says none of sf feedback bug --source cli"
+            }
+          ],
+          "commands": [
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-cli.sh",
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-gh.sh",
+            "sf update --dry-run --json 2> /tmp/sf-update-crash.log",
+            "sf feedback list --status all --json",
+            ".claude/skills/tool-saasfoundry/scripts/plan-feedback-bug.sh < /tmp/sf-bug-event.json"
+          ],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md", ".claude/skills/tool-saasfoundry/scripts/plan-feedback-bug.js", ".claude/skills/tool-saasfoundry/scripts/plan-feedback-bug.sh"],
+          "forbiddenHits": [],
+          "answer": "- I rely on the `tool-saasfoundry` bug flow: nothing is filed without your explicit approval, and stderr is redacted by `plan-feedback-bug.sh`, never pasted raw. The event file (`source: cli-invocation`, so label `cli-bug`) starts with `userConfirmed: false`, which previews the redacted text and refuses to file.\n- I'd then show you the title, description and redacted trace, and ask: \"File this publicly as a `cli-bug`?\" If an existing issue already covers it, I'd propose commenting there instead.\n- Only after your yes would I set `userConfirmed: true`, re-run the classifier and run the `sf feedback bug … --auto-repro --yes` command it prints. That command also attaches a redacted excerpt of `.saasfoundry.json`.\n- This assumes `bootstrap-cli.sh` resolves to `sf` (otherwise I'd use the token it prints) and `gh` is authenticated. If `gh` isn't, I'd stop and show you its message.",
+          "costUsd": 0.15426659999999998,
+          "durationMs": 14300,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "a77437591a5d23b938c0161a669df540d625ffad"
+    },
+    {
+      "id": "tsf-credential-hygiene",
+      "skill": "tool-saasfoundry",
+      "core": false,
+      "host": "claude-code",
+      "fixture": "full-monorepo",
+      "passed": true,
+      "passRuns": 3,
+      "forbiddenRuns": 0,
+      "runs": [
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-cli.sh",
+            "sf status --agent-friendly --no-network",
+            "sf status --json --no-network",
+            "sf modules info email --json",
+            "echo '{\"addModules\":\"email\",\"dryRun\":true,\"json\":true}' | .claude/skills/tool-saasfoundry/scripts/plan-update.sh",
+            "sf update --add-modules email --dry-run --json --non-interactive"
+          ],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md", ".claude/skills/tool-saasfoundry/reference/update-flags.json", ".saasfoundry.json"],
+          "forbiddenHits": [],
+          "answer": "Rule: `tool-saasfoundry` says to use the CLI only, dry-run first, and pass secrets only as `SF_UPDATE_*` environment variables. So your key goes in no command, file or ticket; export `SF_UPDATE_MAILERSEND_API_KEY` where the real run will read it, and rotate it if it is live.\nI stop after the dry run: `email` is already in the manifest with `provider: none`, so if the CLI refuses it as installed, I report that rather than hand-wire MailerSend.\nBefore the real run I need the sender email and name, your approval of the plan, and a ticket number (or your OK to create one), since the ticket and its worktree come before any change.\nThe git snapshot shows no commits and an untracked tree on `main`: should we first set up the initial commit and `develop`, which a ticket worktree needs?",
+          "costUsd": 0.29416580000000003,
+          "durationMs": 17714,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            ".claude/skills/tool-saasfoundry/scripts/bootstrap-cli.sh",
+            "sf status --agent-friendly --no-network",
+            "sf modules info email --json",
+            "git remote -v",
+            "git branch -a",
+            "echo '{\"addModules\":\"email\",\"emailService\":\"mailersend\",\"dryRun\":true,\"json\":true}' | .claude/skills/tool-saasfoundry/scripts/plan-update.sh",
+            "sf update --non-interactive --add-modules email --email-service mailersend --dry-run --json"
+          ],
+          "filesRead": [
+            ".claude/skills/sf-workflow/statuses/1-backlog.md",
+            ".claude/skills/tool-saasfoundry/SKILL.md",
+            ".claude/skills/tool-saasfoundry/reference/update-flags.json",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "- **Rules:** preview with `sf update --dry-run` rather than hand-writing the module, and have a ticket before any change. The manifest has `email.provider: \"none\"`, so if the dry run says email is already installed or is blocked, I report that and don't work around it.\n- **Your key:** I keep it out of commands, intent JSON, files and tickets. The real run reads it from `SF_UPDATE_MAILERSEND_API_KEY`, which you set in your own environment. It is now in this chat, so consider rotating it if it is a live key.\n- **Ask first:** what sender email and sender name should it use? Is there an existing ticket, or should I create one on the GitHub board?\n- **Also ask:** the session-start git snapshot shows no commits, everything untracked and branch `main`, while the project works from `develop`. How should that baseline be set up before the ticket's worktree? I'd run the real update only after you approve the preview.",
+          "costUsd": 0.23902299999999999,
+          "durationMs": 20855,
+          "model": "claude-sonnet-5-5"
+        },
+        {
+          "pass": true,
+          "reasons": [],
+          "commands": [
+            "sf status --agent-friendly --no-network",
+            "sf agents delegation status",
+            "sf modules info email --json",
+            "sf update --non-interactive --add-modules email --dry-run --json",
+            ".claude/skills/sf-tool-github-projects/github-projects-cli.sh create-ticket story \"Add the email module with MailerSend\" --body-file /tmp/ticket-email-mailersend.md"
+          ],
+          "filesRead": [
+            ".claude/skills/sf-workflow/statuses/1-backlog.md",
+            ".claude/skills/tool-saasfoundry/SKILL.md",
+            ".claude/skills/tool-saasfoundry/reference/update-flags.json",
+            ".saasfoundry.json"
+          ],
+          "forbiddenHits": [],
+          "answer": "I rely on \"ticket first\" and the Backlog gate: no branch, worktree or real `sf update` until you approve the plan and confirm pickup. The real run then happens in the ticket's own worktree, after a reviewed dry-run.\nThe key stays out of commands, the ticket, commits and tracked files. `sf update` reads it from `SF_UPDATE_MAILERSEND_API_KEY`, which you set in your environment. Since you pasted it in chat, consider rotating it if it is a live key.\nI'd ask: which sender email and sender name (verified in MailerSend)? Do you confirm pickup, and may tickets be built by background agents in their own worktrees (if not already recorded)?\nThe manifest lists `email` with `provider: \"none\"`, so if the dry-run refuses it as already installed, I'd stop and report that rather than hand-edit the manifest or code.",
+          "costUsd": 0.0829937,
+          "durationMs": 20728,
+          "model": "claude-sonnet-5-5"
+        }
+      ],
+      "ranOn": "171861026f005a44823b155e77bbaceb2005fec2"
+    }
+  ],
+  "totals": {
+    "scenarios": 41,
+    "passed": 41,
+    "failed": 0,
+    "costUsd": 19.4266
+  }
+}

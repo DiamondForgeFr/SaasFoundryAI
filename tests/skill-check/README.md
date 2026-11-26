@@ -68,17 +68,36 @@ node tests/skill-check/run.mjs run --runner claude --core --dry-run # the invoca
 
 Pass rule: a scenario runs 3 times and passes at 2 of 3; a forbidden token fails it on any run. A noisy run is evidence, not a gate.
 
-### Recording the baseline on `develop`
+### The baseline on `develop`
 
-The baseline is taken on a checkout whose skills are those of `develop` (this branch, before any child of #1095 lands, or `develop` once it is merged). It needs a login for each agent, passed as the
-variable that agent reads (below), and it spends tokens: **156 model runs**, 123 for Claude Code (41 scenarios) and 33 for Codex (the 7 region scenarios and one core scenario per projected skill).
+The baseline is taken on a checkout whose skills are those of `develop`, with a login for each agent, and it spends tokens: **156 model runs** in all, 123 for Claude Code (41 scenarios) and 33 for
+Codex (the 7 region scenarios and one core scenario per projected skill).
+
+**Claude Code: recorded**, in `baseline/claude-code.json`. Skills of `develop` at `bdfb1f12`, model `claude-sonnet-5-5`, 41 scenarios of 3 runs each, 41 of 41 passing. It ran with
+`--agent-home inherit`: the login of the developer's subscription lives in their real `HOME`. Two runs make it, and its `meta.sources` says which and why: the full run (123 runs on `17186102`), and a
+rerun of the 6 scenarios whose expectations were recalibrated afterwards (18 runs on `a7743759`), which replaces them, since in each the agent was right and the check was wrong. In all 141 runs were
+paid for, 21.60 USD; the 123 runs the file keeps cost 19.43 USD. Each scenario records the commit it ran on (`ranOn`) and every run records the agent's answer.
+
+**Codex: not measured yet.** Codex logs in with the developer's subscription, a login stored in the real `HOME` (`~/.codex/auth.json`). It can only reach the replay through `--agent-home inherit`, and
+Codex's read-only sandbox can read any file its process can, so that login would weaken the isolation the replay promises (nothing but the fixture, no credential). Whether to accept that, or to give
+Codex an API key (`OPENAI_API_KEY` or `CODEX_API_KEY`) instead, is a decision that is still pending. Until it is made there is no Codex baseline, and `compare` has nothing to compare a Codex run to.
 
 ```bash
-node tests/skill-check/run.mjs run --runner claude --all --repeat 3 --model <the model of the build tier's route> --label "develop <sha>" --confirm --out tests/skill-check/baseline/claude-code.json
-node tests/skill-check/run.mjs run --runner codex  --all --repeat 3 --model <the model of the build tier's route> --label "develop <sha>" --confirm --out tests/skill-check/baseline/codex.json
+# Claude Code, to take the baseline again (the model of the build tier's route is recorded in the results)
+node tests/skill-check/run.mjs run --runner claude --all --repeat 3 --model <model> --label "develop <sha>" --confirm --out tests/skill-check/baseline/claude-code.json
+# Codex, once the login is decided
+node tests/skill-check/run.mjs run --runner codex --all --repeat 3 --model <model> --label "develop <sha>" --confirm --out tests/skill-check/baseline/codex.json
 ```
 
-`--model` is recorded in the results, and the baseline is taken again when it changes. A child ticket runs the core scenarios of the skill it changes, before and after, and compares:
+The baseline is taken again when the model changes. When a scenario's expectations are recalibrated, rerun only that scenario and merge the rerun into the full run: the merged file says which
+scenarios came from the rerun, why, and what both runs cost. It refuses runs of another kind (runner, host, repeat) and a reason left out.
+
+```bash
+node tests/skill-check/run.mjs run --runner claude --scenario <id>,<id> --repeat 3 --confirm --out /tmp/rerun.json
+node tests/skill-check/run.mjs merge tests/skill-check/baseline/claude-code.json /tmp/rerun.json --out tests/skill-check/baseline/claude-code.json --reason "Recalibration in <sha>: <what was wrong with the check>"
+```
+
+A child ticket runs the core scenarios of the skill it changes, before and after, and compares:
 
 ```bash
 node tests/skill-check/run.mjs run --runner claude --core --skill sf-workflow --repeat 3 --confirm --out /tmp/after.json

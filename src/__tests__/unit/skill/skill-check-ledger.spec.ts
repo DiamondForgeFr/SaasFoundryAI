@@ -118,6 +118,65 @@ describe('skill check, Layer 1: the rule ledger on this repository', () => {
       for (const ceiling of Object.values(views)) expect(ceiling.total % budgets.roundTo).toBe(0)
     }
   })
+
+  describe('the recorded Claude Code baseline', () => {
+    type Run = { answer?: string; costUsd?: number }
+    type Scenario = { id: string; core: boolean; passed: boolean; passRuns: number; forbiddenRuns: number; ranOn: string; runs: Run[] }
+    type Source = { role: string; label: string; commit: string; replaces?: string[]; reason?: string; costUsd: number; modelRuns: number }
+    const baselinePath = path.join(REPO_ROOT, 'tests/skill-check/baseline/claude-code.json')
+    const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')) as {
+      meta: { models: string[]; agentHome: string; repeat: number; passThreshold: number; modelRuns: number; modelRunsSpent: number; costUsdSpent: number; sources: Source[] }
+      scenarios: Scenario[]
+      totals: { scenarios: number; passed: number; failed: number; costUsd: number }
+    }
+
+    it('says which runs ran when, why, with which model and login, and what it all cost', () => {
+      const [base, rerun] = baseline.meta.sources
+      expect([base.role, rerun.role]).toEqual(['base', 'rerun'])
+      expect(base.commit).toMatch(/^[0-9a-f]{40}$/)
+      expect(rerun.commit).toMatch(/^[0-9a-f]{40}$/)
+      expect(base.label).toBeTruthy()
+      expect(rerun.label).toBeTruthy()
+      expect(rerun.reason).toContain('Recalibration')
+      expect(rerun.replaces?.length).toBeGreaterThan(0)
+      expect(baseline.meta.models).toEqual(['claude-sonnet-5-5'])
+      expect(baseline.meta.agentHome).toBe('inherit')
+      expect(baseline.meta.modelRunsSpent).toBe(base.modelRuns + rerun.modelRuns)
+      expect(baseline.meta.costUsdSpent).toBeCloseTo(base.costUsd + rerun.costUsd, 4)
+    })
+
+    it('adds up: its totals are those of its scenarios and its runs, and every replaced scenario ran on the rerun', () => {
+      const [base, rerun] = baseline.meta.sources
+      const runs = baseline.scenarios.flatMap((scenario) => scenario.runs)
+      expect(baseline.totals).toMatchObject({
+        scenarios: baseline.scenarios.length,
+        passed: baseline.scenarios.filter((s) => s.passed).length,
+        failed: baseline.scenarios.filter((s) => !s.passed).length
+      })
+      expect(baseline.totals.costUsd).toBeCloseTo(
+        runs.reduce((sum, item) => sum + (item.costUsd ?? 0), 0),
+        4
+      )
+      expect(baseline.meta.modelRuns).toBe(runs.length)
+      for (const scenario of baseline.scenarios) {
+        expect(scenario.runs).toHaveLength(baseline.meta.repeat)
+        expect(scenario.passed).toBe(scenario.passRuns >= baseline.meta.passThreshold && scenario.forbiddenRuns === 0)
+        expect(scenario.ranOn).toBe(rerun.replaces?.includes(scenario.id) ? rerun.commit : base.commit)
+        for (const item of scenario.runs) expect(typeof item.answer).toBe('string')
+      }
+    })
+
+    it('covers scenarios that exist, and every core scenario of the host', async () => {
+      const list = JSON.parse((await run(['list', '--json'])).stdout) as { id: string; core: boolean; hosts: string[] }[]
+      const ids = new Set(baseline.scenarios.map((scenario) => scenario.id))
+      for (const id of ids) expect(list.map((item) => item.id)).toContain(id)
+      for (const item of list.filter((entry) => entry.core && entry.hosts.includes('claude-code'))) expect(ids).toContain(item.id)
+    })
+
+    it('compares with itself without a regression', async () => {
+      expect((await run(['compare', baselinePath, baselinePath])).code).toBe(0)
+    })
+  })
 })
 
 describe('skill check, Layer 1: it fails when a promise breaks', () => {
@@ -374,6 +433,108 @@ describe('skill check, Layer 2: the replay, driven without a model', () => {
     const { results } = await replay('global-forbidden', answers(GOOD, GOOD, plan(command)))
     expect(results.scenarios[0].forbiddenRuns).toBe(1)
     expect(results.scenarios[0].passed).toBe(false)
+  })
+
+  describe('merging a partial rerun into a full run', () => {
+    const WF = 'wf-ai-testing-to-review'
+    const CI = 'ghp-required-local-ci'
+    const BASE_COMMIT = 'a'.repeat(40)
+    const RERUN_COMMIT = 'b'.repeat(40)
+    const REASON = 'Recalibration: the expectations of this scenario were corrected, the agent was right.'
+    type Doc = { meta: Record<string, unknown>; scenarios: { id: string; passed: boolean; runs: { costUsd?: number }[] }[]; totals: Record<string, unknown> }
+
+    async function record(name: string, scenarios: string[], responses: Record<string, unknown>, commit: string, label: string, cost: number): Promise<{ path: string; doc: Doc }> {
+      const responsesPath = path.join(scratch, `${name}.responses.json`)
+      const out = path.join(scratch, `${name}.json`)
+      writeFileSync(responsesPath, JSON.stringify(responses))
+      expect((await run(['run', '--runner', 'fake', '--scenario', scenarios.join(','), '--repeat', '3', '--fake-responses', responsesPath, '--out', out])).code).toBe(0)
+      const doc = JSON.parse(readFileSync(out, 'utf8')) as Doc
+      doc.meta.commit = commit
+      doc.meta.label = label
+      doc.meta.agentHome = 'inherit'
+      for (const scenario of doc.scenarios) for (const item of scenario.runs) item.costUsd = cost
+      doc.totals.costUsd = Number((cost * doc.scenarios.length * 3).toFixed(4))
+      writeFileSync(out, JSON.stringify(doc))
+      return { path: out, doc }
+    }
+
+    const good = (commands: string[], prose = 'The rule is in the skill.') => ({
+      text: `\`\`\`plan\n${commands.join('\n')}\n\`\`\`\n${prose}`,
+      filesRead: ['.claude/skills/sf-workflow/statuses/3-ai-testing.md']
+    })
+    const workflow = good(['.claude/skills/sf-workflow/workflow-cli.sh ready-pr 42', '.claude/skills/sf-workflow/workflow-cli.sh update-status 42 "In review"'])
+    const gate = good(['.claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42'])
+    const wrong = good(['git status'])
+
+    async function twoRuns() {
+      const base = await record('base', [WF, CI], { [WF]: [workflow], [CI]: [wrong] }, BASE_COMMIT, 'develop abc', 0.1)
+      const rerun = await record('rerun', [CI], { [CI]: [gate] }, RERUN_COMMIT, 'develop abc (recalibrated 1)', 0.25)
+      return { base, rerun }
+    }
+
+    it('replaces the scenarios of the rerun, keeps the others, and says which ran when, why, and for how much', async () => {
+      const { base, rerun } = await twoRuns()
+      expect(base.doc.scenarios.find((s) => s.id === CI)?.passed).toBe(false)
+      const merged = path.join(scratch, 'merged.json')
+      const outcome = await run(['merge', base.path, rerun.path, '--out', merged, '--reason', REASON])
+      expect(outcome.code).toBe(0)
+      const doc = JSON.parse(readFileSync(merged, 'utf8'))
+      const byId = Object.fromEntries(doc.scenarios.map((s: { id: string; passed: boolean; ranOn: string }) => [s.id, [s.passed, s.ranOn]]))
+      expect(byId).toEqual({ [WF]: [true, BASE_COMMIT], [CI]: [true, RERUN_COMMIT] })
+      expect(doc.totals).toEqual({ scenarios: 2, passed: 2, failed: 0, costUsd: 1.05 })
+      expect(doc.meta).toMatchObject({
+        commit: RERUN_COMMIT,
+        label: 'develop abc',
+        runner: 'fake',
+        repeat: 3,
+        passThreshold: 2,
+        agentHome: 'inherit',
+        modelRuns: 6,
+        modelRunsSpent: 9,
+        costUsdSpent: 1.35
+      })
+      expect(doc.meta.sources).toEqual([
+        expect.objectContaining({ role: 'base', commit: BASE_COMMIT, label: 'develop abc', modelRuns: 6, costUsd: 0.6, scenarios: 2 }),
+        expect.objectContaining({ role: 'rerun', commit: RERUN_COMMIT, label: 'develop abc (recalibrated 1)', modelRuns: 3, costUsd: 0.75, scenarios: 1, replaces: [CI], reason: REASON })
+      ])
+    })
+
+    it('is a valid baseline, and compares with itself without a regression', async () => {
+      const { base, rerun } = await twoRuns()
+      const merged = path.join(scratch, 'merged.json')
+      await run(['merge', base.path, rerun.path, '--out', merged, '--reason', REASON])
+      expect((await run(['compare', merged, merged])).code).toBe(0)
+      const regression = await run(['compare', merged, base.path])
+      expect(regression.code).toBe(1)
+      expect(regression.stdout).toContain(CI)
+    })
+
+    it('refuses what it cannot merge honestly: no reason, a scenario the base lacks, another kind of run, another file', async () => {
+      const { base, rerun } = await twoRuns()
+      const out = path.join(scratch, 'refused.json')
+      const noReason = await run(['merge', base.path, rerun.path, '--out', out])
+      expect(noReason.code).toBe(2)
+      expect(noReason.stderr).toContain('--reason')
+
+      const only = await record('only-wf', [WF], { [WF]: [workflow] }, BASE_COMMIT, 'develop abc', 0.1)
+      const unknown = await run(['merge', only.path, rerun.path, '--out', out, '--reason', REASON])
+      expect(unknown.code).toBe(2)
+      expect(unknown.stderr).toContain(`${CI}@claude-code`)
+
+      const differs = JSON.parse(readFileSync(rerun.path, 'utf8'))
+      differs.meta.repeat = 1
+      const other = path.join(scratch, 'other.json')
+      writeFileSync(other, JSON.stringify(differs))
+      const repeat = await run(['merge', base.path, other, '--out', out, '--reason', REASON])
+      expect(repeat.code).toBe(2)
+      expect(repeat.stderr).toContain('repeat')
+
+      const metrics = path.join(scratch, 'metrics.json')
+      writeFileSync(metrics, JSON.stringify({ kind: 'metrics' }))
+      expect((await run(['merge', base.path, metrics, '--out', out, '--reason', REASON])).code).toBe(2)
+      expect((await run(['merge', base.path, path.join(scratch, 'missing.json'), '--out', out, '--reason', REASON])).code).toBe(2)
+      expect(existsSync(out)).toBe(false)
+    })
   })
 
   it('does not read the name of a subcommand as the eval builtin', async () => {

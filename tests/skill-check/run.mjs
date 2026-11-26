@@ -17,6 +17,7 @@ import {
   gitHead,
   loadReplayConfig,
   loadScenarios,
+  mergeResults,
   parseClaudeStream,
   parseCodexStream,
   planRuns,
@@ -52,6 +53,8 @@ Layer 2, a real agent, run by a session and never by CI:
            [--fixtures-dir <dir>] [--keep-fixtures] [--timeout-sec 600] [--max-budget-usd 1.5]
            [--fake-responses <file>]             answers for --runner fake
   compare  <before.json> <after.json>          files read, commands planned, forbidden tokens; exit 1 on a regression
+  merge    <base.json> <rerun.json> --out <f> --reason "<why>"
+                                               a full run with some scenarios replaced by a rerun of them (after a recalibration)
   parse    --runner <claude|codex> --file <f>  what the runner takes from a recorded stream (debugging a runner)
 
 Common: --root <dir> (default: this repository), --json.
@@ -88,6 +91,8 @@ export async function main(argv) {
       )
     case 'compare':
       return cmdCompare(parseArgs(rest, common))
+    case 'merge':
+      return cmdMerge(parseArgs(rest, { booleans: ['json'], strings: ['out', 'reason'] }))
     case 'parse':
       return cmdParse(parseArgs(rest, { booleans: ['json'], strings: ['runner', 'file', 'cwd', 'last-message'] }))
     default:
@@ -327,6 +332,23 @@ async function cmdRun(opts) {
   } finally {
     if (!opts.keepFixtures) rmSync(scratch, { recursive: true, force: true })
   }
+}
+
+/** A full run with some of its scenarios replaced by a rerun of them (after their expectations were recalibrated): one file, and it says which part ran when and why. */
+function cmdMerge(opts) {
+  const [basePath, rerunPath] = opts._
+  if (!basePath || !rerunPath || !opts.out) throw new UsageError('merge needs <base.json> <rerun.json> --out <file> --reason "<why>"')
+  for (const path of [basePath, rerunPath]) if (!existsSync(path)) throw new UsageError(`no such file: ${path}`)
+  const merged = mergeResults(JSON.parse(readFileSync(basePath, 'utf8')), JSON.parse(readFileSync(rerunPath, 'utf8')), { reason: opts.reason })
+  mkdirSync(dirname(resolve(opts.out)), { recursive: true })
+  writeFileSync(resolve(opts.out), `${formatJson(merged)}\n`)
+  const rerun = merged.meta.sources[1]
+  emit(
+    opts,
+    merged,
+    `${merged.totals.passed}/${merged.totals.scenarios} scenarios pass; ${rerun.replaces.length} replaced by the rerun of ${rerun.commit.slice(0, 8)} (${rerun.replaces.join(', ')}); ${merged.meta.modelRuns} runs recorded, ${merged.meta.modelRunsSpent} paid, ${merged.meta.costUsdSpent} USD; written to ${opts.out}`
+  )
+  return 0
 }
 
 /** What the runner would take from a recorded stream: the files read, the answer, the cost. For debugging a runner without starting an agent. */
