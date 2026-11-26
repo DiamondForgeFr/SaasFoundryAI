@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, sep } from 'node:path'
 
@@ -102,7 +102,36 @@ const stepMatches = (command, step) => {
 
 const describeStep = (step) => (typeof step === 'string' ? step : JSON.stringify(step))
 
-/** One run against its scenario: `{ pass, reasons, commands, filesRead, forbiddenHits }`. */
+/** How much of an answer a result keeps: enough to read what the agent said, not a transcript. */
+export const ANSWER_LIMIT = 4000
+
+export function truncateAnswer(text) {
+  const trimmed = text.trim()
+  return trimmed.length <= ANSWER_LIMIT ? trimmed : `${trimmed.slice(0, ANSWER_LIMIT)}\n[truncated: ${trimmed.length - ANSWER_LIMIT} more characters]`
+}
+
+/** The planned commands and the answer against one set of expectations (`commands`, `includes`, `answer`): the reasons it fails, none when it holds. */
+function checkOutcome(set, plan) {
+  const reasons = []
+  let next = 0
+  for (const command of plan.commands) if (next < (set.commands ?? []).length && stepMatches(command, set.commands[next])) next += 1
+  for (const step of (set.commands ?? []).slice(next)) reasons.push({ code: 'STEP_MISSING', message: `no planned command, in order, matches ${describeStep(step)}` })
+
+  for (const item of set.includes ?? []) {
+    if (!plan.commands.some((command) => stepMatches(command, item))) reasons.push({ code: 'INCLUDE_MISSING', message: `no planned command matches ${describeStep(item)}` })
+  }
+
+  for (const item of set.answer?.includes ?? []) {
+    const options = typeof item === 'string' ? [item] : item.any
+    if (!options.some((option) => plan.prose.toLowerCase().includes(option.toLowerCase()))) reasons.push({ code: 'ANSWER_MISSING', message: `the answer says none of ${options.join(' | ')}` })
+  }
+  for (const token of set.answer?.excludes ?? []) {
+    if (plan.prose.toLowerCase().includes(token.toLowerCase())) reasons.push({ code: 'ANSWER_FORBIDDEN', message: `the answer says ${token}` })
+  }
+  return reasons
+}
+
+/** One run against its scenario: `{ pass, reasons, commands, filesRead, forbiddenHits, answer }`. */
 export function scoreRun(scenario, config, result) {
   const expect = scenario.expect ?? {}
   const reasons = []
@@ -118,12 +147,17 @@ export function scoreRun(scenario, config, result) {
   }
   for (const hit of forbiddenHits) reasons.push({ code: 'FORBIDDEN', message: `${hit.token} in: ${hit.command}` })
 
-  let next = 0
-  for (const command of plan.commands) if (next < (expect.commands ?? []).length && stepMatches(command, expect.commands[next])) next += 1
-  for (const step of (expect.commands ?? []).slice(next)) reasons.push({ code: 'STEP_MISSING', message: `no planned command, in order, matches ${describeStep(step)}` })
+  reasons.push(...checkOutcome(expect, plan))
 
-  for (const item of expect.includes ?? []) {
-    if (!plan.commands.some((command) => stepMatches(command, item))) reasons.push({ code: 'INCLUDE_MISSING', message: `no planned command matches ${describeStep(item)}` })
+  // `oneOf`: a situation whose right move is either a command or a question to the developer accepts either, never neither.
+  if (expect.oneOf?.length) {
+    const outcomes = expect.oneOf.map((set) => checkOutcome(set, plan))
+    if (!outcomes.some((failed) => failed.length === 0)) {
+      reasons.push({
+        code: 'ONE_OF_MISSING',
+        message: `none of the ${outcomes.length} accepted outcomes holds: ${outcomes.map((failed, i) => `(${i + 1}) ${failed.map((r) => r.message).join('; ')}`).join(' | ')}`
+      })
+    }
   }
 
   for (const item of expect.reads ?? []) {
@@ -131,15 +165,7 @@ export function scoreRun(scenario, config, result) {
     if (!filesRead.some((file) => options.some((option) => file.includes(option)))) reasons.push({ code: 'READ_MISSING', message: `none of ${options.join(' | ')} was read` })
   }
 
-  for (const item of expect.answer?.includes ?? []) {
-    const options = typeof item === 'string' ? [item] : item.any
-    if (!options.some((option) => plan.prose.toLowerCase().includes(option.toLowerCase()))) reasons.push({ code: 'ANSWER_MISSING', message: `the answer says none of ${options.join(' | ')}` })
-  }
-  for (const token of expect.answer?.excludes ?? []) {
-    if (plan.prose.toLowerCase().includes(token.toLowerCase())) reasons.push({ code: 'ANSWER_FORBIDDEN', message: `the answer says ${token}` })
-  }
-
-  return { pass: reasons.length === 0, reasons, commands: plan.commands, filesRead, forbiddenHits }
+  return { pass: reasons.length === 0, reasons, commands: plan.commands, filesRead, forbiddenHits, answer: truncateAnswer(plan.prose) }
 }
 
 /** A scenario over its repeats: it passes at the threshold, and never with a forbidden token on any run. */
@@ -276,7 +302,17 @@ const KNOWN_FILE = /(?:[\w.-]+\/)*[\w.-]+\.(?:md|sh|json|yml|yaml|toml|ts)\b/g
 export function parseClaudeStream(stdout, cwd) {
   const filesRead = []
   const out = { text: '', filesRead, model: undefined, costUsd: undefined, error: undefined, turns: undefined }
-  const rel = (file) => (isAbsolute(file) && file.startsWith(cwd + sep) ? relative(cwd, file).split(sep).join('/') : file)
+  // The agent reports the real path of a file; a temporary folder is often reached through a symlink (`/var` is `/private/var` on macOS), so both spellings of the project folder are tried.
+  const roots = [cwd]
+  try {
+    roots.push(realpathSync(cwd))
+  } catch {
+    // the folder is gone: the plain spelling is all there is
+  }
+  const rel = (file) => {
+    const root = isAbsolute(file) ? roots.find((candidate) => file.startsWith(candidate + sep)) : undefined
+    return root ? relative(root, file).split(sep).join('/') : file
+  }
   for (const line of stdout.split('\n')) {
     if (!line.trim().startsWith('{')) continue
     let event

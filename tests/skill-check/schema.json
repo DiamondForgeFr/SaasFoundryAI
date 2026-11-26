@@ -147,6 +147,39 @@
         }
       ]
     },
+    "answerSpec": {
+      "description": "What the prose after the plan block must, or must not, say. Matching ignores case.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "includes": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["any"],
+                "properties": { "any": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 } }
+              }
+            ]
+          }
+        },
+        "excludes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "outcome": {
+      "description": "One accepted way for a run to end: planned commands and/or words in the answer.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "commands": { "type": "array", "items": { "$ref": "#/definitions/step" } },
+        "includes": { "type": "array", "items": { "$ref": "#/definitions/step" } },
+        "answer": { "$ref": "#/definitions/answerSpec" }
+      }
+    },
     "scenario": {
       "type": "object",
       "additionalProperties": false,
@@ -175,26 +208,12 @@
             "commands": { "type": "array", "items": { "$ref": "#/definitions/step" }, "description": "Planned commands that must appear, in this order." },
             "includes": { "type": "array", "items": { "$ref": "#/definitions/step" }, "description": "Planned commands that must appear, in any order." },
             "forbidden": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Tokens no planned command of this scenario may contain, on top of the global list." },
-            "answer": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "includes": {
-                  "type": "array",
-                  "items": {
-                    "anyOf": [
-                      { "type": "string", "minLength": 1 },
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": ["any"],
-                        "properties": { "any": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 } }
-                      }
-                    ]
-                  }
-                },
-                "excludes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
-              }
+            "answer": { "$ref": "#/definitions/answerSpec" },
+            "oneOf": {
+              "type": "array",
+              "minItems": 2,
+              "items": { "$ref": "#/definitions/outcome" },
+              "description": "Accepted outcomes: the run must satisfy at least one of them, on top of everything else this block asks. For a situation whose right move is either a command or a question to the developer."
             }
           }
         },
