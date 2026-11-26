@@ -100,10 +100,14 @@
     },
     "tool-saasfoundry": {
       "template": {
-        "entry": 68608,
-        "total": 68608,
+        "entry": 15360,
+        "total": 44032,
         "files": {
-          "SKILL.md": 68608
+          "SKILL.md": 15360,
+          "flows/feedback-bug.md": 5120,
+          "flows/intake.md": 7168,
+          "flows/milestone.md": 7168,
+          "flows/update.md": 5120
         }
       }
     },
