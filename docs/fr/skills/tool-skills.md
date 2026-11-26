@@ -222,6 +222,9 @@ généralement pas besoin de l'appeler directement : `sf-workflow` s'en charge.
 Le CLI de `sf-tool-github-projects` reste utile à lire : il relie les sous-tickets natifs, signale chaque enfant dont le statut Projects n'est pas `Done` et fournit les données des garde-fous de
 complétion et de l'agrégation des Epics.
 
+Son `SKILL.md` reste une courte référence de commandes : le cycle de vie (les statuts, et qui sort une pull request du brouillon) appartient à `sf-workflow`, et le catalogue des labels à
+`.claude/docs/github-labels.md`. Chaque fait a un seul propriétaire, comme le demande la [norme d'écriture](/fr/skills/creating-skills) à chaque skill.
+
 Consultez l'[intégration GitHub](/fr/workflow/github-integration) pour comprendre les échanges avec Projects V2.
 
 ## Mettre à niveau les skills d'outils

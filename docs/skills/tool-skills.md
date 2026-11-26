@@ -215,6 +215,9 @@ open PRs from the CLI. You do not call them directly; `sf-workflow` calls them f
 The `sf-tool-github-projects` CLI is worth reading even if you never invoke it yourself — it links native sub-issues, reports every child whose project-board Status is not `Done`, and gives
 `sf-workflow` the data used for parent completion guards and Epic status roll-up.
 
+Its `SKILL.md` stays a short command reference: the lifecycle (statuses, and who takes a pull request out of draft) belongs to `sf-workflow`, and the label catalogue to
+`.claude/docs/github-labels.md`. Each fact has one owner, as the [writing standard](/skills/creating-skills) asks of every skill.
+
 See [GitHub Integration](/workflow/github-integration) for how the skill talks to Projects V2.
 
 ## Upgrading tool skills

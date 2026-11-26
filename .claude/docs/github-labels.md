@@ -89,7 +89,26 @@ A ticket that changes the user interface carries the `ui` label. It is a workflo
 gh label create "ui" --repo DiamondForgeFr/SaasFoundryAI --color "5319E7" --description "Workflow: ticket changes the user interface; a validated mockup is required before review" || true
 ```
 
+## Labels used by `sf-tool-github-projects` (complexity)
+
+The complexity label sets the rigor applied in each phase (agents, tests, reviews). A ticket carries one at a time: `set-complexity` removes the old label first, and `sf new` creates all four.
+
+| Label                 | Color     | Use case                                        |
+| --------------------- | --------- | ----------------------------------------------- |
+| `complexity: bug`     | `#FF5555` | Bug fix — direct fix + regression test          |
+| `complexity: low`     | `#7CFC00` | Oneshot-style, minimal ceremony                 |
+| `complexity: medium`  | `#FFD700` | Structured plan + validation                    |
+| `complexity: complex` | `#FF1493` | Full adversarial review (security, logic, perf) |
+
+Create them once by hand, one command per call. `gh` prints `already exists` and exits non-zero on a label that is there: that is harmless, leave the label as it is and go on with the next one.
+
+```bash
+gh label create "complexity: bug"     --color FF5555 --description "🐛 Bug fix"
+gh label create "complexity: low"     --color 7CFC00 --description "🟢 Low complexity"
+gh label create "complexity: medium"  --color FFD700 --description "🟡 Medium complexity"
+gh label create "complexity: complex" --color FF1493 --description "🔴 Complex / critical"
+```
+
 ## Not managed here
 
-- `complexity: {bug,low,medium,complex}` — internal workflow labels, managed by `sf-tool-github-projects` (see `.claude/skills/sf-tool-github-projects/`).
 - Any custom label a maintainer adds manually — the CLI ignores unrecognized labels.

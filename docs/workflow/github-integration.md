@@ -20,7 +20,7 @@ A status is not a label, and complexity is not a phase column. Keeping them inde
 ## Prerequisites
 
 - A GitHub Projects V2 board whose `Status` field contains the selected preset's statuses.
-- The four complexity labels.
+- The four complexity labels. `sf new` creates them; when it could not, `.claude/docs/github-labels.md` lists the commands.
 - `gh` authenticated with `project` and `repo` permissions.
 - `.saasfoundry.json` configured with the board URL and branches.
 

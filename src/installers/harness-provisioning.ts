@@ -145,8 +145,8 @@ export interface LabelDef {
 /**
  * Canonical workflow label catalogue — the single source of truth for the
  * labels the workflow guards depend on. The `complexity:*` / `nature:*` / `ui` tables
- * in `scaffolds/docs/github-labels.md` and the github-projects SKILL.md mirror
- * this list (prose copies); this constant is what actually gets created.
+ * in `scaffolds/docs/github-labels.md` mirror this list (a prose copy); this constant
+ * is what actually gets created.
  *
  * Feedback labels (`module-request` / `cli-bug` / `scaffold-bug`) are
  * deliberately excluded — they belong to the upstream SaaSFoundryAI repo, not to
