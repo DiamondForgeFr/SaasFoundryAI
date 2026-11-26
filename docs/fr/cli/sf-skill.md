@@ -37,6 +37,18 @@ copie que le projet versionne, et continue de s'exécuter après la mise à jour
 
 [`sf status`](./sf-status.md#skills-personnelles) signale une skill personnelle qui masque déjà une skill du projet ou la concurrence, et nomme le dossier à supprimer.
 
+## Contenu de la skill
+
+Le bundle que copie `install` est un fichier d'entrée et les fichiers vers lesquels il renvoie, qu'un agent ne lit que lorsqu'une demande en a besoin :
+
+- `SKILL.md` aiguille chaque demande vers sa première commande et porte ce que tous les parcours partagent : les scripts de démarrage, les commandes non interactives, les phases du parcours « du zéro
+  au projet » et leur reprise, les questions sur le projet auxquelles répond `read-project.sh`, et le contrôle du catalogue qui précède tout code sur mesure.
+- `flows/` contient un fichier pour chaque branche que seules certaines demandes atteignent : lire un POC et questionner son intention, `sf new`, `sf update`, le jalon de version, les demandes de
+  module et les rapports de bug.
+- `reference/` contient les schémas d'intention de `sf new` et `sf update`, et `scripts/` les aides que les parcours exécutent.
+
+Un projet dont `update` a actualisé la skill y trouve donc un dossier `flows/` à côté de `SKILL.md`.
+
 ## Exemples
 
 ```bash

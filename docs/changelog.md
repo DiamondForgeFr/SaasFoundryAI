@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The `tool-saasfoundry` skill is slimmer: its entry file routes each request to its first command, and the flows only some requests need (reading a POC, `sf new`, `sf update`, the release milestone,
+  module requests, bug reports) sit in files read on demand. The entry file goes from 68,283 to about 15,000 bytes, and the rules a guard or an incident justifies are kept
+  ([#1097](https://github.com/DiamondForgeFr/SaasFoundryAI/issues/1097)).
+
 ## [1.3.0] - 2026-11-23
 
 Kimi Code now works as a coding agent next to Claude Code and Codex, with its own routing and tier agents. The guard refuses shell lines it cannot check (substitutions, loops, chains, interpreter
