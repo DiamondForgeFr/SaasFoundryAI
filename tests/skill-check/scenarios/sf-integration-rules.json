@@ -43,8 +43,9 @@
       "prompt": "The developer asks: 'where do I put a new `InvoiceStatus` type that this API and the web repository both use?'. Answer from what this project's guidance says.",
       "expect": {
         "reads": [["sf-integration-rules/topology.md"]],
-        "answer": { "includes": [{ "any": ["inlined", "inline", "vendored", "per side", "each app", "each repo", "stand-alone", "standalone"] }] }
-      }
+        "answer": { "includes": [{ "any": ["inlined", "inline", "vendored", "per side", "each app", "each repo", "stand-alone", "standalone", "byte-identical", "identical file", "identical copy"] }] }
+      },
+      "notes": "Calibrated in #1100 after the replay of the slimmed skill: three answers gave the rule itself (a copy of the type in src/shared-types/ of each repository, no canonical copy, no packages/) in the words 'byte-identical copy' and 'identical file' instead of 'per side'. The checker's wording was too narrow, the behaviour was right; nothing else is loosened."
     }
   ]
 }
