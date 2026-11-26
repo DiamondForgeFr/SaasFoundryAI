@@ -119,9 +119,9 @@ is then the human gate.
 `update-status` checks two things that used to be instructions only:
 
 - **`→ AI testing` needs pushed work.** The guard reads git alone, so it holds for every workflow tool. It inspects the checkout that holds the work: the ticket branch, the delivery parent's branch
-  for a bundled child, a branch the host named (`worktree-agent-<id>`) against the one ticket branch of `origin`, or, from the primary checkout, the worktree of the ticket branch. Tracked changes
-  (staged or not), a branch `origin` lacks, a commit it does not have, a branch it moved past, an unreachable `origin` and a detached HEAD are refused, and the message names the commit, push or
-  `git pull --rebase` command. Untracked files only warn. The same check covers the return from Human testing to AI testing after a fix.
+  for a bundled child, a branch the host named (`worktree-agent-<id>`) against the one ticket branch of `origin`, or, from the primary checkout or a checkout on another ticket's branch, the worktree
+  of the ticket branch. Tracked changes (staged or not), a branch `origin` lacks, a commit it does not have, a branch it moved past, an unreachable `origin` and a detached HEAD are refused, and the
+  message names the commit, push or `git pull --rebase` command. Untracked files only warn. The same check covers the return from Human testing to AI testing after a fix.
 - **`→ Human testing` needs a green local CI.** With GitHub Projects, the guard reads the head commit of the draft PR it just matched, from any checkout, and requires the project's local CI statuses
   green on it. They come from `workflow.localCi.requiredStatuses` when it is recorded (`sf workflow set-local-ci`), otherwise from `local-<job>` for each job of `.molten/project.json` when it
   publishes to GitHub, otherwise from the `AI testing / Local CI` status the agent publishes with `workflow-cli.sh ai-status <ticket> "Local CI" success` once the project's suite is green. The refusal

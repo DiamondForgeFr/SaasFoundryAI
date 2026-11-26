@@ -209,9 +209,9 @@ The hook is a guardrail against the ordinary path the refusals used to teach, no
 
 - **Protects:** a ticket enters AI testing with its work committed and pushed, so that the test plan and the report describe code anyone can fetch. The guard reads git alone, in the checkout that
   holds the work: the ticket branch of this checkout; the delivery parent's branch for a `nature:bundled-pr` child; a branch the host named (`worktree-agent-<id>`) against the one ticket branch of
-  `origin`; from the primary checkout, the worktree that holds the ticket branch (with none, `origin` alone is checked and the notice says so). Tracked changes, staged or not, a branch `origin` lacks,
-  a commit it does not have, a branch it moved past, an unreachable `origin` and a detached HEAD all refuse, and the message names the add, commit and push (or `git pull --rebase`) command to run.
-  Untracked files only warn.
+  `origin`; from the primary checkout, the worktree that holds the ticket branch (with none, `origin` alone is checked and the notice says so); from a checkout on another ticket's branch, that same
+  worktree (with none, the move is refused). Several worktrees on a branch of the ticket refuse. Tracked changes, staged or not, a branch `origin` lacks, a commit it does not have, a branch it moved
+  past, an unreachable `origin` and a detached HEAD all refuse, and the message names the add, commit and push (or `git pull --rebase`) command to run. Untracked files only warn.
 - **Applies to:** `update-status <ticket> "AI testing"`, from any status, so the return from Human testing ("fix, commit, push, return to AI testing") is covered. Every tool: it needs git, not the
   board.
 - **Legitimate:** `origin` is down or refuses the push and the work is safe elsewhere (a bundle, another remote) that you name. Not a case for the hatch: a dirty tree (commit it), an unpushed commit
