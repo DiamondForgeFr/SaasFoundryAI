@@ -1,0 +1,165 @@
+{
+  "kind": "fixtures",
+  "schemaVersion": 1,
+  "fixtures": {
+    "harness-solo": {
+      "description": "The AI harness alone in an empty repository, Solo workflow, Claude Code and Codex declared. What `sf new --profile harness --workflow solo` deposits.",
+      "steps": [
+        { "op": "git-init" },
+        { "op": "sf", "args": ["new", "--profile", "harness", "--non-interactive", "--agents", "claude-code,codex", "--project-name", "fixture-solo", "--workflow", "solo", "--no-srs-enable"] },
+        { "op": "copy-skill", "from": "scaffolds/skills-templates/tool-saasfoundry", "to": ".claude/skills/tool-saasfoundry" }
+      ]
+    },
+    "harness-team": {
+      "description": "The same harness with the seven-status Team workflow.",
+      "steps": [
+        { "op": "git-init" },
+        { "op": "sf", "args": ["new", "--profile", "harness", "--non-interactive", "--agents", "claude-code,codex", "--project-name", "fixture-team", "--workflow", "saasfoundry", "--no-srs-enable"] }
+      ]
+    },
+    "harness-srs": {
+      "description": "The Solo harness with the sf-srs skill and a Notion SRS declared in the manifest. The skill is copied and the manifest set directly: `sf new --srs-enable` asks Notion for a token, and no credential is ever given to a replay. Nothing contacts Notion, the replay only plans.",
+      "steps": [
+        { "op": "git-init" },
+        { "op": "sf", "args": ["new", "--profile", "harness", "--non-interactive", "--agents", "claude-code,codex", "--project-name", "fixture-srs", "--workflow", "solo", "--no-srs-enable"] },
+        {
+          "op": "copy-skill",
+          "from": "scaffolds/skills-templates/sf-srs",
+          "to": ".claude/skills/sf-srs",
+          "executable": ["scripts/srs-cli.sh", "scripts/detect-eval-signals.sh", "scripts/srs-intent-hook.sh"]
+        },
+        {
+          "op": "json-set",
+          "file": ".saasfoundry.json",
+          "set": {
+            "tools.srs": {
+              "enabled": true,
+              "backend": "notion",
+              "rootPage": { "id": "00000000-0000-4000-8000-000000000000", "url": "https://notion.invalid/fixture-srs", "name": "fixture-srs" },
+              "scan": { "exclude": ["scaffolds/", "docs/", ".claude/"] }
+            }
+          }
+        },
+        { "op": "sf", "args": ["agents", "refresh", "--scope", "shared"] }
+      ]
+    },
+    "full-monorepo": {
+      "description": "A generated monorepo: API, web app, root harness, Solo workflow. Dependencies are not installed.",
+      "agentDir": "fixture-mono",
+      "steps": [
+        {
+          "op": "sf",
+          "args": [
+            "new",
+            "--non-interactive",
+            "--profile",
+            "full",
+            "--project-name",
+            "fixture-mono",
+            "--agents",
+            "claude-code,codex",
+            "--structure",
+            "monorepo",
+            "--setup-repo",
+            "local",
+            "--db-setup",
+            "manual",
+            "--db-type",
+            "postgresql",
+            "--email-service",
+            "none",
+            "--s3-setup",
+            "manual",
+            "--no-analytics",
+            "--workflow",
+            "solo",
+            "--no-srs-enable",
+            "--no-start-services",
+            "--start-apps",
+            "none"
+          ]
+        },
+        { "op": "copy-skill", "from": "scaffolds/skills-templates/tool-saasfoundry", "to": "fixture-mono/.claude/skills/tool-saasfoundry" }
+      ]
+    },
+    "full-multirepo": {
+      "description": "A generated multirepo; the agent starts in the API repository.",
+      "agentDir": "fixture-multi/apps/fixture-multi-api",
+      "steps": [
+        {
+          "op": "sf",
+          "args": [
+            "new",
+            "--non-interactive",
+            "--profile",
+            "full",
+            "--project-name",
+            "fixture-multi",
+            "--agents",
+            "claude-code,codex",
+            "--structure",
+            "multirepo",
+            "--setup-repo",
+            "local",
+            "--db-setup",
+            "manual",
+            "--db-type",
+            "postgresql",
+            "--email-service",
+            "none",
+            "--s3-setup",
+            "manual",
+            "--no-analytics",
+            "--workflow",
+            "solo",
+            "--no-srs-enable",
+            "--no-start-services",
+            "--start-apps",
+            "none"
+          ]
+        }
+      ]
+    },
+    "poc-folder": {
+      "description": "A folder holding a small prototype and no manifest: what a developer has before any SaaSFoundryAI project exists.",
+      "steps": [
+        { "op": "git-init" },
+        {
+          "op": "write",
+          "path": "package.json",
+          "content": "{\n  \"name\": \"invoice-poc\",\n  \"version\": \"0.0.1\",\n  \"scripts\": { \"start\": \"node src/index.js\" },\n  \"dependencies\": { \"express\": \"4.19.2\" }\n}\n"
+        },
+        {
+          "op": "write",
+          "path": "src/index.js",
+          "content": "const express = require('express')\nconst app = express()\nconst invoices = []\napp.use(express.json())\napp.get('/invoices', (req, res) => res.json(invoices))\napp.post('/invoices', (req, res) => {\n  invoices.push(req.body)\n  res.status(201).json(req.body)\n})\napp.listen(3000)\n"
+        },
+        { "op": "write", "path": "README.md", "content": "# invoice-poc\n\nA throwaway prototype: list and create invoices in memory.\n" },
+        { "op": "copy-skill", "from": "scaffolds/skills-templates/tool-saasfoundry", "to": ".claude/skills/tool-saasfoundry" }
+      ]
+    },
+    "dogfood": {
+      "description": "The tracked harness files of this repository, copied into a folder of their own: AGENTS.md, the skills, the shipped templates, two sources the dogfood scenarios ask about. Untracked files, .env files and other worktrees are never copied.",
+      "steps": [
+        { "op": "git-init" },
+        {
+          "op": "copy-tracked",
+          "paths": [
+            "AGENTS.md",
+            ".saasfoundry.json",
+            ".claude/skills",
+            ".claude/docs",
+            ".claude/rules",
+            ".claude/settings.json",
+            ".agents",
+            "scaffolds/skills-templates",
+            "scaffolds/docs",
+            "src/harness/agent-instructions.ts",
+            "src/__tests__/unit/skill/tool-skill-drift.spec.ts",
+            "package.json"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,273 @@
+{
+  "kind": "ledger",
+  "schemaVersion": 1,
+  "skill": "sf-workflow",
+  "rules": [
+    {
+      "id": "complexity-gate",
+      "summary": "No move out of Backlog without a complexity label; the agent suggests, the developer decides",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["update-status <ticket> <target>", "complexity: *", "detect-complexity", "retag"],
+      "source": "workflow-cli.complexity-guard.spec.ts"
+    },
+    {
+      "id": "nature-axis",
+      "summary": "A bundled child goes AI Testing to Done; under Solo no nature label gates In review",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["nature:bundled-pr", "nature:internal", "Nature guard", "PR-state guard", "PR-merged guard"],
+      "source": "workflow-cli.solo-preset.spec.ts"
+    },
+    {
+      "id": "hatches-are-the-developers",
+      "summary": "An agent never sets an escape hatch; it stops, reports and asks",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["An agent never sets one", "SF_WORKFLOW_BYPASS_*", "--skip-local-ci"],
+      "source": "the guard hook of `sf agents guard`"
+    },
+    {
+      "id": "hatch-catalogue",
+      "summary": "What each hatch switches off, when it is legitimate, the record to leave",
+      "owner": "escape-hatches.md",
+      "tier": "disclosed",
+      "tokens": ["# Workflow escape hatches", "## Quick reference", "## Record to leave", "SF_WORKFLOW_BYPASS_PR_MERGED_GUARD"],
+      "unique": true,
+      "pointer": { "from": "SKILL.md", "match": "escape-hatches.md" },
+      "source": "guard-refusal-wording.spec.ts names its sections"
+    },
+    {
+      "id": "ui-mockup-gate",
+      "summary": "A ui ticket reaches the developer's review only with a recorded mockup validation",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["record-ui-validation", "get-ui-validation", "<!-- sf-ui-validation:v1 -->", "UI mockup guard", "set-ui"],
+      "source": "workflow-cli.ui-mockup-guard.spec.ts"
+    },
+    {
+      "id": "ui-working-a-ticket",
+      "summary": "How an agent works a ui ticket: mockup first, visual part held, nothing approved on the developer's behalf",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["Working a `ui` ticket", "ui-checklist.md", "docs/mockups/", "An agent never records an approval the developer did not give"],
+      "source": "ui-ticket-guidance.spec.ts"
+    },
+    {
+      "id": "ui-checklist",
+      "summary": "The checklist a ui mockup is held to",
+      "owner": "ui-checklist.md",
+      "tier": "disclosed",
+      "tokens": ["# UI checklist", "## Hierarchy", "## States", "## Accessibility"],
+      "unique": true,
+      "pointer": { "from": "SKILL.md", "match": "ui-checklist.md" },
+      "source": "ui-ticket-guidance.spec.ts"
+    },
+    {
+      "id": "ticket-hierarchy",
+      "summary": "Children are native sub-issues; an Epic owns no branch or PR and its status is derived",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["create-subtask", "list-incomplete-children", "sf-epic", "delivery parent"],
+      "source": "workflow-cli.parent-child-guards.spec.ts"
+    },
+    {
+      "id": "delegation-routing",
+      "summary": "Delegate by task kind through the route; a subtask states file set, expected result and check",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["sf agents route --task <kind> --provider <current-agent>", "file set", "expected result", "multi-file-feature", "alias <name>"],
+      "source": "delegation-routing.spec.ts"
+    },
+    {
+      "id": "delegated-delivery",
+      "summary": "Who builds a ticket, in which worktree, and that consent is only the developer's own reply",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": [
+        "sf agents delegation allow",
+        "sf agents delegation decline",
+        "Every ticket in a worktree, never the primary checkout",
+        "git worktree add <path> -b <branch> origin/<workingBranch>",
+        "never runs `ready-pr`"
+      ],
+      "source": "delegation-routing.spec.ts, delegated-worktree-refusal.spec.ts"
+    },
+    {
+      "id": "measured-delegations",
+      "summary": "Every routed delegation carries a route id and ends on the SF-DELEGATION line",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["--record", "route=<id>", "SF-DELEGATION:", "--retry-of", "sf agents outcome mark"],
+      "source": "delegation-routing.spec.ts"
+    },
+    {
+      "id": "srs-handoff",
+      "summary": "SRS tickets go through transition-drafting, never update-status; spawned stories come from the spawner",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["transition-drafting", "srs:drafting", "--bypass-srs", "srs-cli.sh validate"],
+      "source": "workflow-cli.srs-drafting.spec.ts"
+    },
+    {
+      "id": "draft-pr-lifecycle",
+      "summary": "A draft pull request at the latest during AI Testing; Resolves and Part of lines; who leaves draft",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["create-pr <ticket> --draft", "ready-pr <ticket>", "draft-pr <ticket>", "Resolves #<ticket>", "Part of #<ticket>"],
+      "source": "draft-pr-owner.spec.ts"
+    },
+    {
+      "id": "release-ticket",
+      "summary": "A release ticket follows the RC branch and its pull request, then a merge-commit sync-back",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["A release ticket", "Closes #<ticket>", "gh pr merge <N> --merge"],
+      "source": "workflow-cli.release-ticket.spec.ts"
+    },
+    {
+      "id": "critical-rules-delivery",
+      "summary": "Close children as they land; a parent is gated by its children; one agent per ticket",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["CLOSE CHILD TICKETS AS THEY LAND", "PARENT DONE IS GATED BY CHILDREN", "ONE AGENT PER TICKET, NEVER A SWITCH MID-DELIVERY"]
+    },
+    {
+      "id": "migration-framework-rule",
+      "summary": "Repository-only rule that only this repository's copy of the skill carries (the template has no rule 9); D9 of #1096 has #1099 move it to this repository's own AGENTS.md",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["MIGRATION FRAMEWORK ON BREAKING CHANGES", ".claude/docs/migration-framework.md"],
+      "views": ["repo"],
+      "source": "AGENTS.md, Migration framework"
+    },
+    {
+      "id": "announce-long-commands",
+      "summary": "Announce a command over ~5 s, stream one over ~60 s",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["ANNOUNCE + STREAM LONG COMMANDS"]
+    },
+    {
+      "id": "milestones",
+      "summary": "A milestone reports and never blocks a release",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["workflow-cli.sh milestone create|list|show|scope|assign|associate", "A milestone reports; it never blocks a release"],
+      "source": "workflow-cli.milestone.spec.ts"
+    },
+    {
+      "id": "output-language",
+      "summary": "Artefacts follow the manifest language, never the language of the conversation",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["language.tickets", "language.codeComments"]
+    },
+    {
+      "id": "status-backlog",
+      "summary": "Complexity is detected, then persisted with retag before the ticket leaves Backlog",
+      "owner": "statuses/1-backlog.md",
+      "tier": "step",
+      "tokens": ["detect-complexity.sh <ticket>", "retag <ticket>", "get-complexity <ticket>"]
+    },
+    {
+      "id": "status-in-progress-ticket-first",
+      "summary": "The ticket exists before the code; the branch carries its number; a host-named branch is pushed to the ticket branch",
+      "owner": "statuses/2-in-progress.md",
+      "tier": "step",
+      "tokens": ["#TBD", "commitlint", "git checkout --no-track -b feature/<N>-<description> origin/<workingBranch>", "git push origin HEAD:feature/<N>-<description>"],
+      "source": "workflow-git-guard.spec.ts, husky hooks"
+    },
+    {
+      "id": "status-in-progress-delegation",
+      "summary": "The session delegates the ticket to one agent; a trivial change stays in the session",
+      "owner": "statuses/2-in-progress.md",
+      "tier": "step",
+      "tokens": ["delegation:", "steps.execute.taskKind", "sf agents delegation allow"],
+      "source": "delegation-routing.spec.ts"
+    },
+    {
+      "id": "status-ai-testing-headings",
+      "summary": "The test plan and the test report start with their exact headings",
+      "owner": "statuses/3-ai-testing.md",
+      "tier": "step",
+      "tokens": ["## Test plan", "## Test report"],
+      "source": "test-report-heading.spec.ts"
+    },
+    {
+      "id": "status-ai-testing-local-ci",
+      "summary": "Heavy validation runs on the pushed head and the local CI gate is green before the PR leaves draft",
+      "owner": "statuses/3-ai-testing.md",
+      "tier": "step",
+      "tokens": [
+        "molten ci run <branch>",
+        "molten ci status",
+        "ci.jobs",
+        "npm run test:pre-push",
+        "workflow.localCi.requiredStatuses",
+        "ai-status <ticket> \"Local CI\" success",
+        "local-ci-gate <ticket>"
+      ],
+      "source": "molten-pipeline-rule.spec.ts, workflow-cli.local-ci-guard.spec.ts"
+    },
+    {
+      "id": "status-ai-testing-delegated-stop",
+      "summary": "A delegated agent stops at the green report with the PR a draft; the session makes the transition",
+      "owner": "statuses/3-ai-testing.md",
+      "tier": "step",
+      "tokens": ["never merges, never runs", "ready-pr <ticket>", "examine.sh <ticket>"],
+      "source": "delegation-routing.spec.ts"
+    },
+    {
+      "id": "status-in-review",
+      "summary": "In review needs an open non-draft PR whose head branch carries the ticket number",
+      "owner": "statuses/4-in-review.md",
+      "tier": "step",
+      "tokens": ["feature/<N>-", "fix/<N>-", "branch-naming-pr-regex.spec.ts", "ready-pr <ticket>"],
+      "source": "workflow-cli.pr-existence-guard.spec.ts"
+    },
+    {
+      "id": "status-done",
+      "summary": "Done needs a verified merged PR and every native child Done",
+      "owner": "statuses/5-done.md",
+      "tier": "step",
+      "tokens": ["list-incomplete-children", "MERGED", "git branch -d <feature-branch>", "nature:bundled-pr"],
+      "source": "workflow-cli.pr-merged-guard.spec.ts"
+    },
+    {
+      "id": "status-drafting",
+      "summary": "An SRS drafting ticket moves through transition-drafting phases and never through update-status",
+      "owner": "statuses/2a-ai-drafting.md",
+      "tier": "step",
+      "tokens": ["transition-drafting <ticket> ai-draft", "srs-cli.sh validate --spec <file>"],
+      "source": "workflow-cli.srs-drafting.spec.ts"
+    },
+    {
+      "id": "team-ai-testing",
+      "summary": "Team preset: the same plan and report headings, and the Human Testing route",
+      "owner": "statuses/4-ai-testing.md",
+      "tier": "step",
+      "tokens": ["## Test plan", "## Test report", "ready-pr <ticket>", "nature:internal"],
+      "views": ["template:team"],
+      "source": "test-report-heading.spec.ts, draft-pr-owner.spec.ts"
+    },
+    {
+      "id": "team-human-testing",
+      "summary": "Team preset: the developer, not the agent, marks the PR ready after Human Testing",
+      "owner": "statuses/5-human-testing.md",
+      "tier": "step",
+      "tokens": ["Ready for review", "non-regression"],
+      "views": ["template:team"],
+      "source": "draft-pr-owner.spec.ts"
+    },
+    {
+      "id": "team-in-review",
+      "summary": "Team preset: In review needs an open non-draft PR whose head branch carries the ticket number",
+      "owner": "statuses/6-in-review.md",
+      "tier": "step",
+      "tokens": ["feature/<N>-", "fix/<N>-", "ready-pr <ticket>"],
+      "views": ["template:team"],
+      "source": "workflow-cli.pr-existence-guard.spec.ts"
+    }
+  ]
+}

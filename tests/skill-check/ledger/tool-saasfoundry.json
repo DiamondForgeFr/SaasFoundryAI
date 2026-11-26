@@ -1,0 +1,137 @@
+{
+  "kind": "ledger",
+  "schemaVersion": 1,
+  "skill": "tool-saasfoundry",
+  "rules": [
+    {
+      "id": "cli-is-non-interactive",
+      "summary": "The skill drives sf only in non-interactive mode and never generates files itself",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["sf new --non-interactive --profile", "sf update --non-interactive", "--dry-run --json", "never runs the interactive Inquirer prompts"]
+    },
+    {
+      "id": "catalogue-lookups",
+      "summary": "Module names come from the catalogue, never from memory",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["sf modules list --json", "sf modules info <slug> --json", "sf modules match <query> --json", "Don't fabricate module names"]
+    },
+    {
+      "id": "bootstrap-scripts",
+      "summary": "Resolve the sf token and gate gh flows before the first command",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["detect-env.sh", "bootstrap-gh.sh", "bootstrap-cli.sh"]
+    },
+    {
+      "id": "recap-before-anything",
+      "summary": "A resumed session reads the phase from disk with recap.sh, never from chat history",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["scripts/recap.sh", "Never report a phase from memory", "`unknown` is not `pending`", "`not-applicable` is not `pending`"],
+      "source": "recap.spec.ts"
+    },
+    {
+      "id": "zero-to-project-phases",
+      "summary": "Seven phases in order, each ending on something checkable; three decisions are the user's",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["The zero-to-project flow", "intake.json", "Ask, do not assume", "Never continue past a blocker"]
+    },
+    {
+      "id": "poc-intake",
+      "summary": "Read the code first; nothing moves without a plan and an explicit confirm",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["scripts/read-poc.sh", "plan-poc-move.sh", "move-poc.sh <dir> --confirm", "plan-challenge.sh", "record-intake.sh"],
+      "source": "read-poc.spec.ts, plan-poc-move.spec.ts"
+    },
+    {
+      "id": "new-discovery",
+      "summary": "The profile is the first question; the intent round-trips through plan-new.sh and is confirmed before running",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["plan-new.sh", "profile", "harness", "reference/new-flags.json", "Don't re-serialize the plan by hand"],
+      "source": "plan-new.spec.ts, new-flags-parity.spec.ts"
+    },
+    {
+      "id": "update-discovery",
+      "summary": "sf update is additive; read the capabilities, dry-run first, confirm before the real run",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["plan-update.sh", "sf status --json --no-network", "Dry-run first", "conflictStrategy", "Don't skip the dry-run round", "Don't propose a module already in `.saasfoundry.json`"],
+      "source": "plan-update.spec.ts"
+    },
+    {
+      "id": "update-never-full-over-repo",
+      "summary": "Never sf new --profile full inside an existing repository",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["Don't run `sf new --profile full` inside an existing repository", "sf update --target-profile full --dry-run --json"]
+    },
+    {
+      "id": "secrets-stay-out",
+      "summary": "Credentials never enter the intent, the command or a summary; they travel as SF_UPDATE_* variables",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["SF_UPDATE_MAILERSEND_API_KEY", "SF_UPDATE_NOTION_API_TOKEN", "NOTION_API_TOKEN", "Don't echo credentials"],
+      "source": "plan-update.spec.ts"
+    },
+    {
+      "id": "project-awareness",
+      "summary": "Questions about the project are answered from read-project.sh, read-only",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["scripts/read-project.sh", "Project Awareness"],
+      "source": "read-project.spec.ts"
+    },
+    {
+      "id": "anti-reinvention",
+      "summary": "Before custom-coding a capability, check whether a module covers it",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["Anti-Reinvention Guardrail", "check-catalogue.sh"],
+      "source": "check-catalogue.spec.ts"
+    },
+    {
+      "id": "milestone-guardrail",
+      "summary": "A release scope is proposed from evidence, never invented",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["Milestone Guardrail", "plan-milestone.sh", "workflow-cli.sh milestone"],
+      "source": "plan-milestone.spec.ts"
+    },
+    {
+      "id": "feedback-module-request",
+      "summary": "A module request is scored on five criteria and checked for duplicates before it is filed",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["sf feedback request", "The 5-criterion scorecard", "plan-feedback-request.sh"],
+      "source": "plan-feedback-request.spec.ts"
+    },
+    {
+      "id": "feedback-bug-report",
+      "summary": "A bug is routed cli-bug or scaffold-bug and filed through sf feedback, with a redacted repro",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["sf feedback bug --source cli|scaffold", "--auto-repro", "cli-bug", "scaffold-bug", "plan-feedback-bug.sh"],
+      "source": "plan-feedback-bug.spec.ts"
+    },
+    {
+      "id": "feedback-voting",
+      "summary": "Votes are recorded locally; comments cast no vote",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["sf feedback vote --list", "sf feedback vote <n> up|down", "~/.saasfoundry/preferences.json"]
+    },
+    {
+      "id": "output-language",
+      "summary": "Artefacts follow the manifest language, never the language of the conversation",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["language", "Never take the language of the conversation as the signal"]
+    }
+  ],
+  "knownBrokenLinks": []
+}

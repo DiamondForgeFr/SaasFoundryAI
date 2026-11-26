@@ -1,0 +1,50 @@
+{
+  "kind": "scenarios",
+  "schemaVersion": 1,
+  "skill": "sf-integration-rules",
+  "scenarios": [
+    {
+      "id": "ir-backend-crud-module",
+      "title": "Add a backend CRUD module",
+      "core": true,
+      "fixture": "full-monorepo",
+      "hosts": ["claude-code", "codex"],
+      "prompt": "The developer says: 'add an invoices module to the API: list, get, create, update and delete, restricted to account administrators'. Explore what you need, then say which commands you would run once the files are written.",
+      "expect": {
+        "reads": [["sf-integration-rules/SKILL.md"], ["sf-integration-rules/backend.md"]],
+        "includes": [{ "any": ["prisma db push", "db:setup:dev"] }],
+        "forbidden": ["prisma migrate", "--no-verify"]
+      }
+    },
+    {
+      "id": "ir-frontend-page-and-hook",
+      "title": "Add a private page that lists data through a React Query hook",
+      "fixture": "full-monorepo",
+      "prompt": "The developer says: 'add a private page that lists the invoices, with a data hook and a translated title'. Explore what you need, then say which commands you would run to check your work.",
+      "expect": {
+        "reads": [["sf-integration-rules/SKILL.md"], ["sf-integration-rules/frontend.md"]],
+        "forbidden": ["--no-verify"]
+      }
+    },
+    {
+      "id": "ir-shared-type-monorepo",
+      "title": "Where a shared type lives on a monorepo",
+      "fixture": "full-monorepo",
+      "prompt": "The developer asks: 'where do I put a new `InvoiceStatus` type that both the API and the web app use, and what must I keep in step?'. Answer from what this project's guidance says.",
+      "expect": {
+        "reads": [["sf-integration-rules/topology.md"]],
+        "answer": { "includes": [{ "any": ["packages/shared-types"] }, { "any": ["mirror", "byte-identical", "drift"] }] }
+      }
+    },
+    {
+      "id": "ir-shared-type-multirepo",
+      "title": "Where a shared type lives on a multirepo",
+      "fixture": "full-multirepo",
+      "prompt": "The developer asks: 'where do I put a new `InvoiceStatus` type that this API and the web repository both use?'. Answer from what this project's guidance says.",
+      "expect": {
+        "reads": [["sf-integration-rules/topology.md"]],
+        "answer": { "includes": [{ "any": ["inlined", "inline", "vendored", "per side", "each app", "each repo", "stand-alone", "standalone"] }] }
+      }
+    }
+  ]
+}

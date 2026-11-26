@@ -1,0 +1,138 @@
+{
+  "kind": "ledger",
+  "schemaVersion": 1,
+  "skill": "instructions",
+  "rules": [
+    {
+      "id": "region-execution-capabilities",
+      "summary": "Delegate through the route, never name a model, never start another agent's CLI, never bypass a guard",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["## Execution capabilities", "sf agents route --task <kind> --provider <current-agent>", "alias <name>", "An escape hatch is the developer's to apply"],
+      "source": "agent-instructions.spec.ts"
+    },
+    {
+      "id": "region-session-delivery",
+      "summary": "The session talks and plans; delivery goes to one agent per ticket, in a worktree, once consent is recorded",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": [
+        "## Session orchestration and delegated ticket delivery",
+        "`not-asked`",
+        "`allowed`",
+        "`declined`",
+        "sf agents delegation allow",
+        "sf agents delegation decline",
+        "A delegated agent never merges"
+      ],
+      "source": "agent-instructions.spec.ts, delegation-routing.spec.ts"
+    },
+    {
+      "id": "region-worktrees",
+      "summary": "A ticket is built in a worktree of its own; the primary checkout stays on the working branch",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["## Parallel implementation and Git worktrees", "git worktree add <path> -b <branch> origin/<workingBranch>", "workflow.workingBranch"],
+      "source": "agent-instructions.spec.ts"
+    },
+    {
+      "id": "region-onboarding",
+      "summary": "Identity comes from the host; an undeclared agent is reported and one action is asked",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["## Coding-agent identity and onboarding", "sf agents list --json", "sf agents enable <agent> --scope shared", "sf agents replace <agents...> --scope <local|shared>"],
+      "source": "agent-instructions.spec.ts"
+    },
+    {
+      "id": "region-profile-transition",
+      "summary": "A managed harness or stack reaches full through a dry-run transition, never sf new inside a repository",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["## Managed project capabilities", "sf update --target-profile full --dry-run --json"],
+      "source": "agent-instructions.spec.ts"
+    },
+    {
+      "id": "region-reading-status",
+      "summary": "How to read a fail, a warn and a skip of the status report, and which language to write in",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["## Reading the project status", "A `fail` precondition is resolved before any project action", "local-ci:"],
+      "source": "agent-instructions.spec.ts"
+    },
+    {
+      "id": "region-ticket-first",
+      "summary": "The ticket exists before the first line of code; an unreachable tool is reported, never worked around",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["## Ticket first, and an unreachable tool", "#TBD", "workflow.branchNaming", "Never pick a workaround alone"],
+      "source": "agent-instructions.spec.ts"
+    },
+    {
+      "id": "region-ui-work",
+      "summary": "A ui ticket shows a mockup before the visual work; the project says how it shows one",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["## UI work: mockup display and design tokens", "Working a `ui` ticket"],
+      "source": "ui-ticket-guidance.spec.ts"
+    },
+    {
+      "id": "region-shell-calls",
+      "summary": "One plain command per call: no chain, no substitution, no loop, no inline script, no heredoc-written file",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["## File edits and shell calls", "`node -e`", "`git commit -F <file>`", "`--body-file <file>`"],
+      "source": "agent-instructions.spec.ts, shipped-recipes.spec.ts, the guard hook"
+    },
+    {
+      "id": "repo-preconditions-first",
+      "summary": "Read the manifest and run sf status before asking the developer about scope",
+      "owner": "AGENTS.md",
+      "region": "hand-written",
+      "tier": "step",
+      "tokens": ["Preconditions first", "`.saasfoundry.json`", "sf status --agent-friendly --no-network"]
+    },
+    {
+      "id": "repo-workflow-never-bypassed",
+      "summary": "Statuses are never skipped; the CLI is the only way to move a ticket; commit and push precede AI testing",
+      "owner": "AGENTS.md",
+      "region": "hand-written",
+      "tier": "step",
+      "tokens": ["Never skip statuses", "Never bypass the CLI", "Commit + push BEFORE moving to AI Testing", "molten ci run <branch>", "Escape hatches"]
+    },
+    {
+      "id": "repo-migration-framework",
+      "summary": "Every breaking manifest or module change ships as a numbered migration",
+      "owner": "AGENTS.md",
+      "region": "hand-written",
+      "tier": "step",
+      "tokens": ["Migration framework — NEVER bypass", "src/migrations/manifest/NNN-<name>.ts", "writeMigratedFile", ".claude/docs/migration-framework.md"]
+    },
+    {
+      "id": "repo-harness-mirrored",
+      "summary": "A harness evolution reaches this repository in the same ticket: three separate regeneration calls",
+      "owner": "AGENTS.md",
+      "region": "hand-written",
+      "tier": "step",
+      "tokens": ["Harness evolutions", "npm run build", "node bin/sf.js agents refresh --scope shared", "npx prettier --write .saasfoundry.json"],
+      "source": "shipped-recipes.spec.ts"
+    },
+    {
+      "id": "repo-conventional-commits",
+      "summary": "Commits are conventional with the ticket number as scope",
+      "owner": "AGENTS.md",
+      "region": "hand-written",
+      "tier": "reference",
+      "tokens": ["<type>(#<ticket>): <description>", "Max header length: 100 characters"]
+    }
+  ],
+  "knownBrokenLinks": []
+}

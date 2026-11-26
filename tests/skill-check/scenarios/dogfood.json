@@ -1,0 +1,38 @@
+{
+  "kind": "scenarios",
+  "schemaVersion": 1,
+  "skill": "dogfood",
+  "scenarios": [
+    {
+      "id": "df-commit-format",
+      "title": "This repository's commit format",
+      "fixture": "dogfood",
+      "prompt": "You fixed a bug in ticket #1234 on the branch `fix/1234-null-owner`. The change is in `src/commands/status.ts`. Commit it.",
+      "expect": {
+        "commands": [{ "all": ["git commit"], "any": ["fix(#1234):", "-F "] }],
+        "forbidden": ["#TBD", "#XXX", "--no-verify", "/git commit .*-m ['\"][^'\"]{101,}/"]
+      }
+    },
+    {
+      "id": "df-harness-evolution-mirrored",
+      "title": "A harness change reaches this repository in the same ticket",
+      "fixture": "dogfood",
+      "prompt": "Your ticket changes the generated instructions in `src/harness/agent-instructions.ts`. What else must this repository carry in the same ticket, and which commands regenerate it?",
+      "expect": {
+        "commands": [{ "all": ["npm run build"] }, { "all": ["agents refresh", "--scope shared"] }, { "all": ["prettier", ".saasfoundry.json"] }],
+        "forbidden": ["jq", "sed -i", "/>\\s*\\.saasfoundry\\.json/"]
+      }
+    },
+    {
+      "id": "df-skill-copies-in-step",
+      "title": "A skill template edit and its dogfood copy",
+      "fixture": "dogfood",
+      "prompt": "You edited `scaffolds/skills-templates/tools/github-projects/SKILL.md`. Which copies of it must follow, and how do you update each?",
+      "expect": {
+        "reads": [["architecture-skills.md", "tool-skill-drift.spec.ts"]],
+        "commands": [{ "all": ["cp", ".claude/skills/sf-tool-github-projects/SKILL.md"] }, { "all": ["agents refresh", "--scope shared"] }],
+        "forbidden": ["/(vi|vim|nano|sed -i)\\s+\\S*\\.agents\\//"]
+      }
+    }
+  ]
+}

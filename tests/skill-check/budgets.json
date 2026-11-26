@@ -1,0 +1,204 @@
+{
+  "kind": "budgets",
+  "schemaVersion": 1,
+  "unit": "bytes",
+  "roundTo": 1024,
+  "measuredAt": {
+    "commit": "bdfb1f12b2c3ff5d8415484bd14defbe851545ab",
+    "date": "2026-11-26"
+  },
+  "ceilings": {
+    "sf-workflow": {
+      "template:solo": {
+        "entry": 49152,
+        "total": 147456,
+        "files": {
+          "SKILL.md": 49152,
+          "complexity/README.md": 19456,
+          "escape-hatches.md": 38912,
+          "statuses/2-in-progress.md": 9216,
+          "statuses/3-ai-testing.md": 8192,
+          "statuses/4-in-review.md": 5120,
+          "statuses/5-done.md": 5120
+        }
+      },
+      "template:team": {
+        "entry": 49152,
+        "total": 156672,
+        "files": {
+          "SKILL.md": 49152,
+          "complexity/README.md": 19456,
+          "escape-hatches.md": 38912,
+          "statuses/3-in-progress.md": 10240,
+          "statuses/4-ai-testing.md": 10240,
+          "statuses/5-human-testing.md": 5120,
+          "statuses/6-in-review.md": 6144,
+          "statuses/7-done.md": 6144
+        }
+      },
+      "repo": {
+        "entry": 56320,
+        "total": 154624,
+        "files": {
+          "SKILL.md": 56320,
+          "complexity/README.md": 19456,
+          "escape-hatches.md": 38912,
+          "statuses/2-in-progress.md": 9216,
+          "statuses/3-ai-testing.md": 8192,
+          "statuses/4-in-review.md": 5120,
+          "statuses/5-done.md": 5120
+        }
+      },
+      "agents": {
+        "entry": 61440,
+        "total": 159744,
+        "files": {
+          "SKILL.md": 61440,
+          "complexity/README.md": 19456,
+          "escape-hatches.md": 38912,
+          "statuses/2-in-progress.md": 9216,
+          "statuses/3-ai-testing.md": 8192,
+          "statuses/4-in-review.md": 5120,
+          "statuses/5-done.md": 5120
+        }
+      }
+    },
+    "sf-srs": {
+      "template": {
+        "entry": 55296,
+        "total": 93184,
+        "files": {
+          "SKILL.md": 55296,
+          "templates/examples/example-epic.md": 12288,
+          "templates/pages/README.md": 5120,
+          "templates/tickets/README.md": 7168,
+          "templates/tickets/examples/task.md": 5120
+        }
+      },
+      "repo": {
+        "entry": 55296,
+        "total": 93184,
+        "files": {
+          "SKILL.md": 55296,
+          "templates/examples/example-epic.md": 12288,
+          "templates/pages/README.md": 5120,
+          "templates/tickets/README.md": 7168,
+          "templates/tickets/examples/task.md": 5120
+        }
+      },
+      "agents": {
+        "entry": 60416,
+        "total": 98304,
+        "files": {
+          "SKILL.md": 60416,
+          "templates/examples/example-epic.md": 12288,
+          "templates/pages/README.md": 5120,
+          "templates/tickets/README.md": 7168,
+          "templates/tickets/examples/task.md": 5120
+        }
+      }
+    },
+    "tool-saasfoundry": {
+      "template": {
+        "entry": 68608,
+        "total": 68608,
+        "files": {
+          "SKILL.md": 68608
+        }
+      }
+    },
+    "sf-tool-github-projects": {
+      "template": {
+        "entry": 24576,
+        "total": 24576,
+        "files": {
+          "SKILL.md": 24576
+        }
+      },
+      "repo": {
+        "entry": 24576,
+        "total": 24576,
+        "files": {
+          "SKILL.md": 24576
+        }
+      },
+      "agents": {
+        "entry": 29696,
+        "total": 29696,
+        "files": {
+          "SKILL.md": 29696
+        }
+      }
+    },
+    "sf-integration-rules": {
+      "template": {
+        "entry": 6144,
+        "total": 71680,
+        "files": {
+          "SKILL.md": 6144,
+          "backend.md": 28672,
+          "frontend.md": 19456,
+          "topology.md": 19456
+        }
+      },
+      "repo": {
+        "entry": 6144,
+        "total": 71680,
+        "files": {
+          "SKILL.md": 6144,
+          "backend.md": 28672,
+          "frontend.md": 19456,
+          "topology.md": 19456
+        }
+      },
+      "agents": {
+        "entry": 11264,
+        "total": 76800,
+        "files": {
+          "SKILL.md": 11264,
+          "backend.md": 28672,
+          "frontend.md": 19456,
+          "topology.md": 19456
+        }
+      }
+    },
+    "instructions": {
+      "repo": {
+        "entry": 29696,
+        "total": 29696,
+        "files": {
+          "AGENTS.md": 29696
+        },
+        "extra": {
+          "region": 14336,
+          "handWritten": 15360
+        }
+      },
+      "template:harness": {
+        "entry": 4096,
+        "total": 4096
+      },
+      "template:api": {
+        "entry": 12288,
+        "total": 12288,
+        "files": {
+          "AGENTS.md": 12288
+        }
+      },
+      "template:web": {
+        "entry": 13312,
+        "total": 13312,
+        "files": {
+          "AGENTS.md": 13312
+        }
+      },
+      "template:monorepo-root": {
+        "entry": 14336,
+        "total": 14336,
+        "files": {
+          "AGENTS.md": 14336
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,311 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "skill-check/schema.json",
+  "title": "Data files of the skill check (#1096)",
+  "description": "One schema for every data file under tests/skill-check/. A file names its shape in `kind`; `node tests/skill-check/run.mjs validate` picks the definition from it.",
+  "definitions": {
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "path": { "type": "string", "minLength": 1 },
+    "view": {
+      "description": "One surface of a skill as a tree of files. `exclude` drops real paths by prefix, then `map` renames the prefix of the rest.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root"],
+      "properties": {
+        "root": { "$ref": "#/definitions/path" },
+        "files": { "type": "array", "items": { "$ref": "#/definitions/path" }, "minItems": 1 },
+        "exclude": { "type": "array", "items": { "$ref": "#/definitions/path" } },
+        "map": { "type": "object", "additionalProperties": { "type": "string" } },
+        "regions": { "type": "boolean", "description": "Measure the generated region and the hand-written part of the entry file apart." },
+        "links": { "type": "boolean", "description": "False skips the relative-link check of this view." },
+        "externalLinks": { "enum": ["skip"], "description": "A link that leaves the view's root is not checked here (it is checked on the installed surfaces)." }
+      }
+    },
+    "skills": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "skills"],
+      "properties": {
+        "kind": { "const": "skills" },
+        "schemaVersion": { "const": 1 },
+        "skills": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["entry", "ledgerViews", "views"],
+            "properties": {
+              "entry": { "$ref": "#/definitions/path" },
+              "ledgerViews": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+              "links": { "type": "boolean" },
+              "views": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/definitions/view" } }
+            }
+          }
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "summary", "owner", "tier", "tokens"],
+      "properties": {
+        "id": { "$ref": "#/definitions/name" },
+        "summary": { "type": "string", "minLength": 1, "description": "What the rule protects, in a few words: never a copy of its text." },
+        "owner": { "$ref": "#/definitions/path", "description": "The file, in the layout of a generated project, that holds the rule." },
+        "tier": { "enum": ["step", "reference", "disclosed"] },
+        "tokens": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "description": "Fixed strings (a command, a flag, a heading, a label) the owner must hold. Whitespace is collapsed before matching."
+        },
+        "views": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "region": { "enum": ["generated", "hand-written"] },
+        "unique": { "type": "boolean", "description": "No other Markdown file of the skill may hold these tokens: the rule has one source." },
+        "pointer": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Required for a disclosed rule: how a reader reaches the owner.",
+          "properties": {
+            "from": { "$ref": "#/definitions/path" },
+            "match": { "type": "string", "minLength": 1 },
+            "lead": { "type": "string", "minLength": 1, "description": "The words the pointer opens with: the trigger comes first." }
+          }
+        },
+        "source": { "type": "string", "description": "What makes the rule real: a guard, a spec, an incident." },
+        "retired": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason"],
+          "properties": { "reason": { "type": "string", "minLength": 1 }, "by": { "type": "string" } }
+        }
+      }
+    },
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "skill", "rules"],
+      "properties": {
+        "kind": { "const": "ledger" },
+        "schemaVersion": { "const": 1 },
+        "skill": { "$ref": "#/definitions/path" },
+        "rules": { "type": "array", "items": { "$ref": "#/definitions/rule" } },
+        "knownBrokenLinks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["view", "file", "target", "reason"],
+            "properties": { "view": { "type": "string" }, "file": { "type": "string" }, "target": { "type": "string" }, "reason": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }
+    },
+    "ceiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry", "total"],
+      "properties": {
+        "entry": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 },
+        "files": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "extra": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "unit", "roundTo", "measuredAt", "ceilings"],
+      "properties": {
+        "kind": { "const": "budgets" },
+        "schemaVersion": { "const": 1 },
+        "unit": { "const": "bytes" },
+        "roundTo": { "const": 1024 },
+        "measuredAt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commit", "date"],
+          "properties": { "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }, "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" } }
+        },
+        "ceilings": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": { "$ref": "#/definitions/ceiling" } } }
+      }
+    },
+    "step": {
+      "description": "A planned command matches a string it contains, a /regex/, or an object whose `all`, `any` and `none` it satisfies.",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "all": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+            "any": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+            "none": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+          }
+        }
+      ]
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "fixture", "prompt", "expect"],
+      "properties": {
+        "id": { "$ref": "#/definitions/name" },
+        "title": { "type": "string", "minLength": 1 },
+        "core": { "type": "boolean", "description": "Runs on every child ticket that changes the skill." },
+        "fixture": { "$ref": "#/definitions/name" },
+        "hosts": { "type": "array", "items": { "enum": ["claude-code", "codex"] }, "minItems": 1, "uniqueItems": true },
+        "prompt": { "type": "string", "minLength": 20 },
+        "expect": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "reads": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  { "type": "string", "minLength": 1 },
+                  { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+                ]
+              },
+              "description": "Each entry is a path fragment the agent must have read; an inner array is an any-of."
+            },
+            "commands": { "type": "array", "items": { "$ref": "#/definitions/step" }, "description": "Planned commands that must appear, in this order." },
+            "includes": { "type": "array", "items": { "$ref": "#/definitions/step" }, "description": "Planned commands that must appear, in any order." },
+            "forbidden": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Tokens no planned command of this scenario may contain, on top of the global list." },
+            "answer": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "includes": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      { "type": "string", "minLength": 1 },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["any"],
+                        "properties": { "any": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 } }
+                      }
+                    ]
+                  }
+                },
+                "excludes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+              }
+            }
+          }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "scenarios": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "skill", "scenarios"],
+      "properties": {
+        "kind": { "const": "scenarios" },
+        "schemaVersion": { "const": 1 },
+        "skill": { "type": "string", "minLength": 1 },
+        "scenarios": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/scenario" } }
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "repeat", "passNumerator", "passDenominator", "concurrency", "timeoutSec", "costEstimate", "preamble", "forbidden", "claude", "codex"],
+      "properties": {
+        "kind": { "const": "replay" },
+        "schemaVersion": { "const": 1 },
+        "repeat": { "type": "integer", "minimum": 1 },
+        "passNumerator": { "type": "integer", "minimum": 1 },
+        "passDenominator": { "type": "integer", "minimum": 1 },
+        "concurrency": { "type": "integer", "minimum": 1 },
+        "timeoutSec": { "type": "integer", "minimum": 1 },
+        "costEstimate": { "type": "string" },
+        "preamble": { "type": "string", "minLength": 20 },
+        "forbidden": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Tokens no planned command of any scenario may contain." },
+        "claude": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tools", "denyTools", "permissionMode", "maxTurns", "maxBudgetUsd"],
+          "properties": {
+            "tools": { "type": "array", "items": { "enum": ["Read", "Glob", "Grep", "Skill"] }, "minItems": 1, "description": "Read-only tools only." },
+            "denyTools": { "type": "array", "items": { "type": "string" } },
+            "permissionMode": { "const": "dontAsk" },
+            "maxTurns": { "type": "integer", "minimum": 1 },
+            "maxBudgetUsd": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "codex": { "type": "object", "additionalProperties": false, "required": ["sandbox"], "properties": { "sandbox": { "const": "read-only" } } }
+      }
+    },
+    "fixtureStep": {
+      "type": "object",
+      "required": ["op"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "enum": ["mkdir", "git-init", "sf", "copy-skill", "json-set", "write", "copy-tracked"] },
+        "dir": { "type": "string" },
+        "args": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "executable": { "type": "array", "items": { "type": "string" } },
+        "file": { "type": "string" },
+        "set": { "type": "object" },
+        "path": { "type": "string" },
+        "content": { "type": "string" },
+        "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "fixtures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "fixtures"],
+      "properties": {
+        "kind": { "const": "fixtures" },
+        "schemaVersion": { "const": 1 },
+        "fixtures": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/name" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["description", "steps"],
+            "properties": {
+              "description": { "type": "string", "minLength": 1 },
+              "agentDir": { "type": "string" },
+              "steps": { "type": "array", "items": { "$ref": "#/definitions/fixtureStep" }, "minItems": 1 }
+            }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "description": "What `run.mjs metrics --out` writes: the baseline of Layer 1.",
+      "type": "object",
+      "required": ["kind", "schemaVersion", "commit", "surfaces"],
+      "properties": {
+        "kind": { "const": "metrics" },
+        "schemaVersion": { "const": 1 },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "surfaces": { "type": "object" },
+        "generated": { "type": "object" }
+      }
+    },
+    "results": {
+      "description": "What `run.mjs run --out` writes: the results of one replay, the input of `compare`.",
+      "type": "object",
+      "required": ["kind", "schemaVersion", "meta", "scenarios", "totals"],
+      "properties": {
+        "kind": { "const": "results" },
+        "schemaVersion": { "const": 1 },
+        "meta": { "type": "object" },
+        "scenarios": { "type": "array" },
+        "totals": { "type": "object" }
+      }
+    }
+  }
+}

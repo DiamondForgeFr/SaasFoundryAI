@@ -1,0 +1,85 @@
+{
+  "kind": "ledger",
+  "schemaVersion": 1,
+  "skill": "sf-tool-github-projects",
+  "rules": [
+    {
+      "id": "board-through-the-cli",
+      "summary": "Every board and ticket call goes through github-projects-cli.sh, never raw GraphQL",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["github-projects-cli.sh <cmd> [args]", "update-status <ticket> <status-name>", "create-subtask <parent>"],
+      "source": "github-projects-cli.* specs"
+    },
+    {
+      "id": "three-axes",
+      "summary": "Status lives on the board, complexity in a label, type in the issue type; never mix them",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["Never encode status in a label", "complexity: bug\\|low\\|medium\\|complex", "sf-epic/sf-story/sf-task/sf-issue"]
+    },
+    {
+      "id": "srs-gate-on-create",
+      "summary": "On an SRS project ticket creation refuses without --bypass-srs; the reason is a grep-able token",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["--bypass-srs <reason>", "tools.srs.backend", "exit code `2`", "meta-srs-tooling"],
+      "source": "github-projects-cli.bypass-srs.spec.ts"
+    },
+    {
+      "id": "local-ci-gate",
+      "summary": "A PR leaves draft only with the required local CI statuses green on its head; the skip is the developer's",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["local-ci-gate <ticket>", "workflow.localCi.requiredStatuses", "local-<name>", "AI testing / Local CI", "--skip-local-ci", "never an agent's"],
+      "source": "github-projects-cli.local-ci-sources.spec.ts, workflow-cli.local-ci-guard.spec.ts"
+    },
+    {
+      "id": "pr-lifecycle",
+      "summary": "create-pr, ready-pr and draft-pr work on the ticket's branch, or its one open PR from another checkout",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["create-pr <ticket> [--draft] [--head <branch>]", "ready-pr <ticket> [--head <branch>", "draft-pr <ticket>", "worktree-agent-<id>", "Resolves #<ticket>"],
+      "source": "github-projects-cli.pr-lifecycle.spec.ts, github-projects-cli.pr-head-resolution.spec.ts"
+    },
+    {
+      "id": "ui-marker",
+      "summary": "The ui label, the validation record and the command that reads it",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["set-ui <ticket>", "record-ui-validation", "get-ui-validation <ticket>", "<!-- sf-ui-validation:v1 -->"],
+      "source": "github-projects-cli.ui-marker.spec.ts"
+    },
+    {
+      "id": "children",
+      "summary": "Children are native sub-issues; detaching one never closes it",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["addSubIssue", "unlink-subtask <parent> <child>", "list-incomplete-children <parent>"],
+      "source": "github-projects-cli.hierarchy.spec.ts, github-projects-cli.unlink-subtask.spec.ts"
+    },
+    {
+      "id": "labels-one-call-each",
+      "summary": "Create the labels one call per line, never several in one call",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["gh label create \"complexity: bug\"", "gh label create \"srs:drafting\"", "one call per line"]
+    },
+    {
+      "id": "issue-types",
+      "summary": "Native issue types live at the organisation level and need the admin:org scope to change",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["ensure-issue-types", "assign-type <issue> <type>", "admin:org"],
+      "source": "github-projects-cli.issue-types.spec.ts"
+    },
+    {
+      "id": "output-language",
+      "summary": "Tickets follow language.tickets, never the language of the conversation",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["language.tickets"]
+    }
+  ],
+  "knownBrokenLinks": []
+}
