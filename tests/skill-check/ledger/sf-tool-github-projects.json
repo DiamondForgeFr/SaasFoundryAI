@@ -8,7 +8,7 @@
       "summary": "Every board and ticket call goes through github-projects-cli.sh, never raw GraphQL",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["github-projects-cli.sh <cmd> [args]", "update-status <ticket> <status-name>", "create-subtask <parent>"],
+      "tokens": ["github-projects-cli.sh <cmd> [args]", "raw `gh api graphql`", "update-status <ticket> <status-name>", "create-subtask <parent>"],
       "source": "github-projects-cli.* specs"
     },
     {
@@ -16,30 +16,30 @@
       "summary": "Status lives on the board, complexity in a label, type in the issue type; never mix them",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["Never encode status in a label", "complexity: bug\\|low\\|medium\\|complex", "sf-epic/sf-story/sf-task/sf-issue"]
+      "tokens": ["Never encode status in a label", "complexity: bug|low|medium|complex", "`sf-epic`/`sf-story`/`sf-task`/`sf-issue`"]
     },
     {
       "id": "srs-gate-on-create",
-      "summary": "On an SRS project ticket creation refuses without --bypass-srs; the reason is a grep-able token",
+      "summary": "On an SRS project ticket creation refuses without --bypass-srs; the reason is a grep-able token the CLI posts on the ticket; the hatch is the developer's",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["--bypass-srs <reason>", "tools.srs.backend", "exit code `2`", "meta-srs-tooling"],
+      "tokens": ["--bypass-srs <reason>", "tools.srs.backend", "code `2`", "meta-srs-tooling", "escape-hatches.md"],
       "source": "github-projects-cli.bypass-srs.spec.ts"
     },
     {
       "id": "local-ci-gate",
-      "summary": "A PR leaves draft only with the required local CI statuses green on its head; the skip is the developer's",
+      "summary": "A PR leaves draft only with the required local CI statuses green on its head; the sources of the list are the workflow skill's; the skip is the developer's",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["local-ci-gate <ticket>", "workflow.localCi.requiredStatuses", "local-<name>", "AI testing / Local CI", "--skip-local-ci", "never an agent's"],
+      "tokens": ["local-ci-gate <ticket>", "Local CI guard", "--skip-local-ci", "never an agent's"],
       "source": "github-projects-cli.local-ci-sources.spec.ts, workflow-cli.local-ci-guard.spec.ts"
     },
     {
       "id": "pr-lifecycle",
-      "summary": "create-pr, ready-pr and draft-pr work on the ticket's branch, or its one open PR from another checkout",
+      "summary": "create-pr, ready-pr and draft-pr work on the ticket's branch, or its one open PR from another checkout; who leaves draft is the workflow skill's",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["create-pr <ticket> [--draft] [--head <branch>]", "ready-pr <ticket> [--head <branch>", "draft-pr <ticket>", "worktree-agent-<id>", "Resolves #<ticket>"],
+      "tokens": ["create-pr <ticket> [--draft] [--head <branch>]", "ready-pr <ticket> [--head <branch>", "draft-pr <ticket>", "worktree-agent-<id>", "Resolves #<ticket>", "Draft PR lifecycle"],
       "source": "github-projects-cli.pr-lifecycle.spec.ts, github-projects-cli.pr-head-resolution.spec.ts"
     },
     {
@@ -55,7 +55,7 @@
       "summary": "Children are native sub-issues; detaching one never closes it",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["addSubIssue", "unlink-subtask <parent> <child>", "list-incomplete-children <parent>"],
+      "tokens": ["native sub-issue", "unlink-subtask <parent> <child>", "list-incomplete-children <parent>"],
       "source": "github-projects-cli.hierarchy.spec.ts, github-projects-cli.unlink-subtask.spec.ts"
     },
     {
@@ -63,7 +63,18 @@
       "summary": "Create the labels one call per line, never several in one call",
       "owner": "SKILL.md",
       "tier": "step",
-      "tokens": ["gh label create \"complexity: bug\"", "gh label create \"srs:drafting\"", "one call per line"]
+      "tokens": ["gh label create \"complexity: bug\"", "gh label create \"srs:drafting\"", "one call per line"],
+      "retired": {
+        "reason": "The label commands moved to .claude/docs/github-labels.md (the catalogue sf new points to when it could not create them), and the one-plain-command rule is enforced by the shell-shape guard (sf agents guard) and owned by the generated AGENTS.md region",
+        "by": "#1100"
+      }
+    },
+    {
+      "id": "labels-catalogue",
+      "summary": "Names, colours and commands of the labels live in the shared label catalogue; sf new and set-ui create them",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["github-labels.md", "`sf new` creates them", "`set-ui` creates `ui`"]
     },
     {
       "id": "issue-types",

@@ -20,7 +20,7 @@ Un statut n'est pas un label et la complexité n'est pas une colonne de phase. L
 ## Prérequis
 
 - Un tableau GitHub Projects V2 dont le champ `Status` contient les statuts du preset choisi.
-- Les quatre labels de complexité.
+- Les quatre labels de complexité. `sf new` les crée ; quand il n'a pas pu, `.claude/docs/github-labels.md` donne les commandes.
 - `gh` authentifié avec les droits `project` et `repo`.
 - `.saasfoundry.json` configuré avec l'URL du tableau et les branches.
 

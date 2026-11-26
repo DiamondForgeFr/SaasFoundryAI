@@ -12,24 +12,53 @@
     },
     {
       "id": "sub-guide-router",
-      "summary": "An intent maps to one sub-guide section",
+      "summary": "A trigger maps to one sub-guide",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["Sub-guide router", "`backend.md`", "`frontend.md`", "`topology.md`"]
+      "tokens": ["Read the sub-guide for the change", "`backend.md`", "`frontend.md`", "`topology.md`"]
+    },
+    {
+      "id": "mirror-what-exists",
+      "summary": "Extend the existing module installer, never a parallel install path; mirror the closest existing module",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["Mirror what exists", "parallel install path", "closest existing one"]
+    },
+    {
+      "id": "finish-the-wiring",
+      "summary": "A controller is done when its module registration, RBAC, OpenAPI tag, DTOs, tests and (monorepo) regenerated api-client exist",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["Finish the wiring", "module registration, RBAC, OpenAPI tag, DTOs and tests", "regenerated `packages/api-client`"]
+    },
+    {
+      "id": "drift-guard-stays-enabled",
+      "summary": "A failing drift-guard test is fixed on both sides, never disabled",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["drift-guard test", "fix both sides", "keep the test enabled"]
     },
     {
       "id": "discipline-rules",
-      "summary": "Extend the installer, never bypass a drift guard, never half-finish a wiring",
+      "summary": "Extend the installer, never bypass a drift guard, never half-finish a wiring, always confirm topology",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["Never invent a parallel install path", "Never bypass drift-guard tests", "Never half-finish a wiring", "Always confirm topology"]
+      "tokens": ["Never invent a parallel install path", "Never bypass drift-guard tests", "Never half-finish a wiring", "Always confirm topology"],
+      "retired": {
+        "reason": "Split into mirror-what-exists, finish-the-wiring and drift-guard-stays-enabled, each a step or a positive instruction; \"always confirm topology\" is step 1 and topology.md (Editing discipline on monorepo); \"never add comments that explain WHAT\" was a no-op the model obeys by default",
+        "by": "#1100"
+      }
     },
     {
       "id": "missing-sub-guide",
       "summary": "A sub-guide that is not there is reported, and the closest module is mirrored",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["When the sub-guide is missing", "mirror its structure exactly"]
+      "tokens": ["When the sub-guide is missing", "mirror its structure exactly"],
+      "retired": {
+        "reason": "The branch cannot occur: the three sub-guides ship with the skill and the stories of Epic #305 landed long ago; its fallback (mirror the closest existing module) is the rule mirror-what-exists",
+        "by": "#1100"
+      }
     },
     {
       "id": "backend-module-structure",
@@ -37,7 +66,7 @@
       "owner": "backend.md",
       "tier": "disclosed",
       "tokens": ["## Module structure", "## Controllers", "## DTOs", "## Services", "## Tests"],
-      "pointer": { "from": "SKILL.md", "match": "backend.md" }
+      "pointer": { "from": "SKILL.md", "match": "backend.md", "lead": "Add or change a module" }
     },
     {
       "id": "backend-rbac",
@@ -45,7 +74,7 @@
       "owner": "backend.md",
       "tier": "disclosed",
       "tokens": ["## RBAC", "@RequirePermissions", "default_user_modules_roles.sql"],
-      "pointer": { "from": "SKILL.md", "match": "backend.md" }
+      "pointer": { "from": "SKILL.md", "match": "backend.md", "lead": "Add or change a module" }
     },
     {
       "id": "backend-prisma",
@@ -53,7 +82,7 @@
       "owner": "backend.md",
       "tier": "disclosed",
       "tokens": ["## Prisma", "prisma/schema/", "npx prisma db push"],
-      "pointer": { "from": "SKILL.md", "match": "backend.md" }
+      "pointer": { "from": "SKILL.md", "match": "backend.md", "lead": "Add or change a module" }
     },
     {
       "id": "backend-validation",
@@ -61,7 +90,7 @@
       "owner": "backend.md",
       "tier": "disclosed",
       "tokens": ["## Validation", "createZodDto", "shared-validation"],
-      "pointer": { "from": "SKILL.md", "match": "backend.md" }
+      "pointer": { "from": "SKILL.md", "match": "backend.md", "lead": "Add or change a module" }
     },
     {
       "id": "frontend-pages",
@@ -69,7 +98,7 @@
       "owner": "frontend.md",
       "tier": "disclosed",
       "tokens": ["## Pages & routing", "lazy(", "pages/private"],
-      "pointer": { "from": "SKILL.md", "match": "frontend.md" }
+      "pointer": { "from": "SKILL.md", "match": "frontend.md", "lead": "Add or change a page" }
     },
     {
       "id": "frontend-hooks-forms",
@@ -77,7 +106,7 @@
       "owner": "frontend.md",
       "tier": "disclosed",
       "tokens": ["## API hooks", "queryKeys", "## Forms", "zodResolver", "useFormLanguageSync"],
-      "pointer": { "from": "SKILL.md", "match": "frontend.md" }
+      "pointer": { "from": "SKILL.md", "match": "frontend.md", "lead": "Add or change a page" }
     },
     {
       "id": "frontend-i18n",
@@ -85,7 +114,7 @@
       "owner": "frontend.md",
       "tier": "disclosed",
       "tokens": ["## i18n", "useTranslation"],
-      "pointer": { "from": "SKILL.md", "match": "frontend.md" }
+      "pointer": { "from": "SKILL.md", "match": "frontend.md", "lead": "Add or change a page" }
     },
     {
       "id": "topology-canonical-and-mirror",
@@ -93,7 +122,7 @@
       "owner": "topology.md",
       "tier": "disclosed",
       "tokens": ["## Mirror vs canonical rule", "byte-identical", "### Drift-guards enforce identity", "shared-types-drift"],
-      "pointer": { "from": "SKILL.md", "match": "topology.md" }
+      "pointer": { "from": "SKILL.md", "match": "topology.md", "lead": "Decide where a shared type" }
     },
     {
       "id": "topology-api-client",
@@ -101,7 +130,7 @@
       "owner": "topology.md",
       "tier": "disclosed",
       "tokens": ["## API client + codegen", "### Direct call or wrapper", "api-client"],
-      "pointer": { "from": "SKILL.md", "match": "topology.md" }
+      "pointer": { "from": "SKILL.md", "match": "topology.md", "lead": "Decide where a shared type" }
     }
   ],
   "knownBrokenLinks": []

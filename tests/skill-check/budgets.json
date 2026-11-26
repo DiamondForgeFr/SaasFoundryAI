@@ -4,7 +4,7 @@
   "unit": "bytes",
   "roundTo": 1024,
   "measuredAt": {
-    "commit": "bdfb1f12b2c3ff5d8415484bd14defbe851545ab",
+    "commit": "9026389a4e5bb7d61d1bb46d3546de6b71d79924",
     "date": "2026-11-26"
   },
   "ceilings": {
@@ -109,53 +109,53 @@
     },
     "sf-tool-github-projects": {
       "template": {
-        "entry": 24576,
-        "total": 24576,
+        "entry": 7168,
+        "total": 7168,
         "files": {
-          "SKILL.md": 24576
+          "SKILL.md": 7168
         }
       },
       "repo": {
-        "entry": 24576,
-        "total": 24576,
+        "entry": 7168,
+        "total": 7168,
         "files": {
-          "SKILL.md": 24576
+          "SKILL.md": 7168
         }
       },
       "agents": {
-        "entry": 29696,
-        "total": 29696,
+        "entry": 12288,
+        "total": 12288,
         "files": {
-          "SKILL.md": 29696
+          "SKILL.md": 12288
         }
       }
     },
     "sf-integration-rules": {
       "template": {
-        "entry": 6144,
-        "total": 71680,
+        "entry": 3072,
+        "total": 68608,
         "files": {
-          "SKILL.md": 6144,
+          "SKILL.md": 3072,
           "backend.md": 28672,
           "frontend.md": 19456,
           "topology.md": 19456
         }
       },
       "repo": {
-        "entry": 6144,
-        "total": 71680,
+        "entry": 3072,
+        "total": 68608,
         "files": {
-          "SKILL.md": 6144,
+          "SKILL.md": 3072,
           "backend.md": 28672,
           "frontend.md": 19456,
           "topology.md": 19456
         }
       },
       "agents": {
-        "entry": 11264,
-        "total": 76800,
+        "entry": 7168,
+        "total": 72704,
         "files": {
-          "SKILL.md": 11264,
+          "SKILL.md": 7168,
           "backend.md": 28672,
           "frontend.md": 19456,
           "topology.md": 19456
