@@ -12,7 +12,7 @@
       "prompt": "The developer says: 'add an invoices module to the API: list, get, create, update and delete, restricted to account administrators'. Explore what you need, then say which commands you would run once the files are written.",
       "expect": {
         "reads": [["sf-integration-rules/SKILL.md"], ["sf-integration-rules/backend.md"]],
-        "includes": [{ "any": ["prisma db push", "db:setup:dev"] }],
+        "includes": [{ "any": ["prisma db push", "db:setup:dev", "db:update:dev"] }],
         "forbidden": ["prisma migrate", "--no-verify"]
       }
     },

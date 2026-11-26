@@ -12,9 +12,13 @@
       "prompt": "The developer says: 'file a ticket for a new feature: export the project list as CSV'. The manifest declares an SRS backend (`tools.srs.backend`).",
       "expect": {
         "reads": [["sf-tool-github-projects/SKILL.md", "sf-workflow/SKILL.md", "sf-srs/SKILL.md"]],
-        "commands": [{ "any": ["sf srs draft", "sf srs write", "srs-cli.sh draft", "srs-cli.sh write", "transition-drafting"] }],
+        "oneOf": [
+          { "commands": [{ "any": ["sf srs draft", "sf srs write", "srs-cli.sh draft", "srs-cli.sh write", "transition-drafting"] }] },
+          { "answer": { "includes": [{ "any": ["draft", "spawn"] }, { "any": ["srs"] }] } }
+        ],
         "forbidden": ["create-ticket", "create-subtask", "create-epic", "--bypass-srs", "gh issue create"]
-      }
+      },
+      "notes": "Either a drafting command, or an answer that proposes or asks to draft in the SRS first: the shared prompt lets a plan stay empty when the right move is to ask. Any ticket command stays forbidden."
     },
     {
       "id": "ghp-split-into-children",

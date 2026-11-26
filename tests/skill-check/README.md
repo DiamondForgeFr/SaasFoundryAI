@@ -105,7 +105,12 @@ A scenario states a situation with every fact the agent needs (ticket number, la
 - `commands`: planned commands that must appear, **in this order**; a step is a string, a `/regex/`, or `{ all, any, none }`;
 - `includes`: planned commands that must appear, in any order;
 - `forbidden`: tokens no planned command may contain, on top of the global list in `replay.json` (escape hatches, `--skip-local-ci`, raw GraphQL, `gh pr ready`, a chained line, another agent's CLI);
-- `answer`: words the prose after the plan must, or must not, hold.
+- `answer`: words the prose after the plan must, or must not, hold;
+- `oneOf`: two or more accepted outcomes (`commands`, `includes`, `answer`), of which a run must satisfy at least one. For a situation whose right move is either a command or a question to the
+  developer: the shared prompt lets a plan stay empty when the right move is to ask first.
+
+The results keep the prose of each run's answer (`answer`, plan block removed, cut at 4,000 characters), so a failed scenario can be read, and a scenario that fails because the agent stopped to ask
+can be told from one that did the wrong thing.
 
 Keep the expectations to the **essential** commands: a scenario that pins an incidental flag fails for a harmless rewording and teaches nothing. Do not tune a prompt to make a scenario pass: the point
 is to see what the skill leads an agent to do.

@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 import { promisify } from 'util'
@@ -332,11 +332,11 @@ describe('skill check, Layer 2: the replay, driven without a model', () => {
   const GOOD = plan('.claude/skills/sf-workflow/workflow-cli.sh ready-pr 42', '.claude/skills/sf-workflow/workflow-cli.sh update-status 42 "In review"')
   const READ = ['.claude/skills/sf-workflow/statuses/3-ai-testing.md']
 
-  async function replay(name: string, responses: Record<string, unknown>, extra: string[] = []) {
+  async function replay(name: string, responses: Record<string, unknown>, extra: string[] = [], scenario = 'wf-ai-testing-to-review') {
     const responsesPath = path.join(scratch, `${name}.json`)
     const out = path.join(scratch, `${name}.results.json`)
     writeFileSync(responsesPath, JSON.stringify(responses))
-    const outcome = await run(['run', '--runner', 'fake', '--scenario', 'wf-ai-testing-to-review', '--repeat', '3', '--fake-responses', responsesPath, '--out', out, ...extra])
+    const outcome = await run(['run', '--runner', 'fake', '--scenario', scenario, '--repeat', '3', '--fake-responses', responsesPath, '--out', out, ...extra])
     return { outcome, results: existsSync(out) ? JSON.parse(readFileSync(out, 'utf8')) : undefined, out }
   }
 
@@ -388,6 +388,71 @@ describe('skill check, Layer 2: the replay, driven without a model', () => {
   it('requires the files the scenario says to read', async () => {
     const { results } = await replay('reads', { 'wf-ai-testing-to-review': [{ text: GOOD, filesRead: [] }] })
     expect(results.scenarios[0].runs[0].reasons).toEqual([expect.objectContaining({ code: 'READ_MISSING' })])
+  })
+
+  it('records the answer of every run, without its plan block, and keeps a long one short', async () => {
+    const prose = 'The Solo preset has no Human testing, so the move to review is mine.'
+    const long = `${'A long explanation. '.repeat(400)}`
+    const { results } = await replay(
+      'answers',
+      answers(`\`\`\`plan\n.claude/skills/sf-workflow/workflow-cli.sh ready-pr 42\n\`\`\`\n${prose}`, `\`\`\`plan\n\`\`\`\n${long}`, 'No plan block, only words.')
+    )
+    const runs = results.scenarios[0].runs
+    expect(runs[0].answer).toBe(prose)
+    expect(runs[2].answer).toBe('No plan block, only words.')
+    expect(runs[1].answer.length).toBeLessThan(long.length)
+    expect(runs[1].answer.length).toBeLessThan(4100)
+    expect(runs[1].answer).toContain('[truncated: ')
+  })
+
+  describe('an outcome that is either a command or a question to the developer (oneOf)', () => {
+    const SCENARIO = 'ghp-create-ticket-srs-project'
+    const READ_SKILL = ['.claude/skills/sf-tool-github-projects/SKILL.md']
+    const srs = (...texts: string[]) => ({ [SCENARIO]: texts.map((text) => ({ text, filesRead: READ_SKILL })) })
+    const ASKS = '```plan\nsf status --agent-friendly --no-network\n```\nThe manifest declares an SRS, so a feature starts as a drafted FR page: shall I draft it in the SRS first?'
+
+    it('accepts an answer that proposes or asks to draft in the SRS first, with no drafting command', async () => {
+      const { results } = await replay('asks', srs(ASKS, ASKS, ASKS), [], SCENARIO)
+      expect(results.scenarios[0]).toMatchObject({ passed: true, passRuns: 3, forbiddenRuns: 0 })
+    })
+
+    it('accepts a drafting command, whatever the answer says', async () => {
+      const command = '```plan\nsf srs draft --from codebase --path src\n```\nThe guard of ticket creation sends me here.'
+      const { results } = await replay('command', srs(command, command, command), [], SCENARIO)
+      expect(results.scenarios[0].passed).toBe(true)
+    })
+
+    it('fails when neither holds, and says what each accepted outcome lacked', async () => {
+      const silent = '```plan\nsf status --agent-friendly --no-network\n```\nI checked the status of the project.'
+      const { results } = await replay('neither', srs(silent, silent, silent), [], SCENARIO)
+      expect(results.scenarios[0].passed).toBe(false)
+      expect(results.scenarios[0].runs[0].reasons).toEqual([expect.objectContaining({ code: 'ONE_OF_MISSING', message: expect.stringMatching(/\(1\).*\(2\)/) })])
+    })
+
+    it('fails an answer that talks of drafting but never of the SRS', async () => {
+      const wrong = '```plan\nsf status --agent-friendly --no-network\n```\nI would draft the ticket body and file it.'
+      const { results } = await replay('no-srs', srs(wrong, wrong, wrong), [], SCENARIO)
+      expect(results.scenarios[0].passed).toBe(false)
+    })
+
+    it('still fails a ticket command, however good the answer is', async () => {
+      const filed = '```plan\n.claude/skills/sf-workflow/workflow-cli.sh create-ticket story "Export the project list as CSV"\n```\nThe manifest declares an SRS, so I would draft it in the SRS first.'
+      const { results } = await replay('filed', srs(ASKS, ASKS, filed), [], SCENARIO)
+      expect(results.scenarios[0]).toMatchObject({ passed: false, passRuns: 2, forbiddenRuns: 1 })
+    })
+  })
+
+  it('accepts the non-destructive schema script of the generated API next to the two the guide names', async () => {
+    const SCENARIO = 'ir-backend-crud-module'
+    const reads = ['.claude/skills/sf-integration-rules/SKILL.md', '.claude/skills/sf-integration-rules/backend.md']
+    const planOf = (command: string) => ({ text: `\`\`\`plan\n${command}\n\`\`\`\nThe backend guide says so.`, filesRead: reads })
+    const accepted = ['npx prisma db push', 'npm run db:setup:dev', 'npm --prefix ../fixture-mono-42 run db:update:dev -w apps/api']
+    for (const command of accepted) {
+      const { results } = await replay('schema-ok', { [SCENARIO]: [planOf(command)] }, [], SCENARIO)
+      expect(results.scenarios[0].runs[0].reasons).toEqual([])
+    }
+    const { results } = await replay('schema-no', { [SCENARIO]: [planOf('npx prisma migrate dev --name invoices')] }, [], SCENARIO)
+    expect(results.scenarios[0].runs[0].reasons.map((reason: { code: string }) => reason.code).sort()).toEqual(['FORBIDDEN', 'INCLUDE_MISSING'])
   })
 
   it('fails a run with no plan block, and a run that errored', async () => {
@@ -492,6 +557,20 @@ describe('skill check, Layer 2: what the runners take from a recorded stream', (
       turns: 4
     })
     expect(JSON.parse(outcome.stdout).error).toBeUndefined()
+  })
+
+  it('reads a path the agent spells through a symlink of the project folder as a path inside the project', async () => {
+    const real = path.join(scratch, 'real')
+    mkdirSync(path.join(real, '.claude/skills/sf-workflow'), { recursive: true })
+    const link = path.join(scratch, 'link')
+    symlinkSync(real, link)
+    const stream = path.join(scratch, 'symlink.ndjson')
+    writeFileSync(
+      stream,
+      lines({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: path.join(realpathSync(real), '.claude/skills/sf-workflow/SKILL.md') } }] } })
+    )
+    const parsed = JSON.parse((await run(['parse', '--runner', 'claude', '--file', stream, '--cwd', link, '--json'])).stdout)
+    expect(parsed.filesRead).toEqual(['.claude/skills/sf-workflow/SKILL.md'])
   })
 
   it('reports an error the agent itself reported', async () => {
