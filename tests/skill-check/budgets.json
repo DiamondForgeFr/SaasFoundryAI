@@ -4,7 +4,7 @@
   "unit": "bytes",
   "roundTo": 1024,
   "measuredAt": {
-    "commit": "bdfb1f12b2c3ff5d8415484bd14defbe851545ab",
+    "commit": "9026389a4e5bb7d61d1bb46d3546de6b71d79924",
     "date": "2026-11-26"
   },
   "ceilings": {
@@ -100,10 +100,14 @@
     },
     "tool-saasfoundry": {
       "template": {
-        "entry": 68608,
-        "total": 68608,
+        "entry": 15360,
+        "total": 44032,
         "files": {
-          "SKILL.md": 68608
+          "SKILL.md": 15360,
+          "flows/feedback-bug.md": 5120,
+          "flows/intake.md": 7168,
+          "flows/milestone.md": 7168,
+          "flows/update.md": 5120
         }
       }
     },

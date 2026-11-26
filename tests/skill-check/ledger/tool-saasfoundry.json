@@ -11,11 +11,25 @@
       "tokens": ["sf new --non-interactive --profile", "sf update --non-interactive", "--dry-run --json", "never runs the interactive Inquirer prompts"]
     },
     {
-      "id": "catalogue-lookups",
-      "summary": "Module names come from the catalogue, never from memory",
+      "id": "routing-table",
+      "summary": "One table sends each request to its first command and, when only some branches need it, to the flow file",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["## Route the request"]
+    },
+    {
+      "id": "preview-confirm-run",
+      "summary": "A mutation is previewed, confirmed by the user, then run; a changed field rebuilds the plan",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["sf modules list --json", "sf modules info <slug> --json", "sf modules match <query> --json", "Don't fabricate module names"]
+      "tokens": ["Preview, confirm, run", "plan-*.sh"]
+    },
+    {
+      "id": "catalogue-lookups",
+      "summary": "Module names come from the catalogue and flags from the reference files, never from memory",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["sf modules list --json", "sf modules info <slug> --json", "sf modules match <query> --json", "Names and flags come from the CLI"]
     },
     {
       "id": "bootstrap-scripts",
@@ -37,45 +51,77 @@
       "summary": "Seven phases in order, each ending on something checkable; three decisions are the user's",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["The zero-to-project flow", "intake.json", "Ask, do not assume", "Never continue past a blocker"]
+      "tokens": ["The zero-to-project flow", "intake.json", "Ask, do not assume", "Stop at a blocker"],
+      "source": "sf-workflow and sf-srs point at this heading"
     },
     {
       "id": "poc-intake",
       "summary": "Read the code first; nothing moves without a plan and an explicit confirm",
-      "owner": "SKILL.md",
-      "tier": "step",
-      "tokens": ["scripts/read-poc.sh", "plan-poc-move.sh", "move-poc.sh <dir> --confirm", "plan-challenge.sh", "record-intake.sh"],
+      "owner": "flows/intake.md",
+      "tier": "disclosed",
+      "tokens": ["scripts/read-poc.sh", "plan-poc-move.sh", "move-poc.sh <dir> --confirm", "recognisable", "refusals"],
+      "pointer": { "from": "SKILL.md", "match": "flows/intake.md", "lead": "has code in the folder" },
       "source": "read-poc.spec.ts, plan-poc-move.spec.ts"
+    },
+    {
+      "id": "harness-never-moves",
+      "summary": "The profile question decides the move: a project the user keeps is read and never relocated",
+      "owner": "flows/intake.md",
+      "tier": "disclosed",
+      "tokens": ["sf new --profile harness", "Never run `plan-poc-move.sh` there"],
+      "pointer": { "from": "SKILL.md", "match": "flows/intake.md", "lead": "has code in the folder" },
+      "source": "#573, #574"
+    },
+    {
+      "id": "intake-challenge",
+      "summary": "Questions come from seeds read off the code; an answer that cites no seed is refused",
+      "owner": "flows/intake.md",
+      "tier": "disclosed",
+      "tokens": ["plan-challenge.sh", "record-intake.sh", "revealing", "## Challenge the intent"],
+      "pointer": { "from": "SKILL.md", "match": "flows/intake.md", "lead": "has code in the folder" },
+      "source": "plan-challenge.spec.ts, record-intake.spec.ts"
     },
     {
       "id": "new-discovery",
       "summary": "The profile is the first question; the intent round-trips through plan-new.sh and is confirmed before running",
-      "owner": "SKILL.md",
-      "tier": "step",
-      "tokens": ["plan-new.sh", "profile", "harness", "reference/new-flags.json", "Don't re-serialize the plan by hand"],
+      "owner": "flows/new.md",
+      "tier": "disclosed",
+      "tokens": ["plan-new.sh", "profile", "harness", "reference/new-flags.json", "re-serialize the plan by hand"],
+      "pointer": { "from": "SKILL.md", "match": "flows/new.md", "lead": "wants a new project" },
       "source": "plan-new.spec.ts, new-flags-parity.spec.ts"
     },
     {
       "id": "update-discovery",
       "summary": "sf update is additive; read the capabilities, dry-run first, confirm before the real run",
-      "owner": "SKILL.md",
-      "tier": "step",
-      "tokens": ["plan-update.sh", "sf status --json --no-network", "Dry-run first", "conflictStrategy", "Don't skip the dry-run round", "Don't propose a module already in `.saasfoundry.json`"],
+      "owner": "flows/update.md",
+      "tier": "disclosed",
+      "tokens": ["plan-update.sh", "sf status --json --no-network", "Dry-run first", "conflictStrategy", "alreadyInstalled"],
+      "pointer": { "from": "SKILL.md", "match": "flows/update.md", "lead": "wants to add modules" },
       "source": "plan-update.spec.ts"
     },
     {
       "id": "update-never-full-over-repo",
       "summary": "Never sf new --profile full inside an existing repository",
-      "owner": "SKILL.md",
-      "tier": "reference",
-      "tokens": ["Don't run `sf new --profile full` inside an existing repository", "sf update --target-profile full --dry-run --json"]
+      "owner": "flows/update.md",
+      "tier": "disclosed",
+      "tokens": ["Inside an existing repository", "`sf new --profile full` never runs there", "sf update --target-profile full --dry-run --json"],
+      "pointer": { "from": "SKILL.md", "match": "flows/update.md", "lead": "wants to add modules" }
+    },
+    {
+      "id": "update-secrets-as-env",
+      "summary": "Secret fields never reach plan-update.sh; each travels as the SF_UPDATE_ variable its env entry names",
+      "owner": "flows/update.md",
+      "tier": "disclosed",
+      "tokens": ["SF_UPDATE_*", "secret: true", "plan-update.sh"],
+      "pointer": { "from": "SKILL.md", "match": "flows/update.md", "lead": "wants to add modules" },
+      "source": "plan-update.spec.ts"
     },
     {
       "id": "secrets-stay-out",
-      "summary": "Credentials never enter the intent, the command or a summary; they travel as SF_UPDATE_* variables",
+      "summary": "Credentials never enter the intent, the command or a summary; they travel as environment variables",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["SF_UPDATE_MAILERSEND_API_KEY", "SF_UPDATE_NOTION_API_TOKEN", "NOTION_API_TOKEN", "Don't echo credentials"],
+      "tokens": ["SF_UPDATE_MAILERSEND_API_KEY", "SF_UPDATE_NOTION_API_TOKEN", "NOTION_API_TOKEN", "Secrets stay out of the intent"],
       "source": "plan-update.spec.ts"
     },
     {
@@ -96,26 +142,54 @@
     },
     {
       "id": "milestone-guardrail",
-      "summary": "A release scope is proposed from evidence, never invented",
-      "owner": "SKILL.md",
-      "tier": "step",
-      "tokens": ["Milestone Guardrail", "plan-milestone.sh", "workflow-cli.sh milestone"],
+      "summary": "A release scope is proposed from evidence, never invented, and never blocks a release",
+      "owner": "flows/milestone.md",
+      "tier": "disclosed",
+      "tokens": ["Milestone Guardrail", "plan-milestone.sh", "workflow-cli.sh milestone", "shouldPropose"],
+      "pointer": { "from": "SKILL.md", "match": "flows/milestone.md", "lead": "talks about releasing" },
       "source": "plan-milestone.spec.ts"
+    },
+    {
+      "id": "milestone-version-named",
+      "summary": "A version the user named out loud is passed to the script, which otherwise judges a young board on ticket count alone",
+      "owner": "flows/milestone.md",
+      "tier": "disclosed",
+      "tokens": ["--version-named", "#551"],
+      "pointer": { "from": "SKILL.md", "match": "flows/milestone.md", "lead": "talks about releasing" },
+      "source": "#551, plan-milestone.spec.ts"
+    },
+    {
+      "id": "milestone-candidates",
+      "summary": "A finished Epic is a scope, a release spanning Epics is one union whose parts are never quoted as the release",
+      "owner": "flows/milestone.md",
+      "tier": "disclosed",
+      "tokens": ["droppedCandidates", "epicDone", "epic-union", "scopeSizePartial", "#560", "#561"],
+      "pointer": { "from": "SKILL.md", "match": "flows/milestone.md", "lead": "talks about releasing" },
+      "source": "#560, #561, plan-milestone.spec.ts"
+    },
+    {
+      "id": "feedback-commands",
+      "summary": "The feedback commands the skill drives: request, bug and list",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["sf feedback request <name>", "sf feedback bug --source cli|scaffold", "sf feedback list"]
     },
     {
       "id": "feedback-module-request",
       "summary": "A module request is scored on five criteria and checked for duplicates before it is filed",
-      "owner": "SKILL.md",
-      "tier": "step",
-      "tokens": ["sf feedback request", "The 5-criterion scorecard", "plan-feedback-request.sh"],
+      "owner": "flows/feedback-request.md",
+      "tier": "disclosed",
+      "tokens": ["sf feedback request", "The 5-criterion scorecard", "plan-feedback-request.sh", "route-to-existing"],
+      "pointer": { "from": "SKILL.md", "match": "flows/feedback-request.md", "lead": "wants a module the catalogue lacks" },
       "source": "plan-feedback-request.spec.ts"
     },
     {
       "id": "feedback-bug-report",
-      "summary": "A bug is routed cli-bug or scaffold-bug and filed through sf feedback, with a redacted repro",
-      "owner": "SKILL.md",
-      "tier": "step",
-      "tokens": ["sf feedback bug --source cli|scaffold", "--auto-repro", "cli-bug", "scaffold-bug", "plan-feedback-bug.sh"],
+      "summary": "A bug is routed cli-bug or scaffold-bug and filed through sf feedback, with a redacted repro, after the user's approval",
+      "owner": "flows/feedback-bug.md",
+      "tier": "disclosed",
+      "tokens": ["--auto-repro", "cli-bug", "scaffold-bug", "plan-feedback-bug.sh", "userConfirmed"],
+      "pointer": { "from": "SKILL.md", "match": "flows/feedback-bug.md", "lead": "reports a crash" },
       "source": "plan-feedback-bug.spec.ts"
     },
     {
@@ -130,7 +204,7 @@
       "summary": "Artefacts follow the manifest language, never the language of the conversation",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["language", "Never take the language of the conversation as the signal"]
+      "tokens": ["language", "The language of the conversation is not the signal"]
     }
   ],
   "knownBrokenLinks": []
