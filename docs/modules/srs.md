@@ -171,8 +171,9 @@ srs-cli.sh apply-update --dry-run < patch.json
 srs-cli.sh eval
 ```
 
-Every action honours a shared exit-code contract (`0` success, `2` bad input, `3` missing backend, `4` unknown backend, `5` runtime, `6` partial write, `7` pendingIngestion clear failed). See the
-skill's [`SKILL.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md) for the full contract.
+Every action honours a shared exit-code contract (`0` success, `2` bad input, `3` missing backend, `4` unknown backend, `5` runtime, `6` partial write, `7` pendingIngestion clear failed).
+`sf srs help` prints it, and the skill's [`SKILL.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md) says what an agent does when a write or a spawn exits
+with one of them.
 
 ### Spec-to-ticket bridge (Rule 8)
 

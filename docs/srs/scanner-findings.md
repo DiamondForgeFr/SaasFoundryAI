@@ -211,9 +211,9 @@ cluster:
 | **TC**  | `test.cases[]`, plus **TODO** items for `endpoint.hasTests=false`                                      | One TC per `test.cases[i].title`; untested endpoints emit a TODO TC (`expectedResult: "to write"`) so the gap is auditable.                                 |
 | **NFR** | stack signals (auth / i18n / prisma / docker-compose / playwright / swagger) + standard SaaS catalogue | Always **proposed** with `priority: 'P3'` and `target: '<proposed — needs human validation>'`. Reviewer lifts priority and refines target before accepting. |
 
-The full seeding rules (including the catalogue of stack signals → NFRs and the pre-accept coverage table) live in `.claude/skills/sf-srs/SKILL.md` → "Seeding DS / TC / NFR (five-category
-completeness)". Keep the two documents consistent — the skill is the source of truth for the agent's behaviour, this file is the source of truth for the finding shapes it consumes. The canonical
-example `example-epic.md` shipped with the skill demonstrates all five categories on the built-in auth module.
+The full seeding rules (including the catalogue of stack signals → NFRs and the pre-accept coverage table) live in `.claude/skills/sf-srs/data/clustering-rules.json`, which `SKILL.md` ("Draft from the
+codebase") sends the agent to. Keep the two documents consistent — that file is the source of truth for the agent's behaviour, this file is the source of truth for the finding shapes it consumes. The
+canonical example `example-epic.md` shipped with the skill demonstrates all five categories on the built-in auth module.
 
 ## Stability guarantees
 
@@ -228,5 +228,6 @@ Exit codes mirror every `srs-cli.sh bin` entrypoint : `0` success, `2` bad input
 
 - [SRS walkthrough → Drafting from an existing codebase](/srs/walkthrough#drafting-from-an-existing-codebase)
 - [SRS lifecycle → ai-draft phase](/srs/lifecycle)
-- [`sf-srs` SKILL.md → Drafting from codebase](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md) — review-loop prompts and clustering heuristics
+- [`sf-srs` SKILL.md → Draft from the codebase](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/skills/sf-srs/SKILL.md) — the review loop and, in `reference/codebase-drafting.md`,
+  the stacks the scanner does not parse
 - [`src/srs/scanners/types.ts`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/src/srs/scanners/types.ts) — the source-of-truth TypeScript definitions
