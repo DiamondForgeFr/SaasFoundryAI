@@ -47,8 +47,8 @@ The skill runs the CLI in non-interactive mode only. `sf update --dry-run --json
 - Skill lifecycle: `sf skill install [--project|--user]`, `sf skill update`, `sf skill uninstall`. Inside a managed project the default scope is the project (`.claude/skills/`); Claude Code gives a
   personal `~/.claude/skills/` copy precedence over it, so pass `--user` only on purpose.
 - Feedback: `sf feedback request <name> --description "…"`, `sf feedback bug --source cli|scaffold --title "…" --description "…" [--auto-repro]`, `sf feedback list`
-- Voting: `sf feedback vote --list` ranks module requests; `sf feedback vote <n> up|down` records a vote in `~/.saasfoundry/preferences.json`; `sf feedback vote <n> comment --comment "<body>"` records
-  none.
+- Voting: `sf feedback vote --list` ranks module requests; `sf feedback vote <n> up|down` records a vote in `~/.saasfoundry/preferences.json`; `sf feedback vote <n> comment --comment "<body>"` posts a
+  comment and records no vote.
 
 ## Rules for every flow
 
