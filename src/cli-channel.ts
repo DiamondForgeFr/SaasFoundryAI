@@ -2,6 +2,8 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
+import { LOCAL_PROBE_BOUNDS } from './utils/local-probe-bounds'
+
 /**
  * Where the running CLI comes from.
  *
@@ -22,7 +24,7 @@ export function resolveCliChannel(root: string = CLI_ROOT): CliChannel {
   if (!existsSync(join(root, '.git')) || !existsSync(join(root, 'src'))) return { channel: 'package' }
   let commit: string | undefined
   try {
-    commit = execFileSync('git', ['-C', root, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || undefined
+    commit = execFileSync('git', ['-C', root, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], ...LOCAL_PROBE_BOUNDS }).trim() || undefined
   } catch {
     commit = undefined
   }

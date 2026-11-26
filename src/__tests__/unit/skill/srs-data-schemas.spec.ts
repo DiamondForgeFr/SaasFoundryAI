@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process'
+import { execFileSync } from '../../helpers/bounded-child'
 import { readFileSync } from 'fs'
 import path from 'path'
 import Ajv from 'ajv'

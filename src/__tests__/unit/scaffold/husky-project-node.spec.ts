@@ -1,4 +1,5 @@
-import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
+import { type SpawnSyncReturns } from 'node:child_process'
+import { spawnSync } from '../../helpers/bounded-child'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'

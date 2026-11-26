@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process'
+import { spawnSync } from '../helpers/bounded-child'
 import { mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'

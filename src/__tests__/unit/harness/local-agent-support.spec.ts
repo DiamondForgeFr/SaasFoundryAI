@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'child_process'
+import { execFile } from 'child_process'
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'fs/promises'
 import { promises as filesystem } from 'fs'
 import { tmpdir } from 'os'
@@ -9,6 +9,7 @@ import { planAgentInstructions } from '../../../harness/agent-instructions'
 import { enableAgents, readAgentSupport, refreshAgents, replaceAgents } from '../../../harness/agent-support'
 import { CODEX_HOOKS_PATH } from '../../../harness/delegation-hooks'
 import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
+import { execFileSync } from '../../helpers/bounded-child'
 
 // Tier agents (#929) have their own suite; these assertions are about the other deposits.
 // Tier agents (#929) and the Codex capture hook (#1035) have their own suites.

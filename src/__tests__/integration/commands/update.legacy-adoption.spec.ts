@@ -1,4 +1,5 @@
-import { execFileSync, spawnSync, type SpawnSyncReturns } from 'node:child_process'
+import { type SpawnSyncReturns } from 'node:child_process'
+import { execFileSync, spawnSync } from '../../helpers/bounded-child'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

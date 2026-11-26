@@ -8,6 +8,7 @@ import shelljs from 'shelljs'
 import { createApiApp } from '../../../builders/api.builder'
 import { createMonorepoRoot } from '../../../builders/monorepo.builder'
 import { createWebApp } from '../../../builders/web.builder'
+import { spawnSync } from '../../helpers/bounded-child'
 import { apiParams, monorepoRootParams, webParams } from '../../helpers/fixtures'
 
 const SHORT = 'zz9'
@@ -43,7 +44,7 @@ async function prettierChanges(projectName: string): Promise<Record<string, { re
     if (content.includes(projectName) || content.includes(projectName.toUpperCase())) rendered.set(file, content)
   }
   // The project's .prettierrc, .prettierignore and .gitignore apply, as in `npm run format:check`
-  const write = childProcess.spawnSync(process.execPath, [require.resolve('prettier/bin/prettier.cjs'), '--write', '--log-level', 'warn', '.'], { cwd: dir, encoding: 'utf8' })
+  const write = spawnSync(process.execPath, [require.resolve('prettier/bin/prettier.cjs'), '--write', '--log-level', 'warn', '.'], { cwd: dir, encoding: 'utf8' })
   expect(write.stderr).toBe('')
 
   const changes: Record<string, { rendered: string; formatted: string }> = {}

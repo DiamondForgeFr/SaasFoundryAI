@@ -1,4 +1,5 @@
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
+import { spawnSync } from '../../helpers/bounded-child'
 import { createHash } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'

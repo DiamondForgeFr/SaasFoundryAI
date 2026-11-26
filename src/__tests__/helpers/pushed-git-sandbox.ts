@@ -1,6 +1,8 @@
-import childProcess, { execFileSync } from 'child_process'
+import childProcess from 'child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'fs'
 import path from 'path'
+
+import { boundedOptions, execFileSync } from './bounded-child'
 
 /**
  * The environment git commands of a sandbox run in. A test that runs inside a commit hook inherits
@@ -37,7 +39,7 @@ export interface SpawnedGitSandbox {
  *
  * Setting the variables on `process.env` cannot do it. Jest hands every test file a copy of `process.env`, and
  * a child process started without an `env` option inherits the real one: the commit then found the identity of
- * whoever ran the suite, and failed on a CI runner that has none (#969).
+ * whoever ran the suite, and failed on a CI runner that has none (#969). The call is bounded like a spec's own (#1344).
  */
 export function sandboxSpawnedGit(): SpawnedGitSandbox {
   const real = childProcess.spawnSync
@@ -45,7 +47,7 @@ export function sandboxSpawnedGit(): SpawnedGitSandbox {
   const spy = jest
     .spyOn(childProcess, 'spawnSync')
     .mockImplementation(((command: string, args?: readonly string[], options?: childProcess.SpawnSyncOptions) =>
-      real(command, args, { ...options, env: sandboxGitEnv(options?.env ?? process.env, { identity }) })) as never)
+      real(command, args, boundedOptions({ ...options, env: sandboxGitEnv(options?.env ?? process.env, { identity }) }))) as never)
   return {
     restore: () => spy.mockRestore(),
     withoutIdentity: <T>(run: () => T): T => {

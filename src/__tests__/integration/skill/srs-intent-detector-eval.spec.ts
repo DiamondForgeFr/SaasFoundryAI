@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync } from '../../helpers/bounded-child'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 

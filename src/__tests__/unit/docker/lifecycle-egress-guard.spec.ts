@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawnSync } from '../../helpers/bounded-child'
 import { resolve } from 'node:path'
 
 describe('lifecycle process egress guard', () => {

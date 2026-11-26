@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'child_process'
+import { execFile } from 'child_process'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'fs'
 import { mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
@@ -7,6 +7,7 @@ import { promisify } from 'util'
 
 import inquirer from 'inquirer'
 
+import { execFileSync } from '../../helpers/bounded-child'
 import { sandboxGitEnv, sandboxSpawnedGit, type SpawnedGitSandbox } from '../../helpers/pushed-git-sandbox'
 
 jest.mock('inquirer')

@@ -21,6 +21,7 @@ import { canConnect, DEFAULT_PORTS } from '../ports'
 import { classifyProjectCapabilities, type ProjectCapabilities } from '../project-capabilities'
 import type { HarnessAgent, SaaSFoundryManifest } from '../types'
 import { readManifest } from '../utils'
+import { LOCAL_PROBE_BOUNDS } from '../utils/local-probe-bounds'
 import { collectInstructionDiagnostics, type InstructionDiagnostics } from './instruction-diagnostics'
 import { collectPersonalSkills, type StatusPersonalSkills } from './personal-skills'
 
@@ -267,7 +268,7 @@ export interface CollectOptions {
 
 function runSafe(cmd: string, cwd: string): string | null {
   try {
-    return execSync(cmd, { cwd, stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' }).trim()
+    return execSync(cmd, { cwd, stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8', ...LOCAL_PROBE_BOUNDS }).trim()
   } catch {
     return null
   }

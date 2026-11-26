@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { statusCommand } from '../../commands/status'
 import { writeManifest } from '../../utils'
 import type { SaaSFoundryManifest } from '../../types'
-import { spawnSync } from 'child_process'
+import { spawnSync } from '../helpers/bounded-child'
 import { resolve } from 'path'
 
 const CLI_ROOT = resolve(__dirname, '../../..')

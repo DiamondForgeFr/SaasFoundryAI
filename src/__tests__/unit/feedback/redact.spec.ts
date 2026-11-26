@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process'
+import { spawnSync } from '../../helpers/bounded-child'
 import path from 'path'
 
 import { isSensitiveKey, redactText } from '../../../feedback/redact'
