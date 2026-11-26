@@ -126,7 +126,9 @@ La skill fait désormais partie du projet. Toute personne qui clone le dépôt l
 
 ## Écrire un bon `SKILL.md`
 
-Les modèles suivants, issus des skills SaaSFoundryAI, rendent leur exécution fiable.
+Les modèles suivants, issus des skills SaaSFoundryAI, rendent leur exécution fiable. Les skills livrées suivent un
+[standard d'écriture](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md#writing-standard-for-agent-facing-documents) (trois niveaux, des pointeurs qui
+commencent par leur déclencheur, une source de vérité par règle), que `sf new` dépose aussi dans `.claude/docs/architecture-skills.md` de votre projet.
 
 ### Frontmatter : une `description` précise
 

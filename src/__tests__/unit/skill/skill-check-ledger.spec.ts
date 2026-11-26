@@ -446,6 +446,83 @@ describe('skill check, Layer 2: the replay, driven without a model', () => {
   })
 })
 
+describe('skill check, Layer 2: what the runners take from a recorded stream', () => {
+  let scratch: string
+
+  beforeEach(() => {
+    scratch = mkdtempSync(path.join(tmpdir(), 'skill-check-parse-'))
+  })
+
+  afterEach(() => {
+    rmSync(scratch, { recursive: true, force: true })
+  })
+
+  const lines = (...events: unknown[]) => `${events.map((event) => (typeof event === 'string' ? event : JSON.stringify(event))).join('\n')}\n`
+
+  it('takes the files read, the answer, the model and the cost from a Claude Code stream, and ignores the rest', async () => {
+    const stream = path.join(scratch, 'claude.ndjson')
+    writeFileSync(
+      stream,
+      lines(
+        'not json at all',
+        { type: 'system', subtype: 'init', model: 'claude-sonnet-5' },
+        {
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'text', text: 'Let me read.' },
+              { type: 'tool_use', name: 'Read', input: { file_path: path.join(scratch, '.claude/skills/sf-workflow/SKILL.md') } }
+            ]
+          }
+        },
+        { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Skill', input: { skill: 'sf-srs' } }] } },
+        { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Grep', input: { pattern: 'ready-pr' } }] } },
+        { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/etc/hosts' } }] } },
+        { type: 'user', message: { content: [{ type: 'tool_result', content: 'ok' }] } },
+        { type: 'result', subtype: 'success', is_error: false, result: '```plan\ngit status\n```', total_cost_usd: 0.0123, num_turns: 4 }
+      )
+    )
+    const outcome = await run(['parse', '--runner', 'claude', '--file', stream, '--cwd', scratch, '--json'])
+    expect(outcome.code).toBe(0)
+    expect(JSON.parse(outcome.stdout)).toMatchObject({
+      text: '```plan\ngit status\n```',
+      filesRead: ['.claude/skills/sf-workflow/SKILL.md', '.claude/skills/sf-srs/SKILL.md', '/etc/hosts'],
+      model: 'claude-sonnet-5',
+      costUsd: 0.0123,
+      turns: 4
+    })
+    expect(JSON.parse(outcome.stdout).error).toBeUndefined()
+  })
+
+  it('reports an error the agent itself reported', async () => {
+    const stream = path.join(scratch, 'claude-error.ndjson')
+    writeFileSync(stream, lines({ type: 'result', subtype: 'error_max_turns', is_error: true, result: 'Reached the turn limit' }))
+    const parsed = JSON.parse((await run(['parse', '--runner', 'claude', '--file', stream, '--cwd', scratch, '--json'])).stdout)
+    expect(parsed.error).toContain('error_max_turns')
+  })
+
+  it('takes the answer of a Codex run from its last message, and the files from the paths its commands name', async () => {
+    const stream = path.join(scratch, 'codex.jsonl')
+    const last = path.join(scratch, 'last.txt')
+    writeFileSync(
+      stream,
+      lines(
+        { type: 'item.completed', item: { type: 'command_execution', command: "sed -n '1,120p' .agents/skills/sf-workflow/statuses/3-ai-testing.md" } },
+        { type: 'item.completed', item: { type: 'command_execution', command: 'rg ready-pr ./AGENTS.md' } },
+        { type: 'item.completed', item: { type: 'agent_message', text: 'done' } }
+      )
+    )
+    writeFileSync(last, '```plan\ngit status\n```')
+    const parsed = JSON.parse((await run(['parse', '--runner', 'codex', '--file', stream, '--last-message', last, '--json'])).stdout)
+    expect(parsed.text).toBe('```plan\ngit status\n```')
+    expect(parsed.filesRead).toEqual(['.agents/skills/sf-workflow/statuses/3-ai-testing.md', 'AGENTS.md'])
+  })
+
+  it('refuses a stream that is not there', async () => {
+    expect((await run(['parse', '--runner', 'claude', '--file', path.join(scratch, 'missing.ndjson')])).code).toBe(2)
+  })
+})
+
 describe('skill check, Layer 2: what an agent would be given', () => {
   const SECRETS = {
     GH_TOKEN: 'ghp_secret_one',

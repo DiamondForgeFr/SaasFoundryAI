@@ -117,5 +117,6 @@ is to see what the skill leads an agent to do.
 - A plan is not an execution. The guards stay covered by their own CLI specs.
 - Three runs of a model are a sample. A scenario at 2 of 3 can hide a rate of 50%.
 - The Claude Code runner uses the documented flags of `claude -p --output-format stream-json`; the Codex runner reads the final message from `--output-last-message` and guesses the files it read from
-  the paths in its shell commands, because the JSON event shapes of `codex exec --json` are not documented. Neither has been run by the author of this tool.
+  the paths in its shell commands, because the JSON event shapes of `codex exec --json` are not documented. Neither has been run by the author of this tool. If a first replay reads no file or no
+  answer, save the agent's stream and run `node tests/skill-check/run.mjs parse --runner claude --file <stream>` (or `--runner codex`) to see what the runner takes from it.
 - Kimi Code is not run (decision D3 of #1096): the scenarios name the hosts `claude-code` and `codex`, and the replay has a runner for each.

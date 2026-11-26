@@ -61,7 +61,7 @@ projection. A ceiling is a ratchet: lower it in the change that shrinks the file
 
 ### Running the skill check
 
-Two layers, both under `tests/skill-check/` (see its `README.md`):
+Two layers, both under `tests/skill-check/` of the SaaSFoundryAI repository (see its `README.md`):
 
 - **Layer 1, the rule ledger (CI gate, no model).** `npm run skill:check` verifies that every ledgered rule keeps its tokens in the file that owns it, that pointers and relative links resolve, and
   that no surface exceeds its byte ceiling. `node tests/skill-check/run.mjs metrics` prints the sizes. The Jest spec `src/__tests__/unit/skill/skill-check-ledger.spec.ts` runs it.
