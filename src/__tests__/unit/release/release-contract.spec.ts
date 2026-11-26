@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawnSync } from '../../helpers/bounded-child'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 

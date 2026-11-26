@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execSync } from '../../helpers/bounded-child'
 import { readFileSync } from 'fs'
 import { mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'

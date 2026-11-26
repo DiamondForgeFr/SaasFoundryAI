@@ -22,6 +22,7 @@ import { mutateProjectManifestSafe } from '../manifest-file'
 import { assertGitBranchName } from '../run'
 import { assertBoardUrl, boardRemediation, isMissingBoard } from '../utils/workflow-board'
 import { getRemoteUrl } from '../utils/git-info'
+import { LOCAL_PROBE_BOUNDS } from '../utils/local-probe-bounds'
 import { AGENT_LOCAL_CI_CONTEXT, localCiGateSummary, moltenPublishesToGithub, moltenStatusContexts, resolveLocalCiGate } from '../local-ci-gate'
 import { MOLTEN_PROJECT_FILE } from '../molten-pipeline'
 import { workflowStatusNames } from '../status/render'
@@ -555,7 +556,7 @@ function moltenRequiredStatuses(projectRoot: string, fail: (message: string) => 
 
 /** Local or on origin. Outside a git repository nothing can be checked, so the branch is not reported missing. */
 function branchExists(branch: string): boolean {
-  const git = (...args: string[]) => spawnSync('git', args, { stdio: 'ignore' }).status === 0
+  const git = (...args: string[]) => spawnSync('git', args, { stdio: 'ignore', ...LOCAL_PROBE_BOUNDS }).status === 0
   if (!git('rev-parse', '--git-dir')) return true
   return git('rev-parse', '--verify', '--quiet', `refs/heads/${branch}`) || git('rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`)
 }

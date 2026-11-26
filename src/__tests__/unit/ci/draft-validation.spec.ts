@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'child_process'
+import { execFileSync, spawnSync } from '../../helpers/bounded-child'
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'

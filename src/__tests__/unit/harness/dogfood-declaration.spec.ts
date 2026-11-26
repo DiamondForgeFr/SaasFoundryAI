@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { execFileSync } from 'child_process'
+import { execFileSync } from '../../helpers/bounded-child'
 import { existsSync } from 'fs'
 import { readdir, readFile, stat } from 'fs/promises'
 import { resolve } from 'path'

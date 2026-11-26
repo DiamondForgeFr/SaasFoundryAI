@@ -1,6 +1,8 @@
 import { execSync } from 'node:child_process'
 import { basename } from 'node:path'
 
+import { LOCAL_PROBE_BOUNDS } from './local-probe-bounds'
+
 export interface GitRepoInfo {
   root: string
   name: string
@@ -10,7 +12,7 @@ export interface GitRepoInfo {
 }
 
 function git(args: string, cwd: string): string {
-  return execSync(`git ${args}`, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+  return execSync(`git ${args}`, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], ...LOCAL_PROBE_BOUNDS }).trim()
 }
 
 export function isGitRepo(cwd: string = process.cwd()): boolean {

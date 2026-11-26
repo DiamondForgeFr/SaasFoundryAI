@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process'
+import { spawnSync } from '../../helpers/bounded-child'
 import { copy } from 'fs-extra'
 import { rm } from 'fs/promises'
 import { join, resolve } from 'path'

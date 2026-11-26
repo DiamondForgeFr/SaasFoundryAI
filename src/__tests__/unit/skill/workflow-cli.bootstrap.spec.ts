@@ -1,4 +1,5 @@
-import { execFile, execFileSync } from 'child_process'
+import { execFile } from 'child_process'
+import { execFileSync } from '../../helpers/bounded-child'
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { mkdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
