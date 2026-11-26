@@ -59,10 +59,10 @@
       "fixture": "harness-solo",
       "prompt": "Before marking the pull request of ticket #42 ready, check whether its head commit carries every required local CI status, and change nothing.",
       "expect": {
-        "reads": [["sf-tool-github-projects/SKILL.md", "sf-workflow/statuses/3-ai-testing.md"]],
         "commands": [{ "all": ["local-ci-gate", "42"], "none": ["--skip-local-ci"] }],
         "forbidden": ["--skip-local-ci"]
-      }
+      },
+      "notes": "No read is required: the command is documented in more than one skill file (sf-workflow/SKILL.md names local-ci-gate too), so which file the agent opened says nothing the planned command does not. The files read are still recorded and compared."
     }
   ]
 }

@@ -29,10 +29,16 @@
       "fixture": "dogfood",
       "prompt": "You edited `scaffolds/skills-templates/tools/github-projects/SKILL.md`. Which copies of it must follow, and how do you update each?",
       "expect": {
-        "reads": [["architecture-skills.md", "tool-skill-drift.spec.ts"]],
-        "commands": [{ "all": ["cp", ".claude/skills/sf-tool-github-projects/SKILL.md"] }, { "all": ["agents refresh", "--scope shared"] }],
-        "forbidden": ["/(vi|vim|nano|sed -i)\\s+\\S*\\.agents\\//"]
-      }
+        "oneOf": [
+          { "commands": [{ "all": ["cp", ".claude/skills/sf-tool-github-projects/SKILL.md"] }, { "all": ["agents refresh", "--scope shared"] }] },
+          {
+            "commands": [{ "all": ["agents refresh", "--scope shared"] }],
+            "answer": { "includes": [{ "any": [".claude/skills/sf-tool-github-projects/SKILL.md"] }, { "any": ["edit tool", "apply the same change", "same edit", "edit the"] }] }
+          }
+        ],
+        "forbidden": ["/(vi|vim|nano|sed -i)\\s+.*\\.agents\\//"]
+      },
+      "notes": "The dogfood copy follows the template either by `cp` or by an edit with the agent's own file tool (the project's instructions ask for native file tools); what is checked is that it follows and that the .agents projection is regenerated, never hand-edited."
     }
   ]
 }
