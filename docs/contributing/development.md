@@ -30,13 +30,14 @@ start. Key directories:
 | `scaffolds/overlays/`         | Topology overrides (`monorepo/`, `multirepo/`) and module overlays (`modules/email/`, `modules/storage/`)  |
 | `scaffolds/skills-templates/` | Skill templates that ship into generated projects (sf-srs, sf-workflow, sf-integration-rules, …)           |
 | `tests/docker/`               | Real lifecycle E2E lanes — browser → API → PostgreSQL for fresh generation and update                      |
-| `.claude/skills/`             | Local copies of the same skills the scaffolds ship — drift-guarded against `scaffolds/skills-templates/`   |
+| `tests/skill-check/`          | The skill check — rule ledger, byte ceilings and plan-only agent replay for the agent-facing documents     |
+| `.claude/skills/`             | Local copies of the skills the scaffolds ship — the files the drift guard lists are byte-equal             |
 | `.claude/docs/`               | Reference docs the agent reads during dev (architecture-modules, architecture-skills, migration-framework) |
 
 For deeper guidance on how to add or modify a module or skill, read the architecture docs the agent uses:
 
 - `.claude/docs/architecture-modules.md` — how modules compose (blueprint markers + overlay files + installer)
-- `.claude/docs/architecture-skills.md` — skill template shape and the drift-guard contract
+- `.claude/docs/architecture-skills.md` — the writing standard for agent-facing documents, the skill template shape and the drift-guard contract
 - `.claude/docs/migration-framework.md` — every breaking manifest or module change must ship through this
 
 The immutable previous-release lifecycle fixture has a separate maintainer runbook in
@@ -84,6 +85,7 @@ sf new --project-name local-test --structure monorepo
 | `npm run test:unit`                                   | Just the unit project (fastest)                                                                       | Quick local feedback                                                         |
 | `npm run test:integration`                            | Just integration tests (filesystem builders, scaffolds, installers)                                   | When changing builders / installers                                          |
 | `npm run test:e2e`                                    | E2E tests (CLI command surface)                                                                       | When changing command wiring                                                 |
+| `npm run skill:check`                                 | Rule ledger, links and byte ceilings of the skills and instructions                                   | After editing a skill or its documents; no model                             |
 | `npm run test:staged`                                 | Classifies the staged snapshot and runs only its configured validation lanes                          | What Husky runs before every commit                                          |
 | `npm run test:impact -- --base <ref> --head <ref>`    | Classifies a Git range and executes its configured validation lanes                                   | Targeted local or CI-equivalent validation                                   |
 | `npm run test:pre-commit`                             | Compatibility alias for `test:staged`                                                                 | Existing local tooling                                                       |
@@ -182,7 +184,12 @@ These flows are documented in dedicated reference docs because they have their o
 - **Adding a new module** — read [`.claude/docs/architecture-modules.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-modules.md). Cover the markers, the
   overlay layout, the installer's `currentVersion` + `migrations`, the manifest delta, and the lifecycle/fast-test signal mapping you'll update under `tests/docker/`.
 - **Adding or editing a skill** — read [`.claude/docs/architecture-skills.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md). Cover the
-  `scaffolds/skills-templates/<name>/` source tree, the drift-guard test that pins it byte-equal to `.claude/skills/<name>/`, and the SKILL.md / scripts split.
+  `scaffolds/skills-templates/<name>/` source tree, the files the drift-guard test pins byte-equal to their `.claude/skills/<name>/` copy, and the SKILL.md / scripts split.
+- **Writing for agents** — the same document opens with the
+  [writing standard](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md#writing-standard-for-agent-facing-documents) every skill, status document and
+  generated instruction follows: three tiers, pointers that lead with their trigger, one source of truth per rule, sizes in bytes. A change to one of them updates its rule ledger and passes
+  `npm run skill:check`; the plan-only agent replay that compares an agent's behaviour before and after is described in
+  [`tests/skill-check/README.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/tests/skill-check/README.md).
 
 ## Releasing
 
@@ -234,7 +241,8 @@ For the v1.0 / v2.0 acceptance rubric, see [`.claude/docs/release-objectives.md`
 - [Workflow skill](/skills/core-skills) — full reference for the workflow CLI and status transitions
 - [Module system](/guide/module-system) — user-facing view (what modules are and how to add them to a project)
 - [Architecture: modules](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-modules.md) — internal reference for adding new modules
-- [Architecture: skills](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md) — internal reference for adding new skills
+- [Architecture: skills](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md) — internal reference for adding new skills, and the writing standard for
+  agent-facing documents
 - [Migration framework](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/migration-framework.md) — required reading before any breaking change
 
 ### Synchronizing the review button with GitHub Projects

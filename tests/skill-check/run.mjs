@@ -17,6 +17,8 @@ import {
   gitHead,
   loadReplayConfig,
   loadScenarios,
+  parseClaudeStream,
+  parseCodexStream,
   planRuns,
   pool,
   renderComparison,
@@ -50,6 +52,7 @@ Layer 2, a real agent, run by a session and never by CI:
            [--fixtures-dir <dir>] [--keep-fixtures] [--timeout-sec 600] [--max-budget-usd 1.5]
            [--fake-responses <file>]             answers for --runner fake
   compare  <before.json> <after.json>          files read, commands planned, forbidden tokens; exit 1 on a regression
+  parse    --runner <claude|codex> --file <f>  what the runner takes from a recorded stream (debugging a runner)
 
 Common: --root <dir> (default: this repository), --json.
 Exit codes: 0 ok, 1 the check failed or a scenario regressed, 2 usage error.
@@ -85,6 +88,8 @@ export async function main(argv) {
       )
     case 'compare':
       return cmdCompare(parseArgs(rest, common))
+    case 'parse':
+      return cmdParse(parseArgs(rest, { booleans: ['json'], strings: ['runner', 'file', 'cwd', 'last-message'] }))
     default:
       throw new UsageError(`unknown command ${command}; run with --help`)
   }
@@ -322,6 +327,19 @@ async function cmdRun(opts) {
   } finally {
     if (!opts.keepFixtures) rmSync(scratch, { recursive: true, force: true })
   }
+}
+
+/** What the runner would take from a recorded stream: the files read, the answer, the cost. For debugging a runner without starting an agent. */
+function cmdParse(opts) {
+  if (!['claude', 'codex'].includes(opts.runner)) throw new UsageError('--runner must be claude or codex')
+  if (!opts.file || !existsSync(opts.file)) throw new UsageError('--file <recorded stream> is required and must exist')
+  const stream = readFileSync(opts.file, 'utf8')
+  const parsed =
+    opts.runner === 'claude'
+      ? parseClaudeStream(stream, resolve(opts.cwd ?? '.'))
+      : parseCodexStream(stream, opts.lastMessage && existsSync(opts.lastMessage) ? readFileSync(opts.lastMessage, 'utf8') : '')
+  emit(opts, parsed, JSON.stringify(parsed, null, 2))
+  return 0
 }
 
 function cmdCompare(opts) {

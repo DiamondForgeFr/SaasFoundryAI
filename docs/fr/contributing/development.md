@@ -21,24 +21,25 @@ La résolution des voies de cycle de vie utilise le runtime TypeScript du dépô
 Le fichier [`AGENTS.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/AGENTS.md), lu par tous les agents de code dont Claude Code, expose les règles opérationnelles. Les principaux
 répertoires sont :
 
-| Chemin                        | Rôle                                                                           |
-| ----------------------------- | ------------------------------------------------------------------------------ |
-| `src/commands/`               | Points d'entrée Commander : `new`, `update`, `workflow`, `srs`, `status`, etc. |
-| `src/builders/`               | Construction des topologies, de la base et des services                        |
-| `src/installers/`             | Installateurs réutilisables pour email, storage, analytics, SRS et harness     |
-| `src/migrations/`             | Registres des migrations du manifeste et des modules                           |
-| `scaffolds/blueprints/`       | Templates de base `api/`, `web/`, `db/`, `s3/`                                 |
-| `scaffolds/overlays/`         | Variantes monorepo/multirepo et overlays de modules                            |
-| `scaffolds/skills-templates/` | Sources des compétences déposées dans les projets                              |
-| `tests/docker/`               | Cycles réels navigateur → API → PostgreSQL pour génération et mise à jour      |
-| `.claude/skills/`             | Dépôts locaux dogfoodés, protégés contre la dérive avec les templates          |
-| `.agents/skills/`             | Surface partagée entre agents pendant la phase de compatibilité                |
-| `.claude/docs/`               | Références internes sur les modules, les compétences et les migrations         |
+| Chemin                        | Rôle                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| `src/commands/`               | Points d'entrée Commander : `new`, `update`, `workflow`, `srs`, `status`, etc.     |
+| `src/builders/`               | Construction des topologies, de la base et des services                            |
+| `src/installers/`             | Installateurs réutilisables pour email, storage, analytics, SRS et harness         |
+| `src/migrations/`             | Registres des migrations du manifeste et des modules                               |
+| `scaffolds/blueprints/`       | Templates de base `api/`, `web/`, `db/`, `s3/`                                     |
+| `scaffolds/overlays/`         | Variantes monorepo/multirepo et overlays de modules                                |
+| `scaffolds/skills-templates/` | Sources des compétences déposées dans les projets                                  |
+| `tests/docker/`               | Cycles réels navigateur → API → PostgreSQL pour génération et mise à jour          |
+| `tests/skill-check/`          | Le contrôle des compétences : registre de règles, plafonds d'octets, rejeu d'agent |
+| `.claude/skills/`             | Copies locales dogfoodées : les fichiers que le drift guard liste sont identiques  |
+| `.agents/skills/`             | Surface partagée entre agents pendant la phase de compatibilité                    |
+| `.claude/docs/`               | Références internes sur les modules, les compétences et les migrations             |
 
 Avant de modifier ces zones, lisez :
 
 - `.claude/docs/architecture-modules.md` ;
-- `.claude/docs/architecture-skills.md` ;
+- `.claude/docs/architecture-skills.md` (il s'ouvre sur le standard d'écriture des documents destinés aux agents) ;
 - `.claude/docs/migration-framework.md`.
 
 La fixture immuable de la version précédente possède son runbook dans
@@ -79,6 +80,7 @@ sf new --project-name local-test --structure monorepo
 | `npm run test:unit`                                   | Tests unitaires                                                      | Feedback rapide                                  |
 | `npm run test:integration`                            | Builders, scaffolds et installateurs                                 | Après modification de génération                 |
 | `npm run test:e2e`                                    | Surface des commandes CLI                                            | Après modification du câblage CLI                |
+| `npm run skill:check`                                 | Registre de règles, liens et plafonds d'octets des compétences       | Après modification d'une compétence              |
 | `npm run test:staged`                                 | Classe l'index Git et exécute uniquement les voies nécessaires       | Contrôle déclenché par le hook de commit         |
 | `npm run test:impact -- --base <ref> --head <ref>`    | Classe une plage Git et exécute les voies configurées                | Validation locale ciblée ou équivalente à la CI  |
 | `npm run test:pre-commit`                             | Alias de compatibilité vers `test:staged`                            | Outillage local existant                         |
@@ -188,7 +190,14 @@ Lisez [l'architecture des modules](https://github.com/DiamondForgeFr/SaasFoundry
 ### Compétence
 
 Lisez [l'architecture des compétences](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md). Modifiez la source sous `scaffolds/skills-templates/`,
-synchronisez les dépôts locaux attendus et vérifiez le drift guard.
+synchronisez les fichiers que le drift guard apparie avec leur copie `.claude/skills/<nom>/` et vérifiez le drift guard.
+
+### Écrire pour les agents
+
+Le même document s'ouvre sur le [standard d'écriture](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md#writing-standard-for-agent-facing-documents) que
+suivent toutes les compétences, tous les documents de statut et toutes les instructions générées : trois niveaux, des pointeurs qui commencent par leur déclencheur, une source de vérité par règle, des
+tailles en octets. Une modification de l'un d'eux met à jour son registre de règles et passe `npm run skill:check` ; le rejeu d'agent en lecture seule, qui compare le comportement d'un agent avant et
+après, est décrit dans [`tests/skill-check/README.md`](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/tests/skill-check/README.md).
 
 ## Publier une release
 
@@ -254,5 +263,5 @@ numéro présent dans la branche et conserve tous les garde-fous. Après une err
 - [Compétences principales](/fr/skills/core-skills)
 - [Système de modules](/fr/guide/module-system)
 - [Architecture des modules](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-modules.md)
-- [Architecture des compétences](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md)
+- [Architecture des compétences](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md) et standard d'écriture des documents destinés aux agents
 - [Framework de migration](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/migration-framework.md)

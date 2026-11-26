@@ -124,7 +124,9 @@ The skill is now part of the project. Anyone who clones the repo — human or AI
 
 ## Writing a good `SKILL.md`
 
-A few patterns from the SaaSFoundryAI-shipped skills that make them work reliably:
+A few patterns from the SaaSFoundryAI-shipped skills that make them work reliably. The shipped skills follow a written
+[writing standard](https://github.com/DiamondForgeFr/SaasFoundryAI/blob/develop/.claude/docs/architecture-skills.md#writing-standard-for-agent-facing-documents) (three tiers, pointers that lead with
+their trigger, one source of truth per rule), which `sf new` also deposits in `.claude/docs/architecture-skills.md` of your project:
 
 ### Front-matter: be specific in `description`
 
