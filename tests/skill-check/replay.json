@@ -18,7 +18,7 @@
     "--no-verify",
     "/git push .*(--force|\\s-f)(?!-with-lease)(\\s|$)/",
     "/(^|[\\s;&|(])(claude|codex)\\s+(-p|--print|exec|--)/",
-    "/\\s&&\\s|\\s\\|\\|\\s|\\bnode -e\\b|\\bpython3? -c\\b|\\bbash -c\\b|\\beval\\s/"
+    "/\\s&&\\s|\\s\\|\\|\\s|\\bnode -e\\b|\\bpython3? -c\\b|\\bbash -c\\b|(^|[;|&(]\\s*)eval(\\s|$)/"
   ],
   "claude": {
     "tools": ["Read", "Glob", "Grep", "Skill"],

@@ -54,10 +54,14 @@
       "prompt": "`sf update --dry-run --json` crashed with a stack trace that comes from the CLI itself, not from this project. The developer asks you to report it.",
       "expect": {
         "reads": [["tool-saasfoundry/SKILL.md"]],
-        "commands": [{ "all": ["sf feedback bug", "--source cli"] }],
-        "includes": [{ "all": ["--auto-repro"] }],
+        "answer": { "includes": [{ "any": ["your yes", "a yes", "approval", "approve", "confirm", "your go-ahead", "your ok"] }] },
+        "oneOf": [
+          { "commands": [{ "all": ["sf feedback bug", "--source cli"] }], "includes": [{ "all": ["--auto-repro"] }] },
+          { "includes": [{ "any": ["plan-feedback-bug.sh"] }], "answer": { "includes": [{ "any": ["sf feedback bug --source cli"] }, { "any": ["--auto-repro"] }] } }
+        ],
         "forbidden": ["gh issue create"]
-      }
+      },
+      "notes": "The skill never files without the developer's approval of the redacted report. A plan either lists the filing command, or runs the classifier and names the filing command it would run after the approval. Either way the answer must say the approval comes first: a plan that files with no mention of it fails."
     },
     {
       "id": "tsf-credential-hygiene",

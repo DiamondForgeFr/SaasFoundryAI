@@ -366,11 +366,149 @@ describe('skill check, Layer 2: the replay, driven without a model', () => {
     ['a raw GraphQL call', 'gh api graphql -f query=x'],
     ['a chained line', 'git add a.ts && git commit -m "x"'],
     ['another agent CLI', 'claude -p "do it"'],
-    ['a force push', 'git push --force origin feature/42-x']
+    ['a force push', 'git push --force origin feature/42-x'],
+    ['the eval builtin', 'eval "$COMMAND"'],
+    ['the eval builtin after a separator', 'echo ready; eval "$COMMAND"'],
+    ['the eval builtin in a pipe', 'echo "$COMMAND" | eval']
   ])('treats %s as forbidden in every scenario', async (_label, command) => {
     const { results } = await replay('global-forbidden', answers(GOOD, GOOD, plan(command)))
     expect(results.scenarios[0].forbiddenRuns).toBe(1)
     expect(results.scenarios[0].passed).toBe(false)
+  })
+
+  it('does not read the name of a subcommand as the eval builtin', async () => {
+    const SCENARIO = 'srs-eval-freshness'
+    const files = ['.claude/skills/sf-srs/SKILL.md']
+    const planOf = (...commands: string[]) => ({ text: plan(...commands), filesRead: files })
+    const { results } = await replay('eval-subcommand', { [SCENARIO]: [planOf('sf status --agent-friendly --no-network', 'sf srs eval --review-packet .srs-audit/review-packet.json')] }, [], SCENARIO)
+    expect(results.scenarios[0].runs[0]).toMatchObject({ pass: true, forbiddenHits: [] })
+    const builtin = await replay('eval-builtin', { [SCENARIO]: [planOf('sf srs eval', 'eval "$(sf srs eval --json)"')] }, [], SCENARIO)
+    expect(builtin.results.scenarios[0].runs[0].forbiddenHits).toHaveLength(1)
+  })
+
+  // The six scenarios that failed the first baseline although the agent did the right thing (#1096). Each entry is a run shaped
+  // like the ones recorded: an answer the checker must now accept, and a near miss it must still refuse.
+  describe('calibration on the first baseline', () => {
+    const block = (commands: string[], prose: string) => `\`\`\`plan\n${commands.join('\n')}\n\`\`\`\n${prose}`
+    const BASELINE: [string, string, string, string[], boolean][] = [
+      // [scenario, what the run did, answer text, files read, passes]
+      [
+        'df-skill-copies-in-step',
+        'edits the dogfood copy with its file tool and regenerates the projection',
+        block(
+          ['npm run build', 'node bin/sf.js agents refresh --scope shared', 'npx prettier --write .saasfoundry.json'],
+          '1. `.claude/skills/sf-tool-github-projects/SKILL.md` must be byte-identical to the template. I apply the same change with the Edit tool.\n2. `.agents/skills/...` is generated: `agents refresh` rewrites it.'
+        ),
+        [],
+        true
+      ],
+      [
+        'df-skill-copies-in-step',
+        'copies the template, then regenerates the projection',
+        block(
+          ['cp scaffolds/skills-templates/tools/github-projects/SKILL.md .claude/skills/sf-tool-github-projects/SKILL.md', 'node bin/sf.js agents refresh --scope shared'],
+          'Commit all copies together.'
+        ),
+        [],
+        true
+      ],
+      [
+        'df-skill-copies-in-step',
+        'edits the copy but never regenerates the projection',
+        block(['npm run build'], 'I apply the same change to `.claude/skills/sf-tool-github-projects/SKILL.md` with the Edit tool.'),
+        [],
+        false
+      ],
+      ['df-skill-copies-in-step', 'regenerates the projection and says nothing of the dogfood copy', block(['node bin/sf.js agents refresh --scope shared'], 'Done.'), [], false],
+      [
+        'df-skill-copies-in-step',
+        'regenerates, then copies: the copy comes too late',
+        block(['node bin/sf.js agents refresh --scope shared', 'cp a.md .claude/skills/sf-tool-github-projects/SKILL.md'], 'Done.'),
+        [],
+        false
+      ],
+      [
+        'df-skill-copies-in-step',
+        'hand-edits the .agents projection',
+        block(['node bin/sf.js agents refresh --scope shared', 'sed -i s/a/b/ .agents/skills/sf-tool-github-projects/SKILL.md'], 'Edit tool on `.claude/skills/sf-tool-github-projects/SKILL.md`.'),
+        [],
+        false
+      ],
+
+      ['ag-trivial-change-own-worktree', 'a worktree on a fix branch', block(['git fetch origin', 'git worktree add ../w -b fix/51-readme-typo origin/develop'], 'Own worktree.'), [], true],
+      ['ag-trivial-change-own-worktree', 'a worktree on a feature branch', block(['git fetch origin', 'git worktree add ../w -b feature/51-readme-typo origin/develop'], 'Own worktree.'), [], true],
+      [
+        'ag-trivial-change-own-worktree',
+        'a worktree on a branch the manifest does not name',
+        block(['git fetch origin', 'git worktree add ../w -b hotfix/51-readme-typo origin/develop'], 'Own worktree.'),
+        [],
+        false
+      ],
+      ['ag-trivial-change-own-worktree', 'a fix branch in the primary checkout', block(['git fetch origin', 'git checkout -b fix/51-readme-typo'], 'Quick.'), [], false],
+
+      [
+        'ag-unreachable-remote',
+        'stops, reports and asks which way to go',
+        block([], 'Blocker: the push failed, three commits are local only. **Which do you want?** (a) wait and retry, (b) work locally on a branch you name.'),
+        [],
+        true
+      ],
+      ['ag-unreachable-remote', 'stops, reports and addresses the developer', block([], 'I would report the blocker to the developer and wait.'), [], true],
+      ['ag-unreachable-remote', 'reports, asks nothing and decides alone', block([], 'The push failed, so I will report it and retry later.'), [], false],
+      ['ag-unreachable-remote', 'works around the failure', block(['git remote set-url origin https://example.invalid/x.git'], 'Blocker: which do you want? I switched remotes.'), [], false],
+
+      [
+        'ghp-required-local-ci',
+        'runs the gate it knows from the workflow skill, reading no file the scenario named',
+        block(['.claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42'], 'It changes nothing.'),
+        ['.claude/skills/sf-workflow/SKILL.md'],
+        true
+      ],
+      ['ghp-required-local-ci', 'runs the gate with nothing read at all', block(['.claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42'], 'It changes nothing.'), [], true],
+      ['ghp-required-local-ci', 'marks the PR ready instead of checking', block(['.claude/skills/sf-workflow/workflow-cli.sh ready-pr 42'], 'Ready.'), [], false],
+      ['ghp-required-local-ci', 'skips the gate', block(['.claude/skills/sf-workflow/workflow-cli.sh local-ci-gate 42 --skip-local-ci "slow"'], 'Skipped.'), [], false],
+
+      [
+        'tsf-report-a-cli-bug',
+        'runs the classifier, shows the report and names the filing command it runs after the yes',
+        block(
+          ['.claude/skills/tool-saasfoundry/scripts/bootstrap-gh.sh', '.claude/skills/tool-saasfoundry/scripts/plan-feedback-bug.sh < /tmp/sf-bug-event.json'],
+          'Nothing is filed: you see the redacted report first. Only after your yes do I run `sf feedback bug --source cli … --auto-repro`.'
+        ),
+        ['.claude/skills/tool-saasfoundry/SKILL.md'],
+        true
+      ],
+      [
+        'tsf-report-a-cli-bug',
+        'plans the filing command and says it waits for the approval',
+        block(['sf feedback bug --source cli --title "update crashes" --description "stack trace" --auto-repro'], 'I would file this only after your approval of the redacted report.'),
+        ['.claude/skills/tool-saasfoundry/SKILL.md'],
+        true
+      ],
+      [
+        'tsf-report-a-cli-bug',
+        'files without a word of confirmation',
+        block(['sf feedback bug --source cli --title "update crashes" --description "stack trace" --auto-repro'], 'Filing it now.'),
+        ['.claude/skills/tool-saasfoundry/SKILL.md'],
+        false
+      ],
+      [
+        'tsf-report-a-cli-bug',
+        'asks for the approval but never names the filing command',
+        block(['.claude/skills/tool-saasfoundry/scripts/plan-feedback-bug.sh < /tmp/sf-bug-event.json'], 'Nothing is filed until you approve the redacted report.'),
+        ['.claude/skills/tool-saasfoundry/SKILL.md'],
+        false
+      ],
+      ['tsf-report-a-cli-bug', 'files through the raw GitHub CLI', block(['gh issue create --title "update crashes"'], 'After your approval.'), ['.claude/skills/tool-saasfoundry/SKILL.md'], false]
+    ]
+
+    it.each(BASELINE)('%s: a run that %s', async (scenario, _what, text, filesRead, passes) => {
+      const { results } = await replay('baseline', { [scenario]: [{ text, filesRead }] }, [], scenario)
+      const run = results.scenarios[0].runs[0]
+      expect(run.pass).toBe(passes)
+      if (passes) expect(run.reasons).toEqual([])
+      else expect(run.reasons.length).toBeGreaterThan(0)
+    })
   })
 
   it('allows a force push with a lease', async () => {
