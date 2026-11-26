@@ -13,7 +13,7 @@ Drive the `sf` CLI for the user. The CLI generates every file, so you plan, prev
 
 ## Before any command
 
-Run these from `scripts/`, next to this file.
+Paths in this skill (`scripts/`, `flows/`, `reference/`) are relative to the folder of this file. Run these helpers from `scripts/`.
 
 | Script             | Run it                                                            | It ends on                                                                                                         |
 | ------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
