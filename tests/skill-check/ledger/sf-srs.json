@@ -8,7 +8,7 @@
       "summary": "Commands go through sf srs; the shell wrapper exists only for a session without sf on the PATH",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["sf srs <action>", "srs-cli.sh <action>", "sf srs help"],
+      "tokens": ["sf srs <action>", "srs-cli.sh <action>", "sf srs help", "#525"],
       "source": "srs-cli.resolution.spec.ts, #525"
     },
     {
@@ -20,12 +20,43 @@
       "source": "no-notion-leak.spec.ts"
     },
     {
+      "id": "install-vs-draft",
+      "summary": "An absent tools.srs means install the module, not draft content",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["sf update --add-modules srs", "install the module", "#244"],
+      "source": "#240, #244"
+    },
+    {
       "id": "three-levels",
       "summary": "Feature, version, FR: the level comes from position, never from the title; a version of an older feature uses its page id",
       "owner": "SKILL.md",
-      "tier": "reference",
-      "tokens": ["epic.parentId", "epic.version.changes", "write-srs", "parentEpicPageId"],
+      "tier": "step",
+      "tokens": ["epic.parentId", "epic.version.changes", "parentEpicPageId", "sf srs write", "never from the title"],
       "source": "srs-spec-examples.spec.ts"
+    },
+    {
+      "id": "spec-payload-shape",
+      "summary": "A spec is a DraftCandidate[] shaped like the tested example; an epic candidate alone writes no FR page",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["templates/examples/example-three-levels.spec.json", "kind: 'fr'", "example-epic.spec.json", "not a `--spec` payload"],
+      "source": "srs-spec-examples.spec.ts, #899"
+    },
+    {
+      "id": "write-exit-contract",
+      "summary": "A write that exits 2 wrote nothing; exit 6 hands the user the rollback hint; exit 7 means the pages exist but the ingestion flag stayed",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["Exit 2 wrote nothing", "Exit 6 is a partial write", "rollbackHint", "exit 7"]
+    },
+    {
+      "id": "write-details",
+      "summary": "What the batch check refuses, and how a page joins one written earlier",
+      "owner": "reference/writing.md",
+      "tier": "disclosed",
+      "tokens": ["What the batch check refuses", "notPlaced", "parentEpicPageId"],
+      "pointer": { "from": "SKILL.md", "match": "reference/writing.md", "lead": "A write is refused" }
     },
     {
       "id": "next-ids",
@@ -33,6 +64,13 @@
       "owner": "SKILL.md",
       "tier": "step",
       "tokens": ["sf srs next-ids --feature", "exit 2, nothing written", "#919"]
+    },
+    {
+      "id": "ingest-notes",
+      "summary": "A pending ingestion is browsed, drafted with the user and written; the CLI calls no model",
+      "owner": "SKILL.md",
+      "tier": "step",
+      "tokens": ["tools.srs.pendingIngestion", "sf srs browse --parent", "sf srs draft --from notion-pages --ids", "pendingIngestion"]
     },
     {
       "id": "conformance-findings",
@@ -53,44 +91,70 @@
       "summary": "The milestone is the release, never the version page, and spawning is when it is declared",
       "owner": "SKILL.md",
       "tier": "step",
-      "tokens": ["--milestone", "release: none", "The name is the release, not the version page", "#542"]
+      "tokens": ["--milestone", "release: none", "The name is the release", "one by one afterwards", "#542", "#562"]
     },
     {
       "id": "spawn-complexity",
       "summary": "A spawned story gets a complexity label before it leaves Backlog",
       "owner": "SKILL.md",
-      "tier": "reference",
+      "tier": "step",
       "tokens": ["--complexity <level>", "workflow-cli.sh retag"]
     },
     {
       "id": "respawn-reuses-tickets",
-      "summary": "Spawning again reuses the stories that exist, never creates them twice, and never reparents implicitly",
+      "summary": "Spawning again reuses the stories that exist, never creates them twice, never reparents implicitly, and creates none by hand",
       "owner": "SKILL.md",
       "tier": "step",
-      "tokens": ["Existing tickets are reused", "exit 10", "closed as **not planned**", "workflow-cli.sh unlink-subtask", "gh issue close <duplicate> --reason \"not planned\""],
+      "tokens": ["Existing tickets are reused", "exit 10", "**not planned**", "Create no Story by hand", "#1037"],
+      "source": "#1037"
+    },
+    {
+      "id": "duplicate-cleanup",
+      "summary": "A duplicate Story is detached from its Epic and closed as not planned, without a raw API call",
+      "owner": "reference/spawning.md",
+      "tier": "disclosed",
+      "tokens": ["workflow-cli.sh unlink-subtask", "gh issue close <duplicate> --reason \"not planned\""],
+      "pointer": { "from": "SKILL.md", "match": "reference/spawning.md", "lead": "A duplicate Story exists" },
       "source": "#1037"
     },
     {
       "id": "reconciliation-plan",
       "summary": "An approved version that may overlap existing work is spawned with an evidence plan",
+      "owner": "reference/spawning.md",
+      "tier": "disclosed",
+      "tokens": ["--reconciliation-plan", "transition-drafting 42 spawning", "delivered", "partial", "missing", "superseded"],
+      "pointer": { "from": "SKILL.md", "match": "reference/spawning.md", "lead": "A duplicate Story exists" }
+    },
+    {
+      "id": "freshness-eval-entry",
+      "summary": "sf srs eval scores drift in batch; exit 0 is fresh, exit 1 is drift",
       "owner": "SKILL.md",
       "tier": "step",
-      "tokens": ["--reconciliation-plan", "transition-drafting 42 spawning", "delivered", "partial", "missing", "superseded", "Never assign the tickets one by one afterwards"]
+      "tokens": ["sf srs eval", "--threshold", "--review-packet"]
     },
     {
       "id": "freshness-eval",
-      "summary": "sf srs eval scores drift in batch; its exit codes and the three-layer matcher",
-      "owner": "SKILL.md",
-      "tier": "reference",
-      "tokens": ["sf srs eval", "## Freshness eval", "Three-layer matcher", "--review-packet"]
+      "summary": "The findings, the exit codes and the three-layer matcher of the batch eval",
+      "owner": "reference/freshness-eval.md",
+      "tier": "disclosed",
+      "tokens": ["sf srs eval", "Findings (v1)", "Three-layer matcher", "--review-packet"],
+      "pointer": { "from": "SKILL.md", "match": "reference/freshness-eval.md", "lead": "Interpreting the findings" }
     },
     {
       "id": "draft-from-codebase",
-      "summary": "Drafting from the code scans a source folder, not the whole repository",
+      "summary": "Drafting from the code scans a source folder, not the whole repository, and writes only what the user confirmed, one Epic per prompt",
       "owner": "SKILL.md",
       "tier": "step",
-      "tokens": ["draft --from codebase", "--path src", ".srsignore", "sf update --add-modules srs"],
+      "tokens": ["draft --from codebase", "--path src", ".srsignore", "tools.srs.scan.exclude", "skip-area", "#238"],
       "source": "#238, #240"
+    },
+    {
+      "id": "scanner-is-best-effort",
+      "summary": "An empty scan on a stack the scanner does not parse is not an empty surface: the agent reads the registry itself",
+      "owner": "reference/codebase-drafting.md",
+      "tier": "disclosed",
+      "tokens": ["That is not evidence the surface is empty", "generate_handler!", ".srsignore", "tools.srs.scan.exclude"],
+      "pointer": { "from": "SKILL.md", "match": "reference/codebase-drafting.md", "lead": "The findings come back sparse or empty" }
     },
     {
       "id": "conversational-eval-hook",
@@ -105,14 +169,23 @@
       "summary": "A revision of an FR is applied where it is listed, dry run first, never appended as a design item",
       "owner": "SKILL.md",
       "tier": "step",
-      "tokens": ["sf srs apply-update --dry-run", "\"kind\": \"update-fr\"", "Refused before any write", "Safe to repeat"]
+      "tokens": ["sf srs apply-update --dry-run", "\"kind\": \"update-fr\"", "never appended as a design item"]
+    },
+    {
+      "id": "update-fr-failures",
+      "summary": "What an update-fr patch refuses before any write, and how a write that stopped midway is finished",
+      "owner": "reference/conversational-hook.md",
+      "tier": "disclosed",
+      "tokens": ["Refused before any write", "Safe to repeat", "followUps"],
+      "pointer": { "from": "SKILL.md", "match": "reference/conversational-hook.md", "lead": "An `update-fr` patch is refused" }
     },
     {
       "id": "intent-hook-opt-outs",
       "summary": "Three ways to silence the auto-firing hook, in priority order; a broken manifest fails open",
-      "owner": "SKILL.md",
-      "tier": "reference",
+      "owner": "reference/conversational-hook.md",
+      "tier": "disclosed",
       "tokens": ["SF_DISABLE_SRS_HOOK", "tools.srs.intentDetectorEnabled", "tools.srs.enabled", "fail open"],
+      "pointer": { "from": "SKILL.md", "match": "reference/conversational-hook.md", "lead": "An `update-fr` patch is refused" },
       "source": "srs-intent-hook.spec.ts"
     },
     {
@@ -120,7 +193,7 @@
       "summary": "The FR title separator is one em dash shared by the renderer and the parser",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["FR_TITLE_SEPARATOR", "U+2014"],
+      "tokens": ["FR_TITLE_SEPARATOR", "U+2014", "#246"],
       "source": "#246"
     },
     {
@@ -143,16 +216,8 @@
       "owner": "templates/tickets/examples/story.md",
       "tier": "disclosed",
       "tokens": ["Why this example", "Shows:"],
-      "pointer": { "from": "SKILL.md", "match": "templates/tickets/examples/" },
+      "pointer": { "from": "SKILL.md", "match": "templates/tickets/examples/", "lead": "Before authoring" },
       "source": "examples-contract.spec.ts"
-    }
-  ],
-  "knownBrokenLinks": [
-    {
-      "view": "agents",
-      "file": "SKILL.md",
-      "target": "scripts/srs-intent-hook.sh",
-      "reason": "The .agents projection does not carry the hook script the skill links to; a child of #1095 removes the link or the projection carries the file"
     }
   ]
 }

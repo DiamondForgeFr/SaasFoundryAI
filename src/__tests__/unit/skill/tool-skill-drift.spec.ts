@@ -66,6 +66,11 @@ const PAIRS = [
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/SKILL.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/sf-srs/SKILL.md')
   },
+  ...['writing', 'spawning', 'freshness-eval', 'codebase-drafting', 'conversational-hook'].map((name) => ({
+    name: `sf-srs reference/${name}.md`,
+    inRepo: path.resolve(__dirname, `../../../../.claude/skills/sf-srs/reference/${name}.md`),
+    scaffolded: path.resolve(__dirname, `../../../../scaffolds/skills-templates/sf-srs/reference/${name}.md`)
+  })),
   {
     name: 'sf-srs srs-cli.sh',
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-srs/scripts/srs-cli.sh'),

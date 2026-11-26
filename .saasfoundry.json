@@ -129,8 +129,8 @@
     ".agents/skills/sf-srs/data/clustering-rules.json": "3110294b18bf3229a320ea70f5878d18c1e874b8bbc511e61ee0c948dcf0bfee",
     ".agents/skills/sf-srs/scripts/detect-eval-signals.sh": "59bdb4d7757b91d9b7c833350f28c5d609c323fd19fe804c61a9c3a89032c481",
     ".agents/skills/sf-srs/scripts/srs-cli.sh": "2c4d6d8654dd54dfd49ee3901c5714447fcfb8042739a1a06a52fbcf943fb406",
-    ".agents/skills/sf-srs/SKILL.md": "468d665020b94dea1b8c22ba4dd568aa3aae11908802fbe21094519cfab4ed40",
-    ".agents/skills/sf-srs/templates/examples/example-epic.md": "353c7ab168a78283a0051f48b91775550b218ff25bf9e87ff9b668fdefa9864f",
+    ".agents/skills/sf-srs/SKILL.md": "fd4a89e95caa1b619b1fa1edf658da1bc6b1a5dac83430794ca2733e85873ce6",
+    ".agents/skills/sf-srs/templates/examples/example-epic.md": "1a8381f1d27a117e363754a3003924d7abe3e2ef663b77b5084b9e1e348c0350",
     ".agents/skills/sf-srs/templates/examples/example-epic.spec.json": "028ec65c05b42717ad94ef207263754625431ad3ce2b482d0439dd994acbc52d",
     ".agents/skills/sf-srs/templates/examples/example-three-levels.spec.json": "710c232072e333a0fb6918629e25d3caa73952ea2bf4d11b284703cd0fbcb41c",
     ".agents/skills/sf-srs/templates/pages/README.md": "6f9748935e491e82a3064a443907545cf9c806c38f534428b3c11dbb6532c3db",
@@ -180,7 +180,12 @@
     ".kimi-code/agents/sf-fix.md": "486a64bfe868c28a2d1e7d72ef2059cfb851e4bd04520a0e37b19648287b31aa",
     ".kimi-code/agents/sf-plan.md": "e73e8ff89c91c9b7c7e60616a33f98bf3a8c8c4ec736bfa2949a8698cc93f44f",
     ".kimi-code/agents/sf-terminal.md": "b3ce36746e55474390f55020ca98617bfbf201698ab48405c959a80df52b1570",
-    ".agents/skills/sf-workflow/ui-checklist.md": "3a459602f503cd8c16908980b41e1604fa7a12a99a777d31e9552ff148d95df2"
+    ".agents/skills/sf-workflow/ui-checklist.md": "3a459602f503cd8c16908980b41e1604fa7a12a99a777d31e9552ff148d95df2",
+    ".agents/skills/sf-srs/reference/codebase-drafting.md": "fcc4a147220788e22bbc007128b2f4838c32a36a0ef1f62d2618c2c523de4189",
+    ".agents/skills/sf-srs/reference/conversational-hook.md": "828f74cb0dd3a70568ec12cae285f5085a66076ed3b323c89c2fedd6063408ff",
+    ".agents/skills/sf-srs/reference/freshness-eval.md": "d290b82d2760a955cfd1a6a12022d5055a76ab5594d7c8301699f6ced6c7a021",
+    ".agents/skills/sf-srs/reference/spawning.md": "2fb19bcdb16bbe89041c15e3e25915600e27d4f6110a3ff457a897d3f31c62cc",
+    ".agents/skills/sf-srs/reference/writing.md": "ac890c9cad6ed69394b3b414d6b24b64511ec59bdbca09ce921bd15eba415fe8"
   },
   "manifestVersion": 4
 }
