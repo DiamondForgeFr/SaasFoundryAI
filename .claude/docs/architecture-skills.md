@@ -107,11 +107,13 @@ Never edit a file under `.agents/skills/` by hand: edit the `.claude/skills/` so
 
 A skill reaches an agent from up to four places, and only some are byte-equal:
 
-- **Byte-equal, guarded.** The pairs listed in `src/__tests__/unit/skill/tool-skill-drift.spec.ts` (the board CLI skill, the workflow CLI, `ui-checklist.md`, the `sf-srs` and `sf-integration-rules`
-  files, the shared docs of `scaffolds/docs/`) must equal their dogfood copy under `.claude/`, byte for byte. This document is one of them: `scaffolds/docs/architecture-skills.md` is the same file.
-- **Different on purpose.** `sf-workflow/SKILL.md` carries placeholders the installer fills, and this repository's copy adds to it. This repository runs the Solo preset, so its `statuses/` folder
-  holds what the template keeps under `statuses-solo/` (the guard covers those). The `.agents/skills/` copies add the capabilities text (`sf agents refresh` writes them). `tool-saasfoundry` is a
-  symlink to its template.
+- **Byte-equal, guarded.** The pairs listed in `src/__tests__/unit/skill/tool-skill-drift.spec.ts` (the board CLI skill, the workflow CLI, `ui-checklist.md`, the `reference/` files of `sf-workflow`,
+  the `sf-srs` and `sf-integration-rules` files, the shared docs of `scaffolds/docs/`) must equal their dogfood copy under `.claude/`, byte for byte. This document is one of them:
+  `scaffolds/docs/architecture-skills.md` is the same file.
+- **Different on purpose.** `sf-workflow/SKILL.md` carries placeholders the installer fills: this repository's copy is the template with the Solo values filled in and Prettier applied, and
+  `workflow-skill-dogfood.spec.ts` keeps it that way (a rule that only this repository follows goes in its hand-written `AGENTS.md`, never in this file). This repository runs the Solo preset, so its
+  `statuses/` folder holds what the template keeps under `statuses-solo/` (the guard covers those). The `.agents/skills/` copies add the capabilities text (`sf agents refresh` writes them).
+  `tool-saasfoundry` is a symlink to its template.
 - **Measured per surface.** The skill check (below) sizes each of these separately, so a shrink is credited where it lands.
 
 ### Current Skills Inventory

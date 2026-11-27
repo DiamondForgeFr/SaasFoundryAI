@@ -3,6 +3,8 @@ import path from 'path'
 
 const TEMPLATE = path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow')
 const read = (file: string) => readFileSync(path.join(TEMPLATE, file), 'utf-8')
+/** The templates wrap long lines: compare on collapsed whitespace. */
+const flat = (file: string) => read(file).replace(/\s+/g, ' ')
 
 /** The lines of a status file that mention a given command. */
 const linesWith = (content: string, needle: string) => content.split('\n').filter((line) => line.includes(needle))
@@ -17,10 +19,12 @@ const linesWith = (content: string, needle: string) => content.split('\n').filte
 // ─────────────────────────────────────────────────────────────────────────────
 describe('who takes a pull request out of draft (#915)', () => {
   it('states the rule and both routes in the skill', () => {
-    const skill = read('SKILL.md')
+    const skill = flat('SKILL.md')
     expect(skill).toContain('**as a draft, at the latest during AI Testing**')
-    expect(skill).toMatch(/\*\*With Human Testing\*\*.*\*\*The developer\*\*, with the \*\*Ready for review\*\* button/)
-    expect(skill).toMatch(/\*\*Without Human Testing\*\*.*\*\*You\*\*: `workflow-cli\.sh ready-pr <ticket>`/)
+    // anchored on the route names, the button and the command, not on the sentence around them
+    expect(skill).toMatch(/\*\*With Human Testing\*\*.*\*\*Ready for review\*\* button/)
+    expect(skill).toMatch(/\*\*Without Human Testing\*\*.*`workflow-cli\.sh ready-pr <ticket>`/)
+    expect(skill).toContain('never run `ready-pr` yourself')
     expect(skill).not.toContain('may create a ready PR directly')
   })
 
@@ -32,16 +36,16 @@ describe('who takes a pull request out of draft (#915)', () => {
   })
 
   it('keeps the draft on the Human Testing route and promotes it on the internal route, at the end of AI Testing', () => {
-    const aiTesting = read('statuses/4-ai-testing.md')
-    expect(aiTesting).toContain('Open the draft PR if it is not open yet (`create-pr <ticket> --draft`)')
+    const aiTesting = flat('statuses/4-ai-testing.md')
+    expect(aiTesting).toContain('create-pr <ticket> --draft')
     expect(aiTesting).toMatch(/`nature:user-facing`.*keep the PR a draft.*Do not mark it ready/)
     expect(aiTesting).toMatch(/`nature:internal`.*`workflow-cli\.sh ready-pr <ticket>`, then → \*\*In Review\*\*/)
   })
 
   it('has the Solo agent open a draft during AI Testing and mark it ready itself', () => {
-    const aiTesting = read('statuses-solo/3-ai-testing.md')
-    expect(aiTesting).toContain('`create-pr <ticket> --draft`')
-    expect(aiTesting).toContain('default: take the PR out of draft with `workflow-cli.sh ready-pr <ticket>`, then move to **In Review**')
+    const aiTesting = flat('statuses-solo/3-ai-testing.md')
+    expect(aiTesting).toContain('create-pr <ticket> --draft')
+    expect(aiTesting).toContain('take the PR out of draft with `workflow-cli.sh ready-pr <ticket>`, then move to **In Review**')
     expect(aiTesting).not.toContain('create the PR and move')
     expect(read('statuses-solo/4-in-review.md')).not.toContain('Create a ready PR')
   })

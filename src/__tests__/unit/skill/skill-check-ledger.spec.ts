@@ -217,12 +217,12 @@ describe('skill check, Layer 1: it fails when a promise breaks', () => {
   })
 
   it('a token that a line wrap splits still matches', async () => {
-    edit(root, '.claude/skills/sf-workflow/SKILL.md', (text) => text.replace('ONE AGENT PER TICKET, NEVER A SWITCH', 'ONE AGENT PER\n   TICKET, NEVER A\n   SWITCH'))
+    edit(root, '.claude/skills/sf-workflow/SKILL.md', (text) => text.replace('never batch closures', 'never batch\n   closures'))
     expect((await check(root)).failures).toEqual([])
   })
 
   it('TOKEN_MISSING: a reworded token does not match', async () => {
-    edit(root, '.claude/skills/sf-workflow/SKILL.md', (text) => text.replace('SF-DELEGATION:', 'SF-DELEGATION :'))
+    edit(root, '.claude/skills/sf-workflow/reference/delegation.md', (text) => text.replace('SF-DELEGATION:', 'SF-DELEGATION :'))
     const { failures } = await check(root)
     expect(failures).toContainEqual(expect.objectContaining({ code: 'TOKEN_MISSING', view: 'repo', subject: 'measured-delegations' }))
   })
@@ -306,7 +306,7 @@ describe('skill check, Layer 1: it fails when a promise breaks', () => {
   })
 
   it('a retired rule is no longer checked, but must say why; a listed broken link must still be broken', async () => {
-    edit(root, '.claude/skills/sf-workflow/SKILL.md', (text) => text.replace('ANNOUNCE + STREAM LONG COMMANDS', 'Announce long commands'))
+    edit(root, '.claude/skills/sf-workflow/SKILL.md', (text) => text.replace('~5 seconds', 'five seconds'))
     expect((await check(root)).failures).toContainEqual(expect.objectContaining({ code: 'TOKEN_MISSING', subject: 'announce-long-commands' }))
     editLedger(root, 'sf-workflow', (ledger) => {
       const rule = ledger.rules.find((item) => item.id === 'announce-long-commands') as Record<string, unknown>

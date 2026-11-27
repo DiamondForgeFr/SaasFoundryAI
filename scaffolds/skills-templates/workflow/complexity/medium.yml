@@ -39,7 +39,7 @@ aiInstructions: |
   This is a medium-complexity feature. Use a structured approach:
 
   **Analyze Phase (STANDARD):**
-  - Launch 2-4 parallel `exploration` delegations (SKILL.md → Delegation routing)
+  - Launch 2-4 parallel `exploration` delegations (reference/delegation.md → Delegation routing)
   - Codebase: Find existing patterns, files, utilities
   - Documentation: Research library documentation if unfamiliar
   - Document findings with file:line references
@@ -55,8 +55,8 @@ aiInstructions: |
 
   **Execute Phase:**
   - Create subtasks for each major file change
-  - A delegated subtask names its task kind, file set, expected result and check (SKILL.md → Delegation routing)
-  - Delegated, the delivery is a `multi-file-feature` delegation once the subtasks are decomposed; planning stays in the session (SKILL.md → Delegated ticket delivery)
+  - A delegated subtask names its task kind, file set, expected result and check (reference/delegation.md → Delegation routing)
+  - Delegated, the delivery is a `multi-file-feature` delegation once the subtasks are decomposed; planning stays in the session (reference/delegation.md → Delegated ticket delivery)
   - Use TodoCreate to track progress
   - Implement file-by-file following the plan
   - Mark todos complete immediately after each task

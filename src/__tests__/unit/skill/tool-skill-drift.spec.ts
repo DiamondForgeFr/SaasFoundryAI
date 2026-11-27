@@ -27,6 +27,12 @@ const PAIRS = [
     inRepo: path.resolve(__dirname, '../../../../.claude/skills/sf-workflow/ui-checklist.md'),
     scaffolded: path.resolve(__dirname, '../../../../scaffolds/skills-templates/workflow/ui-checklist.md')
   },
+  // The disclosed references of the workflow skill have no placeholder: byte-identical like the status documents (#1099).
+  ...['delegation', 'ui-gate', 'pull-requests'].map((name) => ({
+    name: `sf-workflow reference/${name}.md`,
+    inRepo: path.resolve(__dirname, `../../../../.claude/skills/sf-workflow/reference/${name}.md`),
+    scaffolded: path.resolve(__dirname, `../../../../scaffolds/skills-templates/workflow/reference/${name}.md`)
+  })),
   // Note: sf-workflow/SKILL.md intentionally NOT in this drift set.
   // The scaffolded copy carries `{{WORKFLOW_NAME}}` / `{{TOOL}}` / `{{STATUSES_LIST}}`
   // placeholders that `workflow-skill.installer.ts` substitutes at project creation —

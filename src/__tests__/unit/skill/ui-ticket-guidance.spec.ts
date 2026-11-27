@@ -16,15 +16,17 @@ const SKILL_COPIES = [
 
 const flat = (text: string): string => text.replace(/\s+/g, ' ')
 
-const HEADING = '### Working a `ui` ticket'
+const HEADING = '## Working a `ui` ticket'
+/** The disclosed reference that holds the marker commands and the UI-ticket section (#1099). */
+const UI_GATE = 'reference/ui-gate.md'
 
 /** The UI-ticket section of the workflow skill, from its heading to the next `##` section. */
 function uiSection(skillDir: string): string {
-  const skill = readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')
-  const start = skill.indexOf(HEADING)
-  if (start < 0) throw new Error(`${skillDir}/SKILL.md has no "${HEADING}" section`)
-  const end = skill.indexOf('\n## ', start)
-  return skill.slice(start, end < 0 ? undefined : end)
+  const gate = readFileSync(path.join(skillDir, UI_GATE), 'utf8')
+  const start = gate.indexOf(HEADING)
+  if (start < 0) throw new Error(`${skillDir}/${UI_GATE} has no "${HEADING}" section`)
+  const end = gate.indexOf('\n## ', start + HEADING.length)
+  return gate.slice(start, end < 0 ? undefined : end)
 }
 
 /** The numbered items of the section, each one flattened to a single line. */
@@ -41,11 +43,13 @@ describe.each(SKILL_COPIES)('UI ticket guidance of the workflow skill — %s (#1
   const section = uiSection(skillDir)
   const steps = items(section)
 
-  it('sits right after the UI mockup gate and before the ticket hierarchy', () => {
+  it('keeps the gate in the skill and the marker commands, then the working section, in the disclosed reference', () => {
     const skill = readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')
-    expect(skill.indexOf('## 🖼️ UI mockup gate')).toBeGreaterThan(-1)
-    expect(skill.indexOf(HEADING)).toBeGreaterThan(skill.indexOf('## 🖼️ UI mockup gate'))
-    expect(skill.indexOf(HEADING)).toBeLessThan(skill.indexOf('## 🧩 Ticket Hierarchy'))
+    expect(skill).toContain('## UI mockup gate')
+    expect(skill).toContain('(reference/ui-gate.md)')
+    const gate = readFileSync(path.join(skillDir, UI_GATE), 'utf8')
+    expect(gate.indexOf('## The marker and the record')).toBeGreaterThan(-1)
+    expect(gate.indexOf(HEADING)).toBeGreaterThan(gate.indexOf('## The marker and the record'))
     expect(steps).toHaveLength(6)
   })
 
@@ -58,7 +62,7 @@ describe.each(SKILL_COPIES)('UI ticket guidance of the workflow skill — %s (#1
   })
 
   it('points to the UI checklist that ships next to SKILL.md, with its five parts', () => {
-    expect(steps[1]).toContain('[ui-checklist.md](ui-checklist.md)')
+    expect(steps[1]).toContain('[ui-checklist.md](../ui-checklist.md)')
     expect(steps[1]).toContain('hierarchy; spacing and design tokens; states (empty, loading, error, disabled); accessibility (contrast, keyboard, focus, labels); copy')
     expect(existsSync(path.join(skillDir, 'ui-checklist.md'))).toBe(true)
   })
@@ -109,13 +113,14 @@ describe.each(SKILL_COPIES)('UI ticket guidance of the workflow skill — %s (#1
   })
 
   it('carries the hold-the-visual-part clause in the brief of a ui ticket (AC-2)', () => {
-    const skill = flat(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8'))
-    const brief = skill.slice(skill.indexOf('**Brief the agent**'), skill.indexOf("**The agent's line.**"))
+    const delegation = flat(readFileSync(path.join(skillDir, 'reference/delegation.md'), 'utf8'))
+    const brief = delegation.slice(delegation.indexOf('**Brief the agent**'), delegation.indexOf("**The agent's line.**"))
     expect(brief).toContain('For a ticket marked `ui` the brief carries one more clause')
     expect(brief).toContain("**hold the visual part until the session relays the developer's OK, and follow the validated mockup**")
-    expect(brief).toContain('"Working a `ui` ticket" in the UI mockup gate above')
+    expect(brief).toContain('"Working a `ui` ticket"')
+    expect(brief).toContain('(ui-gate.md)')
     // The mockup may already be validated when the ticket is delegated: then there is nothing to hold
-    expect(brief).toContain('When the developer has already approved the mockup, the brief names it instead and there is nothing to hold')
+    expect(brief).toContain('there is nothing to hold')
   })
 
   it('points the In progress status document at the section', () => {
@@ -124,7 +129,7 @@ describe.each(SKILL_COPIES)('UI ticket guidance of the workflow skill — %s (#1
     for (const file of solo) {
       const doc = flat(readFileSync(file, 'utf8'))
       expect({ file: path.basename(file), ui: doc.includes('**A `ui` ticket**') }).toEqual({ file: path.basename(file), ui: true })
-      expect(doc).toContain('SKILL.md → "Working a `ui` ticket"')
+      expect(doc).toContain('"Working a `ui` ticket" in [ui-gate.md](../reference/ui-gate.md)')
       expect(doc).toContain('The brief of a delegated agent carries that hold')
     }
   })
@@ -225,8 +230,10 @@ describe('UI ticket guidance reaches the shared agent copies and the generated p
     const checklist = await readFile(path.join(skillDir, 'ui-checklist.md'), 'utf8')
     expect(checklist).toBe(readFileSync(path.join(REPO_ROOT, 'scaffolds/skills-templates/workflow/ui-checklist.md'), 'utf8'))
     const skill = await readFile(path.join(skillDir, 'SKILL.md'), 'utf8')
-    expect(skill).toContain(HEADING)
+    expect(skill).toContain('(reference/ui-gate.md)')
     expect(skill).not.toMatch(/\{\{[A-Z_]+\}\}/)
+    const gate = await readFile(path.join(skillDir, UI_GATE), 'utf8')
+    expect(gate).toContain(HEADING)
     // The link of the section resolves next to SKILL.md
     expect(existsSync(path.join(skillDir, 'ui-checklist.md'))).toBe(true)
   })
@@ -241,15 +248,16 @@ describe('UI ticket guidance reaches the shared agent copies and the generated p
 
     const projected = new Map(plan.files.map((file) => [file.path, file.content.toString('utf8')]))
     expect(projected.get('.agents/skills/sf-workflow/ui-checklist.md')).toBe(readFileSync(path.join(REPO_ROOT, '.claude/skills/sf-workflow/ui-checklist.md'), 'utf8'))
-    const skill = projected.get('.agents/skills/sf-workflow/SKILL.md')
-    expect(skill).toContain(HEADING)
-    expect(flat(skill ?? '')).toContain("**hold the visual part until the session relays the developer's OK, and follow the validated mockup**")
+    expect(projected.get('.agents/skills/sf-workflow/reference/ui-gate.md')).toContain(HEADING)
+    expect(flat(projected.get('.agents/skills/sf-workflow/reference/delegation.md') ?? '')).toContain(
+      "**hold the visual part until the session relays the developer's OK, and follow the validated mockup**"
+    )
   })
 
   it('keeps the committed .agents copy of this repository in step with the dogfood skill', () => {
     expect(readFileSync(path.join(REPO_ROOT, '.agents/skills/sf-workflow/ui-checklist.md'), 'utf8')).toBe(readFileSync(path.join(REPO_ROOT, '.claude/skills/sf-workflow/ui-checklist.md'), 'utf8'))
-    const shared = readFileSync(path.join(REPO_ROOT, '.agents/skills/sf-workflow/SKILL.md'), 'utf8')
-    expect(shared).toContain(HEADING)
-    expect(flat(shared)).toContain("**hold the visual part until the session relays the developer's OK, and follow the validated mockup**")
+    expect(readFileSync(path.join(REPO_ROOT, '.agents/skills/sf-workflow/reference/ui-gate.md'), 'utf8')).toContain(HEADING)
+    const delegation = readFileSync(path.join(REPO_ROOT, '.agents/skills/sf-workflow/reference/delegation.md'), 'utf8')
+    expect(flat(delegation)).toContain("**hold the visual part until the session relays the developer's OK, and follow the validated mockup**")
   })
 })

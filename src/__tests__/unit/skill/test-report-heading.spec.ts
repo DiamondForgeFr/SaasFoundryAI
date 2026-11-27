@@ -37,8 +37,8 @@ describe('AI Testing comment headings are pinned', () => {
     ['team Human Testing', 'scaffolds/skills-templates/workflow/statuses/5-human-testing.md'],
     ['team In Review', 'scaffolds/skills-templates/workflow/statuses/6-in-review.md'],
     ['solo In Review', 'scaffolds/skills-templates/workflow/statuses-solo/4-in-review.md'],
-    ['workflow SKILL template', 'scaffolds/skills-templates/workflow/SKILL.md'],
-    ['dogfood workflow SKILL', '.claude/skills/sf-workflow/SKILL.md']
+    ['delegation reference template', 'scaffolds/skills-templates/workflow/reference/delegation.md'],
+    ['dogfood delegation reference', '.claude/skills/sf-workflow/reference/delegation.md']
   ])('every status that refers to the report (%s) names the same heading', (_label, file) => {
     expect(read(file)).toContain(TEST_REPORT)
   })

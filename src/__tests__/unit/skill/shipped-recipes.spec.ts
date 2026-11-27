@@ -33,11 +33,6 @@ const COUNTER_EXAMPLES: Record<string, string[]> = {
   'harness/claude-code.md': ['python3 - <<EOF', 'node -e', 'python3 -c', 'bash -c', 'eval', `git commit -m "$(cat <<'EOF' … EOF)"`],
   // a line of the script the profiles are read by, shown to explain which keys it reads: a listing, not a command to run
   'workflow/complexity/README.md': ['ANALYZE_ENABLED=$(step_value "$CONFIG_FILE" analyze enabled)'],
-  // the usage synopsis of the SRS script: `write|draft|spawn|validate|eval` is a list of actions
-  'workflow/SKILL.md': ['.claude/skills/sf-srs/scripts/srs-cli.sh write|draft|spawn|validate|eval'],
-  // "an inline script such as `node -e`" in the errors to avoid of In Progress
-  'workflow/statuses/3-in-progress.md': ['node -e'],
-  'workflow/statuses-solo/2-in-progress.md': ['node -e'],
   // "never an inline `python3 -c` script"
   'optional/sf-tool-atlassian/SKILL.md': ['python3 -c']
 }

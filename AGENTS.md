@@ -58,6 +58,9 @@ shortcuts reintroduce exactly the cross-version drift the framework was built to
   fall back to a `.saasfoundry.new` sidecar.
 - **Read the playbook first** — Before editing `src/types.ts`, `schemas/saasfoundry-manifest.schema.json`, any installer's deposited templates, or any file under `src/migrations/`, read
   `.claude/docs/migration-framework.md`. It covers the registry pattern, the file-naming convention, the conflict-aware writer, and worked examples for both manifest renames and module file splits.
+- **At the status transition** — Before moving a ticket whose diff touches one of those files out of AI Testing, verify that the change ships its numbered migration (`src/migrations/manifest/NNN-*.ts`
+  for a manifest shape change, a `ModuleMigration` on the installer's `migrations` array for a module file-set change) and read the playbook before approving the transition. Inline manifest
+  mutations and "let users fix it manually" shortcuts are refused.
 
 ### Harness evolutions — mirrored in SaaSFoundry itself
 

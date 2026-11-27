@@ -92,7 +92,7 @@ EOF
     cat <<'EOF'
 STANDARD ANALYSIS (structured):
 
-1. **Launch 2-4 parallel `exploration` delegations** (SKILL.md → Delegation routing):
+1. **Launch 2-4 parallel `exploration` delegations** (reference/delegation.md → Delegation routing):
    ```
    sf agents route --task exploration --provider <current-agent>   # names the sf-<tier> agent
    exploration: "find existing {feature} implementation patterns"
@@ -130,7 +130,7 @@ DEEP ANALYSIS (maximum rigor):
    - Which agents will provide maximum value?
    - What are the unknowns and risks?
 
-2. **Launch 6-10 parallel `exploration` delegations (BE SMART - don't blindly launch all)** (SKILL.md → Delegation routing):
+2. **Launch 6-10 parallel `exploration` delegations (BE SMART - don't blindly launch all)** (reference/delegation.md → Delegation routing):
    ```
    sf agents route --task exploration --provider <current-agent>   # names the sf-<tier> agent
 
