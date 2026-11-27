@@ -213,10 +213,15 @@ async function planDirectory(manifest: SaaSFoundryManifest, files: DirectoryFile
       }
       continue
     }
-    const refreshed = section.heading && isShipped(kind, section) ? template.get(section.heading) : undefined
-    if (refreshed) {
-      moves.push({ heading: section.heading, action: 'refresh' })
-      placed.push(refreshed)
+    if (section.heading && isShipped(kind, section)) {
+      // Unedited shipped text: refreshed when the current template still has its heading, dropped when the template retired it (#1342)
+      const refreshed = template.get(section.heading)
+      if (refreshed) {
+        moves.push({ heading: section.heading, action: 'refresh' })
+        placed.push(refreshed)
+      } else {
+        moves.push({ heading: section.heading, action: 'drop' })
+      }
       continue
     }
     const { text, rewrites, mentions } = rewriteRemovedClaudeMdReferences(section.text, dir, removed, firstLine)
