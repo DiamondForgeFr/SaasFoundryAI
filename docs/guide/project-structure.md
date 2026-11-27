@@ -49,6 +49,10 @@ my-saas/
 Only the root `AGENTS.md` carries the `## Workflow System` section. It ends with a generated region between `<!-- saasfoundry:generated:start -->` and `<!-- saasfoundry:generated:end -->`, which
 `sf update` and `sf agents enable` rewrite; the rest of the file belongs to the project. In a multirepo, each app repository has its own root `AGENTS.md`.
 
+The app `AGENTS.md` files are short on purpose. They hold what is specific to the app and point to the skills that carry the rest; the rules shared by the whole monorepo live once in the root file. An
+agent working in an app reads the root file, its generated region and the app file together, and Codex caps the instruction files it loads at 32 KiB, so the three templates together stay well under
+that limit (about 22.5 KiB on the worst monorepo chain, against 39.4 KiB before this change).
+
 ## API Structure
 
 ### Module Pattern
