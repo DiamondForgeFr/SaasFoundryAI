@@ -55,7 +55,7 @@ aiInstructions: |
   - Clear variable names over comments
   - Stay STRICTLY in scope
   - NO refactoring beyond requirements
-  - Delegated, the delivery is a `scoped-edit` delegation (SKILL.md → Delegated ticket delivery)
+  - Delegated, the delivery is a `scoped-edit` delegation (reference/delegation.md → Delegated ticket delivery)
 
   **Validate Phase:**
   - Lint + typecheck, and the tests the change affects

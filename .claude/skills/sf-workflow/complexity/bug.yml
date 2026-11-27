@@ -51,7 +51,7 @@ aiInstructions: |
   **Execute Phase:**
   - Make the minimal fix
   - No refactoring unless necessary for the fix
-  - Delegated, the delivery is a `bug-fix` delegation; it is a `scoped-edit` one only when the ticket or its triage already names the files to change, two or fewer (SKILL.md → Delegated ticket delivery)
+  - Delegated, the delivery is a `bug-fix` delegation; it is a `scoped-edit` one only when the ticket or its triage already names the files to change, two or fewer (reference/delegation.md → Delegated ticket delivery)
 
   **Validate Phase:**
   - Build + lint + typecheck

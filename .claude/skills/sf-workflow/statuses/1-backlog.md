@@ -2,42 +2,23 @@
 status: Backlog
 banner_ai: Detect + persist the complexity label, analyze and plan per complexity, challenge the specs
 banner_human: Validate specs + plan, then confirm pickup (→ In progress)
-complexity_profiles: [bug, low, medium, complex]
-entry_conditions:
-  - Developer mentions a new idea / feature / bug
-  - No branch created, no code written
-mandatory_actions:
-  - Read the ticket thoroughly
-  - Detect complexity — suggestion only
-  - Persist complexity label — MANDATORY (update-status is hard-gated on it)
-  - Analyze (adaptive — skip=bug, minimal=low, 2–4 agents=medium, 6–10 agents=complex)
-  - Plan (adaptive — skip=bug, mental=low, file-by-file=medium, comprehensive=complex)
-  - Challenge the specs (edge cases, questions, alternatives)
-  - Wait for developer validation
-exit_conditions:
-  - Complexity label present — `get-complexity <ticket>` prints one of `bug|low|medium|complex` (not `(none)`)
-  - Analysis complete (if required by complexity)
-  - Plan approved (if required by complexity)
-  - Developer validates specs AND confirms pickup
 next_status: In progress
 ---
 
 # STATUS: Backlog
 
-Preparation phase — detect complexity, analyze context, plan implementation, validate specs. In the solo workflow, spec validation and pickup confirmation usually happen in the same exchange: one
-developer "go" covers both.
+Preparation: complexity, analysis, plan, validated specs. In the solo workflow one developer "go" covers the spec validation and the pickup confirmation. No branch and no code until it comes.
 
-## Action checklist
+## Steps
 
-- [ ] **Detect complexity (suggestion):** `.claude/skills/sf-workflow/scripts/detect-complexity.sh <ticket>`
-- [ ] **Persist the label (mandatory):** `.claude/skills/sf-workflow/workflow-cli.sh retag <ticket> <bug|low|medium|complex>`
-- [ ] **Analyze:** `.claude/skills/sf-workflow/scripts/analyze.sh <ticket> <complexity>` — follow its guidance; analysis delegations are `exploration` (SKILL.md → Delegation routing)
-- [ ] **Plan:** `.claude/skills/sf-workflow/scripts/plan.sh <ticket> <complexity>` — follow its guidance; post + await approval for medium/complex; a delegated plan is `planning`
-- [ ] **Challenge the specs** — ask questions, surface edge cases, propose alternatives
-- [ ] **Ticket completeness** — problem/need, acceptance criteria, technical context, complexity tag
-- [ ] **Wait for validation** — the developer's approval of the plan doubles as pickup confirmation
-
-## Complexity cheat sheet
+1. **Detect the complexity** (a suggestion): `.claude/skills/sf-workflow/scripts/detect-complexity.sh <ticket>`.
+2. **Persist the label:** `.claude/skills/sf-workflow/workflow-cli.sh retag <ticket> <bug|low|medium|complex>`. Done when `get-complexity <ticket>` prints one of the four, not `(none)`:
+   `update-status` refuses every move out of Backlog without the `complexity: *` label.
+3. **Analyze:** `.claude/skills/sf-workflow/scripts/analyze.sh <ticket> <complexity>`; follow its guidance. A delegated analysis is an `exploration` ([delegation.md](../reference/delegation.md)).
+4. **Plan:** `.claude/skills/sf-workflow/scripts/plan.sh <ticket> <complexity>`; follow its guidance. On `medium` and `complex`, post the plan and wait for its approval; a delegated plan is
+   `planning`.
+5. **Challenge the specs:** ask questions, surface edge cases, propose alternatives. The ticket states the problem or need, the acceptance criteria, the technical context and its complexity.
+6. **Wait for the developer's go.** Done when the label is on the ticket, the analysis and the plan are complete as the level requires, and the developer validated the plan and confirmed the pickup.
 
 | Level      | Analyze     | Plan                     |
 | ---------- | ----------- | ------------------------ |
@@ -45,11 +26,3 @@ developer "go" covers both.
 | 🟢 low     | minimal     | mental                   |
 | 🟡 medium  | 2–4 agents  | file-by-file + approval  |
 | 🔴 complex | 6–10 agents | comprehensive + approval |
-
-## Errors to avoid
-
-- Creating a branch from Backlog
-- Starting to code before the developer validated the plan
-- Skipping complexity detection
-- Leaving Backlog without the `complexity: *` label (suggestion ≠ label; hard-gated)
-- Skipping analysis/planning when required

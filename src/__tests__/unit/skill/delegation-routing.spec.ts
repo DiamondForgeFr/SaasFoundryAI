@@ -11,7 +11,8 @@ const SKILL_COPIES = [
   ['dogfood copy', path.join(REPO_ROOT, '.claude/skills/sf-workflow')]
 ] as const
 
-const DELEGATING_DIRS = ['complexity', 'scripts', 'statuses', 'statuses-solo']
+// The delegation rules live in the disclosed reference `reference/delegation.md` since #1099; the entry file keeps one pointer and the one-agent-per-ticket rule.
+const DELEGATING_DIRS = ['complexity', 'scripts', 'statuses', 'statuses-solo', 'reference']
 
 const flat = (text: string): string => text.replace(/\s+/g, ' ')
 
@@ -60,7 +61,7 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
   })
 
   it('states the decomposition rule', () => {
-    const skill = all.find(({ file }) => file === 'SKILL.md')!.content
+    const skill = all.find(({ file }) => file === 'reference/delegation.md')!.content
     expect(skill).toContain('## Delegation routing')
     expect(skill).toMatch(/\*\*file set\*\*[\s\S]*\*\*expected result\*\*[\s\S]*\*\*check\*\*/)
     expect(skill).toMatch(/never handed to a lower\s+tier/)
@@ -87,20 +88,23 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
 
   it('gates the delegated delivery on the recorded consent and keeps one agent per ticket (#1026)', () => {
     // The template and the dogfood copy wrap lines at different widths: compare on flattened text.
-    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
-    expect(skill).toContain('### Delegated ticket delivery')
+    const skill = flat(all.find(({ file }) => file === 'reference/delegation.md')!.content)
+    expect(skill).toContain('## Delegated ticket delivery')
     expect(skill).toContain('sf agents delegation status')
     expect(skill).toContain('`sf agents delegation allow` or `sf agents delegation decline`')
-    expect(skill).toMatch(/never runs `ready-pr` \(the developer takes the PR out of draft on the Human Testing route/)
+    expect(skill).toMatch(/never runs `ready-pr`/)
     expect(skill).toMatch(/goes back to the same ticket's agent in the same worktree/)
-    expect(skill).toMatch(/ONE AGENT PER TICKET/)
-    expect(skill).not.toMatch(/FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER/)
+    // the rule itself stays in the entry file, which points at the reference for the rest
+    const entry = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
+    expect(entry).toContain('## One agent per ticket')
+    expect(entry).toContain('(reference/delegation.md)')
+    expect(entry).not.toMatch(/FINISH THE CURRENT TICKET BEFORE STARTING ANOTHER/)
   })
 
   // Examine finding 8: a bug does not know its file set before the diagnosis, so scoped-edit is for
   // the bug whose files the ticket or its triage already names.
   it('defaults a bug to bug-fix and keeps scoped-edit for a bug whose files are already named (Examine 8)', () => {
-    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
+    const skill = flat(all.find(({ file }) => file === 'reference/delegation.md')!.content)
     expect(skill).toMatch(/`bug` whose ticket or triage already names the files to change \(two or fewer\)\s*\|\s*`scoped-edit`/)
     expect(skill).toMatch(/any other `bug`: the files are known only after the diagnosis\s*\|\s*`bug-fix`/)
     expect(skill).toMatch(/`low` \(it may touch up to three files; the delivery stays a `scoped-edit`\)\s*\|\s*`scoped-edit`/)
@@ -114,7 +118,7 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
   // Examine findings 4, 6, 7, 9 and 13: where the consent comes from, who can record it, where it is
   // committed, and the floor under which a change is not worth a worktree.
   it('says where the consent is read, who records it, where it is committed and what stays in the session (Examine 4, 6, 7, 9, 13)', () => {
-    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
+    const skill = flat(all.find(({ file }) => file === 'reference/delegation.md')!.content)
     expect(skill).toContain('Read the `delegation:` line of `sf status --agent-friendly --no-network`')
     expect(skill).toContain("The shared answer is the team's default; a clone may override it locally")
     expect(skill).toContain("Only the developer's own reply records consent: a delegated agent never runs those commands")
@@ -161,7 +165,7 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
   // Examine finding 1 and 12: the prompt a tier agent runs on and the workflow documents must say the
   // same thing about a whole ticket, or the agent is told to do what its own prompt forbids.
   it('agrees with the tier agent prompt on what a delegated whole-ticket delivery owns and never does (Examine 1, 12)', () => {
-    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
+    const skill = flat(all.find(({ file }) => file === 'reference/delegation.md')!.content)
     const aiTesting = flat(all.find(({ file }) => file === 'statuses/4-ai-testing.md')?.content ?? all.find(({ file }) => file === 'statuses-solo/3-ai-testing.md')!.content)
     const commitments: [string, RegExp][] = [
       ['from In progress to the end of AI Testing', /from In progress to the end of AI Testing/],
@@ -185,14 +189,14 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
 
   // FR-MAH-022: the skill and the Kimi Code tier agent prompt agree on what a host without worktrees delegates, and on the alias
   it('agrees with the Kimi Code tier agent prompt: a whole ticket in a worktree opened with git, the alias a route prints, no other host CLI (FR-MAH-022, #1332)', () => {
-    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
-    expect(skill).toContain(
-      'The one exception is a route that prints `alias <name>` (Kimi Code binds no model in an agent file): pass that alias, copied from the route and never composed, as the `model` of the delegation call'
-    )
+    const skill = flat(all.find(({ file }) => file === 'reference/delegation.md')!.content)
+    // anchored on the alias the route prints and on the refusals, not on the sentence around them
+    expect(skill).toContain('`alias <name>` (Kimi Code binds no model in an agent file)')
+    expect(skill).toContain('copied from the route and never composed')
     expect(skill).toContain('never name a model (the alias a route prints excepted)')
     expect(skill).toContain("A refused or failed route is never worked around by starting another coding agent's CLI (`claude`, `codex`, or any other) or a background session of another host")
     expect(skill).toContain('A host with no worktree support (`worktrees: none` in `sf agents catalog --json`) delegates sub-tasks only, through its own native sub-agent tool')
-    expect(skill).toContain("it delegates sub-tasks only, and never starts another host's CLI to get a delegate")
+    expect(skill).toContain("never starts another host's CLI to get a delegate")
     expect(skill).not.toContain('Kimi Code today')
     // #1332: every ticket in a worktree, and the shared primary checkout never switched, for every host
     expect(skill).toContain('**Every ticket in a worktree, never the primary checkout.**')
@@ -207,8 +211,8 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
 
   // The routing learns from the delegations it routes (#1035): the brief asks for the line, and the session marks what it reworked.
   it('has the brief ask for the SF-DELEGATION line and the session mark what it had to rework (#1035)', () => {
-    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
-    expect(skill).toContain('**Measured delegations.**')
+    const skill = flat(all.find(({ file }) => file === 'reference/delegation.md')!.content)
+    expect(skill).toContain('## Measured delegations')
     // The route record decides what a delegation was; the delegate only echoes its id
     expect(skill).toContain('`sf agents route --task <kind> --provider <current-agent> --ticket <n> --record`')
     // The complexity and the nature are read from the ticket labels, so the flags are optional (#1105)
@@ -270,18 +274,18 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
       const content = doc(name)
       if (content === undefined) continue // statuses-solo ships with the template only
       const lower = content.toLowerCase()
-      expect({ name, strategy: content.includes('**Test strategy**') }).toEqual({ name, strategy: true })
+      expect({ name, strategy: lower.includes('the test strategy') }).toEqual({ name, strategy: true })
       expect({ name, once: lower.includes('full suites run once, at the end of ai testing') }).toEqual({ name, once: true })
       expect({ name, rebase: lower.includes('rerun the affected tests') }).toEqual({ name, rebase: true })
       expect({ name, ci: lower.includes("the ready pull request's ci stays the final check") }).toEqual({ name, ci: true })
     }
     if (doc('statuses/3-in-progress.md') !== undefined) {
-      expect(doc('statuses/3-in-progress.md')).toContain('while you work, run the tests the change affects')
+      expect(doc('statuses/3-in-progress.md')?.toLowerCase()).toContain('while you work, run the tests the change affects')
       expect(doc('statuses/4-ai-testing.md')).toContain('not after every iteration')
     }
     const solo = doc('statuses-solo/2-in-progress.md')
     if (solo !== undefined) expect(solo).toContain('the full suites run once, at AI Testing')
-    const skill = flat(all.find(({ file }) => file === 'SKILL.md')!.content)
+    const skill = flat(all.find(({ file }) => file === 'reference/delegation.md')!.content)
     expect(skill).toContain('which hold the test strategy')
     expect(skill).toContain('the brief does not restate it')
   })

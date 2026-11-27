@@ -4,62 +4,74 @@
   "unit": "bytes",
   "roundTo": 1024,
   "measuredAt": {
-    "commit": "9026389a4e5bb7d61d1bb46d3546de6b71d79924",
-    "date": "2026-11-26"
+    "commit": "838b821f85cc88fe5c73b1cab0f76461825fbd26",
+    "date": "2026-11-27"
   },
   "ceilings": {
     "sf-workflow": {
       "template:solo": {
-        "entry": 49152,
-        "total": 147456,
+        "entry": 13312,
+        "total": 124928,
         "files": {
-          "SKILL.md": 49152,
+          "SKILL.md": 13312,
           "complexity/README.md": 19456,
           "escape-hatches.md": 38912,
-          "statuses/2-in-progress.md": 9216,
-          "statuses/3-ai-testing.md": 8192,
-          "statuses/4-in-review.md": 5120,
-          "statuses/5-done.md": 5120
+          "reference/delegation.md": 12288,
+          "reference/pull-requests.md": 6144,
+          "reference/ui-gate.md": 6144,
+          "statuses/2-in-progress.md": 7168,
+          "statuses/3-ai-testing.md": 7168,
+          "statuses/4-in-review.md": 4096,
+          "statuses/5-done.md": 3072
         }
       },
       "template:team": {
-        "entry": 49152,
-        "total": 156672,
+        "entry": 13312,
+        "total": 133120,
         "files": {
-          "SKILL.md": 49152,
+          "SKILL.md": 13312,
           "complexity/README.md": 19456,
           "escape-hatches.md": 38912,
-          "statuses/3-in-progress.md": 10240,
-          "statuses/4-ai-testing.md": 10240,
-          "statuses/5-human-testing.md": 5120,
-          "statuses/6-in-review.md": 6144,
-          "statuses/7-done.md": 6144
+          "reference/delegation.md": 12288,
+          "reference/pull-requests.md": 6144,
+          "reference/ui-gate.md": 6144,
+          "statuses/3-in-progress.md": 8192,
+          "statuses/4-ai-testing.md": 8192,
+          "statuses/5-human-testing.md": 4096,
+          "statuses/6-in-review.md": 4096,
+          "statuses/7-done.md": 4096
         }
       },
       "repo": {
-        "entry": 56320,
-        "total": 154624,
+        "entry": 14336,
+        "total": 125952,
         "files": {
-          "SKILL.md": 56320,
+          "SKILL.md": 14336,
           "complexity/README.md": 19456,
           "escape-hatches.md": 38912,
-          "statuses/2-in-progress.md": 9216,
-          "statuses/3-ai-testing.md": 8192,
-          "statuses/4-in-review.md": 5120,
-          "statuses/5-done.md": 5120
+          "reference/delegation.md": 12288,
+          "reference/pull-requests.md": 6144,
+          "reference/ui-gate.md": 6144,
+          "statuses/2-in-progress.md": 7168,
+          "statuses/3-ai-testing.md": 7168,
+          "statuses/4-in-review.md": 4096,
+          "statuses/5-done.md": 3072
         }
       },
       "agents": {
-        "entry": 61440,
-        "total": 159744,
+        "entry": 19456,
+        "total": 130048,
         "files": {
-          "SKILL.md": 61440,
+          "SKILL.md": 19456,
           "complexity/README.md": 19456,
           "escape-hatches.md": 38912,
-          "statuses/2-in-progress.md": 9216,
-          "statuses/3-ai-testing.md": 8192,
-          "statuses/4-in-review.md": 5120,
-          "statuses/5-done.md": 5120
+          "reference/delegation.md": 12288,
+          "reference/pull-requests.md": 6144,
+          "reference/ui-gate.md": 6144,
+          "statuses/2-in-progress.md": 7168,
+          "statuses/3-ai-testing.md": 7168,
+          "statuses/4-in-review.md": 4096,
+          "statuses/5-done.md": 3072
         }
       }
     },

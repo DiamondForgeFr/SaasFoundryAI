@@ -8,7 +8,7 @@
       "summary": "No move out of Backlog without a complexity label; the agent suggests, the developer decides",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["update-status <ticket> <target>", "complexity: *", "detect-complexity", "retag"],
+      "tokens": ["update-status <ticket>", "complexity: *", "detect-complexity", "retag", "Complexity guard"],
       "source": "workflow-cli.complexity-guard.spec.ts"
     },
     {
@@ -20,11 +20,19 @@
       "source": "workflow-cli.solo-preset.spec.ts"
     },
     {
+      "id": "guards-catalogue",
+      "summary": "Each guard of update-status is named with what it refuses, so a refusal is read against one list",
+      "owner": "SKILL.md",
+      "tier": "reference",
+      "tokens": ["Pushed-commits guard", "Local CI guard", "UI mockup guard", "SRS guard", "local-ci-gate <ticket>"],
+      "source": "workflow-cli.*-guard.spec.ts"
+    },
+    {
       "id": "hatches-are-the-developers",
       "summary": "An agent never sets an escape hatch; it stops, reports and asks",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["An agent never sets one", "SF_WORKFLOW_BYPASS_*", "--skip-local-ci"],
+      "tokens": ["an agent never sets one", "SF_WORKFLOW_BYPASS_*", "--skip-local-ci"],
       "source": "the guard hook of `sf agents guard`"
     },
     {
@@ -34,23 +42,25 @@
       "tier": "disclosed",
       "tokens": ["# Workflow escape hatches", "## Quick reference", "## Record to leave", "SF_WORKFLOW_BYPASS_PR_MERGED_GUARD"],
       "unique": true,
-      "pointer": { "from": "SKILL.md", "match": "escape-hatches.md" },
+      "pointer": { "from": "SKILL.md", "match": "escape-hatches.md", "lead": "A guard refuses and the command it names does not fix it" },
       "source": "guard-refusal-wording.spec.ts names its sections"
     },
     {
       "id": "ui-mockup-gate",
       "summary": "A ui ticket reaches the developer's review only with a recorded mockup validation",
-      "owner": "SKILL.md",
-      "tier": "reference",
+      "owner": "reference/ui-gate.md",
+      "tier": "disclosed",
       "tokens": ["record-ui-validation", "get-ui-validation", "<!-- sf-ui-validation:v1 -->", "UI mockup guard", "set-ui"],
+      "pointer": { "from": "SKILL.md", "match": "reference/ui-gate.md", "lead": "A ticket carries the `ui` label" },
       "source": "workflow-cli.ui-mockup-guard.spec.ts"
     },
     {
       "id": "ui-working-a-ticket",
       "summary": "How an agent works a ui ticket: mockup first, visual part held, nothing approved on the developer's behalf",
-      "owner": "SKILL.md",
-      "tier": "reference",
+      "owner": "reference/ui-gate.md",
+      "tier": "disclosed",
       "tokens": ["Working a `ui` ticket", "ui-checklist.md", "docs/mockups/", "An agent never records an approval the developer did not give"],
+      "pointer": { "from": "SKILL.md", "match": "reference/ui-gate.md", "lead": "A ticket carries the `ui` label" },
       "source": "ui-ticket-guidance.spec.ts"
     },
     {
@@ -60,7 +70,7 @@
       "tier": "disclosed",
       "tokens": ["# UI checklist", "## Hierarchy", "## States", "## Accessibility"],
       "unique": true,
-      "pointer": { "from": "SKILL.md", "match": "ui-checklist.md" },
+      "pointer": { "from": "reference/ui-gate.md", "match": "ui-checklist.md" },
       "source": "ui-ticket-guidance.spec.ts"
     },
     {
@@ -74,16 +84,17 @@
     {
       "id": "delegation-routing",
       "summary": "Delegate by task kind through the route; a subtask states file set, expected result and check",
-      "owner": "SKILL.md",
-      "tier": "reference",
+      "owner": "reference/delegation.md",
+      "tier": "disclosed",
       "tokens": ["sf agents route --task <kind> --provider <current-agent>", "file set", "expected result", "multi-file-feature", "alias <name>"],
+      "pointer": { "from": "SKILL.md", "match": "reference/delegation.md", "lead": "You hand a ticket or a step to another agent" },
       "source": "delegation-routing.spec.ts"
     },
     {
       "id": "delegated-delivery",
       "summary": "Who builds a ticket, in which worktree, and that consent is only the developer's own reply",
-      "owner": "SKILL.md",
-      "tier": "reference",
+      "owner": "reference/delegation.md",
+      "tier": "disclosed",
       "tokens": [
         "sf agents delegation allow",
         "sf agents delegation decline",
@@ -91,14 +102,16 @@
         "git worktree add <path> -b <branch> origin/<workingBranch>",
         "never runs `ready-pr`"
       ],
+      "pointer": { "from": "SKILL.md", "match": "reference/delegation.md", "lead": "You hand a ticket or a step to another agent" },
       "source": "delegation-routing.spec.ts, delegated-worktree-refusal.spec.ts"
     },
     {
       "id": "measured-delegations",
       "summary": "Every routed delegation carries a route id and ends on the SF-DELEGATION line",
-      "owner": "SKILL.md",
-      "tier": "reference",
+      "owner": "reference/delegation.md",
+      "tier": "disclosed",
       "tokens": ["--record", "route=<id>", "SF-DELEGATION:", "--retry-of", "sf agents outcome mark"],
+      "pointer": { "from": "SKILL.md", "match": "reference/delegation.md", "lead": "You hand a ticket or a step to another agent" },
       "source": "delegation-routing.spec.ts"
     },
     {
@@ -120,25 +133,48 @@
     {
       "id": "release-ticket",
       "summary": "A release ticket follows the RC branch and its pull request, then a merge-commit sync-back",
-      "owner": "SKILL.md",
-      "tier": "reference",
+      "owner": "reference/pull-requests.md",
+      "tier": "disclosed",
       "tokens": ["A release ticket", "Closes #<ticket>", "gh pr merge <N> --merge"],
+      "pointer": { "from": "SKILL.md", "match": "reference/pull-requests.md", "lead": "Several tickets in one PR" },
       "source": "workflow-cli.release-ticket.spec.ts"
+    },
+    {
+      "id": "pr-several-and-stacked",
+      "summary": "One PR for several tickets carries one Resolves line each; a stacked PR is found by its head branch",
+      "owner": "reference/pull-requests.md",
+      "tier": "disclosed",
+      "tokens": ["One pull request, several tickets", "A stacked pull request", "Resolves #170"],
+      "pointer": { "from": "SKILL.md", "match": "reference/pull-requests.md", "lead": "Several tickets in one PR" },
+      "source": "workflow-cli.pr-resolution.spec.ts"
+    },
+    {
+      "id": "review-listener",
+      "summary": "The Ready for review click moves the ticket through the guards; the listener needs SF_PROJECTS_TOKEN",
+      "owner": "reference/pull-requests.md",
+      "tier": "disclosed",
+      "tokens": ["pr-review-sync.yml", "sync-pr-review", "SF_PROJECTS_TOKEN"],
+      "pointer": { "from": "SKILL.md", "match": "reference/pull-requests.md", "lead": "Several tickets in one PR" },
+      "source": "pr-review-sync.spec.ts"
     },
     {
       "id": "critical-rules-delivery",
       "summary": "Close children as they land; a parent is gated by its children; one agent per ticket",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["CLOSE CHILD TICKETS AS THEY LAND", "PARENT DONE IS GATED BY CHILDREN", "ONE AGENT PER TICKET, NEVER A SWITCH MID-DELIVERY"]
+      "tokens": ["Close each child as it lands", "gh issue view <child> --json state", "never batch closures", "One agent per ticket", "never stops delivering one ticket to start another"]
     },
     {
       "id": "migration-framework-rule",
-      "summary": "Repository-only rule that only this repository's copy of the skill carries (the template has no rule 9); D9 of #1096 has #1099 move it to this repository's own AGENTS.md",
+      "summary": "Repository-only rule that only this repository's copy of the skill carried (the template never had rule 9)",
       "owner": "SKILL.md",
       "tier": "reference",
       "tokens": ["MIGRATION FRAMEWORK ON BREAKING CHANGES", ".claude/docs/migration-framework.md"],
       "views": ["repo"],
+      "retired": {
+        "reason": "D9 of #1096: a rule of this repository only does not belong in a skill that ships to projects. It moved to the hand-written part of this repository's AGENTS.md, Migration framework, 'At the status transition'.",
+        "by": "#1099"
+      },
       "source": "AGENTS.md, Migration framework"
     },
     {
@@ -146,14 +182,14 @@
       "summary": "Announce a command over ~5 s, stream one over ~60 s",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["ANNOUNCE + STREAM LONG COMMANDS"]
+      "tokens": ["~5 seconds", "~60 seconds", "--line-buffered"]
     },
     {
       "id": "milestones",
       "summary": "A milestone reports and never blocks a release",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["workflow-cli.sh milestone create|list|show|scope|assign|associate", "A milestone reports; it never blocks a release"],
+      "tokens": ["workflow-cli.sh milestone create|list|show|scope|assign|associate", "never blocks a release", "Epic #542"],
       "source": "workflow-cli.milestone.spec.ts"
     },
     {
@@ -161,7 +197,11 @@
       "summary": "Artefacts follow the manifest language, never the language of the conversation",
       "owner": "SKILL.md",
       "tier": "reference",
-      "tokens": ["language.tickets", "language.codeComments"]
+      "tokens": ["language.tickets", "language.codeComments"],
+      "retired": {
+        "reason": "The generated AGENTS.md region owns it ('Reading the project status': write every artefact in the output language the status report gives); the skill only repeated it, with a jq snippet the manifest makes redundant.",
+        "by": "#1099"
+      }
     },
     {
       "id": "status-backlog",
@@ -223,8 +263,8 @@
       "summary": "In review needs an open non-draft PR whose head branch carries the ticket number",
       "owner": "statuses/4-in-review.md",
       "tier": "step",
-      "tokens": ["feature/<N>-", "fix/<N>-", "branch-naming-pr-regex.spec.ts", "ready-pr <ticket>"],
-      "source": "workflow-cli.pr-existence-guard.spec.ts"
+      "tokens": ["feature/<N>-", "fix/<N>-", "workflow.branchNaming", "ready-pr <ticket>"],
+      "source": "workflow-cli.pr-existence-guard.spec.ts, branch-naming-pr-regex.spec.ts"
     },
     {
       "id": "status-done",

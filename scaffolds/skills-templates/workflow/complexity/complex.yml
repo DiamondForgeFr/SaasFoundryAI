@@ -46,7 +46,7 @@ aiInstructions: |
   This is a complex/critical feature. Apply maximum rigor:
 
   **Analyze Phase (DEEP):**
-  - ADAPTIVE AGENT LAUNCHING: Launch 6-10 parallel `exploration` delegations (SKILL.md → Delegation routing)
+  - ADAPTIVE AGENT LAUNCHING: Launch 6-10 parallel `exploration` delegations (reference/delegation.md → Delegation routing)
   - Codebase (multiple): Find patterns, files, utilities
   - Documentation: Research library documentation
   - Web: Research best practices, gotchas, security concerns
@@ -67,8 +67,8 @@ aiInstructions: |
 
   **Execute Phase:**
   - Create granular subtasks with clear acceptance criteria
-  - A delegated subtask names its task kind, file set, expected result and check (SKILL.md → Delegation routing)
-  - Delegated, the delivery is a `multi-file-feature` delegation once the subtasks are decomposed; planning stays in the session (SKILL.md → Delegated ticket delivery)
+  - A delegated subtask names its task kind, file set, expected result and check (reference/delegation.md → Delegation routing)
+  - Delegated, the delivery is a `multi-file-feature` delegation once the subtasks are decomposed; planning stays in the session (reference/delegation.md → Delegated ticket delivery)
   - Use TodoCreate to track progress
   - Implement following the plan exactly
   - NEVER deviate from approved plan

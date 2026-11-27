@@ -216,7 +216,7 @@ The hook is a guardrail against the ordinary path the refusals used to teach, no
   board.
 - **Legitimate:** `origin` is down or refuses the push and the work is safe elsewhere (a bundle, another remote) that you name. Not a case for the hatch: a dirty tree (commit it), an unpushed commit
   (push it), a branch named off the convention (rename it, or push to the ticket branch), or a release ticket whose RC branch was deleted by its merge: the guard reads that merge on GitHub and accepts
-  it when it is verified, as long as this checkout holds no other work (SKILL.md → "A release ticket").
+  it when it is verified, as long as this checkout holds no other work (reference/pull-requests.md → "A release ticket").
 - **Illegitimate:** "I will push after the tests", leaving the work uncommitted so a test run is not disturbed, pushing later "for the report".
 - **Record:** automatic, a ticket comment naming the variable and `SF_WORKFLOW_BYPASS_REASON`. Complete it with what is unpushed and where the work is.
 
@@ -296,7 +296,7 @@ the rule there.
 - **Protects:** every commit names the number of a ticket that exists, `<type>(#<N>): <description>`. commitlint refuses a placeholder (`#TBD`, `#XXX`, `#12a`) with the `ticket-reference` rule, and it
   already refused any header without a numbered scope.
 - **No hatch:** a subject can always be reworded once the ticket exists, so nothing legitimate needs a placeholder. When the ticket tool is unreachable, stop and report it
-  (`statuses/*-in-progress.md`, "An unreachable ticket tool or remote"); the developer decides what happens meanwhile.
+  (`statuses/*-in-progress.md`, the step on an unreachable ticket tool or remote); the developer decides what happens meanwhile.
 
 ### Branch guard: `SF_WORKFLOW_BYPASS_BRANCH_GUARD`
 
