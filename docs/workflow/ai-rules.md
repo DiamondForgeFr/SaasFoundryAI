@@ -6,8 +6,9 @@ Violating these rules is not a style choice — it's a bug in the agent's behavi
 
 ## 1. Always read the status description before acting
 
-Before every workflow action — transitioning status, creating a branch, running tests, opening a PR — the agent reads `.claude/skills/sf-workflow/statuses/<N>-<name>.md` to pull the mandatory actions
-and exit conditions for the current status.
+Before every workflow action — transitioning status, creating a branch, running tests, opening a PR — the agent reads `.claude/skills/sf-workflow/statuses/<N>-<name>.md` to pull the steps and exit
+conditions for the current status. The skill's entry file stays short and points at the files an agent opens only when a case needs them (`reference/delegation.md`, `reference/ui-gate.md`,
+`reference/pull-requests.md`, `escape-hatches.md`).
 
 **Why:** status descriptions are the source of truth. They encode gating logic, ordering requirements, and edge cases that the conversation context cannot be trusted to preserve across long sessions.
 

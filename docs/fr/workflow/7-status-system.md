@@ -1,6 +1,6 @@
 # Workflow complet à 7 statuts
 
-Le preset **SaaSFoundry** fait passer chaque ticket de livraison par sept statuts. Chaque statut impose des actions et des conditions de sortie. L'agent lit la description correspondante dans
+Le preset **SaaSFoundry** fait passer chaque ticket de livraison par sept statuts. Chaque statut impose des étapes et des conditions de sortie. L'agent lit la description correspondante dans
 `.claude/skills/sf-workflow/statuses/` avant d'agir.
 
 ::: tip Deux workflows natifs

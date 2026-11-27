@@ -5,7 +5,8 @@ Le workflow n'a de valeur que si l'agent respecte ses garde-fous. Ces règles so
 ## 1. Lire le statut configuré avant d'agir
 
 Avant une transition, une branche, une validation ou une pull request, l'agent lit `.saasfoundry.json`, demande le statut réel au CLI et consulte la description installée sous
-`.claude/skills/sf-workflow/statuses/`.
+`.claude/skills/sf-workflow/statuses/`. Le fichier d'entrée du skill reste court et renvoie aux fichiers qu'un agent n'ouvre que lorsqu'un cas l'exige (`reference/delegation.md`,
+`reference/ui-gate.md`, `reference/pull-requests.md`, `escape-hatches.md`).
 
 Il ne doit pas supposer le preset : le workflow d'équipe a sept statuts et Solo en a cinq, chacun avec ses documents et garde-fous. Un modèle personnalisé peut enregistrer d'autres statuts, mais
 l'équipe doit fournir les documents et contrôles correspondants avant que l'agent puisse les suivre en sécurité.

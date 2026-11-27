@@ -165,7 +165,7 @@ Backlog → In progress → AI testing → In review → Done
 ```
 
 - There is no Ready and no Human testing: the developer works alone, and the pull request review (`In review`) is the human gate. `AI testing → In review` needs no `nature:*` label.
-- Read `.claude/skills/sf-workflow/statuses/<N>-<name>.md` before any transition — the file lists the mandatory entry actions and exit conditions.
+- Read `.claude/skills/sf-workflow/statuses/<N>-<name>.md` before any transition — the file lists the steps and the exit conditions.
 - Use the workflow CLI: `.claude/skills/sf-workflow/workflow-cli.sh update-status <ticket> <status> --reason "..."`. Don't drag cards in the GitHub Projects UI manually — the CLI runs the guards (PR
   existence, complexity label, parent-status mirror, …) the UI doesn't know about.
 - Child tickets are native GitHub sub-issues, not checkboxes. Create them via `.claude/skills/sf-tool-github-projects/github-projects-cli.sh create-subtask`.

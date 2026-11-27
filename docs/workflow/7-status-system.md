@@ -1,7 +1,7 @@
 # Team workflow: the 7-status system
 
-The `saasfoundry` preset is the complete team workflow. Every delivery status has mandatory actions and exit conditions in `.claude/skills/sf-workflow/statuses/`. The workflow CLI reads the ordered
-status list from `.saasfoundry.json`; it does not hardcode the sequence.
+The `saasfoundry` preset is the complete team workflow. Every delivery status has its steps and exit conditions in `.claude/skills/sf-workflow/statuses/`. The workflow CLI reads the ordered status
+list from `.saasfoundry.json`; it does not hardcode the sequence.
 
 ::: info Looking for the lighter flow?
 
