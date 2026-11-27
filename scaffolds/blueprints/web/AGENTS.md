@@ -1,365 +1,56 @@
 # {{PROJECT_NAME}} Web
 
-Production-ready React application generated with **SaaSFoundryAI** - An AI-First development platform.
+React 19 application generated with **SaaSFoundryAI**: React Router v7, Vite 7, TailwindCSS 4 with ShadCN UI, React Query, React Hook Form with Zod 4, i18next (French and English), Playwright E2E.
 
-## 🧭 Preconditions first (read before asking questions)
+## 🧭 Preconditions first
 
-Before asking the user anything about scope, backend, or module choices, **read the manifest and check the configured tools**:
+Before asking about scope, read `.saasfoundry.json` (workflow, SRS backend, installed modules) and run `sf status --agent-friendly --no-network`. Resolve any `fail` precondition first: its remediation names the `sf` command. Ask only what the manifest does not declare.
 
-1. Read `.saasfoundry.json` — the source of truth for workflow, SRS backend, and installed modules. Never re-ask what is already declared there.
-2. Run `sf status --agent-friendly --no-network` to get a summary of the manifest, installed modules, and preconditions. Some hosts run it automatically at session start (Claude Code through
-   the hook described in `.claude/rules/claude-code.md`).
-3. Only ask about things that are **not** resolvable from the manifest. If a precondition is `fail`, route the user to the relevant install/config CLI (`sf workflow`, `sf skill install`, etc.) instead
-   of opening a scope dialogue.
+## 🎯 Skills
 
-## Tech Stack
+Prefer the `sf-*` skill over a same-named global one (`sf-git-commit` over `git-commit`). Claude Code reads `.claude/skills/`; other agents read `.agents/skills/`.
 
-- **Frontend**: React 19, React Router v7, Vite 7
-- **Styling**: TailwindCSS 4, Radix UI, ShadCN UI
-- **State**: React Query (data fetching), React Hook Form (forms)
-- **Validation**: Zod 4
-- **i18n**: i18next (French + English)
-- **Testing**: Playwright (E2E)
+- `sf-integration-rules`: read it before adding a page, API hook, form, ShadCN composition, RBAC wiring or i18n key.
+- `sf-git-commit`, `sf-git-fix-pr-comments`, `sf-utils-fix-errors`, `sf-utils-fix-grammar`: commits, PR feedback, lint and type errors, prose.
+- `sf-tool-*`: the tools you selected at setup.
 
-## 🎯 Skills Priority
+## Layout
 
-**IMPORTANT**: This project uses SaaSFoundryAI skills (prefix `sf-*`). When multiple skills with similar functionality exist, **always prefer SaaSFoundryAI skills** over global or other skills:
-
-- ✅ Use `sf-git-commit` instead of `git-commit`
-- ✅ Use `sf-utils-fix-errors` instead of `utils-fix-errors`
-- ✅ Use `sf-git-create-pr` instead of `git-create-pr`
-- ✅ Use `sf-tool-figma` instead of `tool-figma`
-
-SaaSFoundryAI skills are specifically optimized for this project's structure, conventions, and workflows.
-
-## Project Structure
-
-```
-src/
-├── components/
-│   ├── dialogs/      # App-level dialog/modal compositions
-│   ├── layout/       # App layout components (sidebar, topbar, wrappers)
-│   ├── nav/          # Navigation components
-│   ├── theme/        # Theme provider + dark/light toggle
-│   └── ui/           # ShadCN UI compositions (custom/) — primitives live in @<project>/ui-primitives on monorepo
-├── pages/
-│   ├── private/      # Protected pages (require auth)
-│   └── public/       # Public pages (login, register)
-├── hooks/
-│   ├── api/          # React Query hooks for API calls
-│   └── ui/           # UI-related hooks
-├── router/
-│   ├── routes.tsx    # Route definitions
-│   ├── lazy-pages.tsx  # Lazy-loaded page components
-│   └── guard.tsx     # Route protection (auth)
-├── locales/          # i18next translations (YAML)
-│   ├── en/
-│   └── fr/
-└── utils/            # Utility functions
-```
+Pages live in `src/pages/private/` (authentication required) and `src/pages/public/`. API hooks live in `src/hooks/api/`, UI hooks in `src/hooks/ui/`. Routes are in `src/router/routes.tsx`, lazy-loaded through `src/router/lazy-pages.tsx`, and protected by `src/router/guard.tsx`. Translations are YAML in `src/locales/{en,fr}/`.
 
 ## Code Conventions
 
-### Component Pattern
+- Components are PascalCase function components. Fetch data with React Query hooks. Build forms with React Hook Form and a Zod resolver, and call `useFormLanguageSync(form)` so displayed errors follow the current language.
+- Path aliases: `@/*` → `src/*`, `@shared-types/*` and `@shared-validation/*` for the shared types and Zod schemas.
+- Styling: Tailwind utilities and ShadCN primitives (`Button`, `Dialog`, `Form`), Radix only through ShadCN, mobile first. Theme tokens (colours, radii, animations, dark mode) live in `theme.css`, imported once from `src/index.css`.
+- Authenticated pages go under the protected layout route in `src/router/routes.tsx`; public pages (login, register) go outside it.
+- Strings: translate with `useTranslation('<namespace>')`; never hard-code them. Keep the keys of `en` and `fr` identical.
+- Auth is cookie-based, with automatic refresh.
 
-```tsx
-// PascalCase for components
-export function UserProfile() {
-  // React Query for data fetching
-  const { data: user } = useGetUser()
+## Shared Layers
 
-  // React Hook Form for forms
-  const form = useForm<UserFormData>({
-    resolver: zodResolver(userSchema)
-  })
-  // Displayed validation errors follow the current language
-  useFormLanguageSync(form)
+`src/shared-types/` and `src/shared-validation/` are vendored copies that the web bundle compiles against.
 
-  return <div>...</div>
-}
-```
+- **Monorepo**: they mirror `<root>/packages/shared-{types,validation}/src/`. Edit a hand-written file in all three places; the CLI's drift guard blocks divergence. ShadCN primitives come from `@<root-package-name>/ui-primitives/<name>`, the theme from `@import "@<root-package-name>/ui-primitives/theme.css"` in `src/index.css`. Typed hooks come from `@<root-package-name>/api-client/generated/api/<tag>/<tag>`. Module constants (such as `STORAGE_LOGO_MAX_BYTES`) come from the workspace: never redeclare them.
+- **Multirepo**: the vendored copies are the only ones. ShadCN primitives live in `src/components/ui/shadcn/`. There is no generated client: write the React Query hooks under `src/hooks/api/`. Module-shared values are inlined: keep them stable, the CLI's docker assertions enforce the inlined shape.
 
-### Path Aliases
-
-- `@/*` → `./src/*`
-- `@shared-types/*` → `./src/shared-types/*` (cross-wire TypeScript types)
-- `@shared-validation/*` → `./src/shared-validation/*` (Zod schemas reused on the API side)
-
-### Styling
-
-- **TailwindCSS 4** for utility classes
-- **ShadCN** primitives for the design system (`Button`, `Dialog`, `Form`, …)
-- **Radix UI** for accessible primitives (consumed through ShadCN)
-- Mobile-first responsive design
-- Theme tokens (colors, radii, animations, dark mode) live in a `theme.css` imported once in `src/index.css`
-
-### API Integration
-
-- **Monorepo**: typed React Query hooks come from `@<root-package-name>/api-client/generated/api/<tag>/<tag>` (auto-emitted by orval from the API's OpenAPI snapshot). Hand-written hooks under
-  `src/hooks/api/` are thin wrappers when extra logic is needed.
-- **Multirepo**: hand-written React Query hooks under `src/hooks/api/` consume a typed fetch wrapper directly.
-- Cookie-based auth with automatic refresh
-- Type-safe end-to-end via shared types + auto-generated client (mono) or shared types alone (multi)
-
-### 📦 Shared layers (mono vs multi)
-
-This blueprint always carries vendored copies of `src/shared-types/` and `src/shared-validation/` — that's the working source the web bundle compiles against. The full shared landscape diverges by
-topology:
-
-- **In a monorepo** (root has `packages/`):
-  - `src/shared-types/` and `src/shared-validation/` are mirrored from `<root>/packages/shared-{types,validation}/src/` — **edit hand-written files in all three places** (canonical + both apps'
-    mirrors). The SaaSFoundryAI CLI's drift-guard tests block divergence.
-  - **ShadCN primitives** are not in `src/components/ui/shadcn/` — they live in the workspace package and are imported as `@<root-package-name>/ui-primitives/<name>` (see `package.json`). The Tailwind
-    theme is pulled in via `@import "@<root-package-name>/ui-primitives/theme.css"` in `src/index.css`. App-specific compositions (logos, page-loaders, business widgets) stay under `src/components/`.
-  - **Typed API client**: `@<root-package-name>/api-client/generated/api/<tag>/<tag>` exposes `useXxx` React Query hooks generated from the API's OpenAPI snapshot.
-  - **Module-deposited shared constants** (e.g. `STORAGE_LOGO_MAX_BYTES` in `shared-config`) — consume them via the workspace import; don't re-declare locally.
-- **In multirepo** (this app stands alone):
-  - Vendored `src/shared-{types,validation}/` are the only copies.
-  - **ShadCN primitives** live in `src/components/ui/shadcn/` (vendored from the same canonical source as the mono `ui-primitives` package — drift-guarded by the CLI).
-  - No generated API client — hand-write React Query hooks under `src/hooks/api/`.
-  - Module-shared values (storage MIME list, email envelope, …) are inlined per side; keep them stable — the SaaSFoundryAI CLI's docker assertions enforce the inlined shape.
-
-Run `sf status --agent-friendly --no-network` to confirm topology before changing shared shapes.
-
-## Git Workflow
-
-- Main branch: `{{MAIN_BRANCH}}`
-- **ALWAYS** use conventional commits: `<type>(#<ticket>): <description>`
-- Types: feat, fix, docs, style, refactor, perf, test, chore
-- Scope (ticket number) is required
-- Max header: 100 characters
-- Husky enforces commit format + pre-push checks
-
-### Commit Examples
-
-_Ticket numbers below are illustrative — always use the number of the ticket you are working on._
-
-```bash
-feat(#42): add user profile page
-fix(#43): resolve form validation issue
-style(#44): improve mobile responsiveness
-```
+Run `sf status --agent-friendly --no-network` to confirm the topology before you change a shared shape.
 
 ## Development Commands
 
 ```bash
-# Development
-npm run dev                 # Start Vite dev server (port 5173)
-
-# Testing
-npm run test:e2e            # Run Playwright E2E tests
-npm run test:full           # Format + Lint + Type-check + Build + E2E
-
-# Code Quality
-npm run format              # Prettier
-npm run lint                # ESLint
-npm run type-check          # TypeScript
-
-# Build
-npm run build               # Production build
-npm run preview             # Preview production build
+npm run dev                 # Vite dev server on port 5173
+npm run test:e2e            # Playwright E2E, specs in tests/e2e/
+npm run test:full           # format, lint, type-check, build and E2E
 ```
+
+The API is at `VITE_API_URL` (`http://localhost:3500/api` in the template); the other variables are listed in `.env.example`.
 
 ## 🤖 AI-Assisted Development
 
-This project is pre-configured for AI-assisted development with coding agents (Claude Code, Codex and other AGENTS.md readers).
+- Long-running commands (over about 5 seconds): announce them in one sentence, stream their progress past a minute, and report the outcome with numbers.
+- Do not skip the E2E tests, which validate the user flows; do not bypass the hooks (`--no-verify`); do not leave TypeScript errors.
 
-### 📣 Long-running commands (announce + stream)
+## Git Workflow
 
-The screen must never freeze silently. For any command expected to take more than ~5 seconds (test suites, builds, commit/push hooks, Docker scenarios):
-
-1. **Announce before running** — one sentence: what runs and the expected duration (e.g. "pre-commit hook ~40s: format + lint + build + tests").
-2. **Over ~60 seconds: stream progress** — run the command in the background and surface its progress markers to the user as they appear (e.g. `tail -f <log> | grep -E --line-buffered "PASS|FAIL|\[sf-progress\]"`). Never block silently.
-3. **Report the outcome with numbers** — suites passed/failed, duration — not just "done".
-
-### 🛠️ Available Skills
-
-Claude Code discovers them under `.claude/skills/`; other agents read the copies under `.agents/skills/` (or the `.claude/skills/<name>/SKILL.md` file explicitly when no copy exists).
-
-#### Git Workflows
-
-- **`sf-git-commit`** - Quick commit with conventional messages
-  - Auto-generates commit messages following project conventions
-  - Includes ticket number and proper type
-
-- **`sf-git-fix-pr-comments`** - Implement PR review feedback
-  - Fetches PR comments from GitHub
-  - Implements requested changes automatically
-  - Creates new commits with fixes
-
-#### Integration grammar
-
-- **`sf-integration-rules`** - Integration grammar router. Triggers when adding a page, an API hook, a form, a ShadCN composition, RBAC wiring, or i18n keys. Routes to `backend.md` / `frontend.md` /
-  `topology.md` sub-guides — read first before scaffolding.
-
-#### Code Quality
-
-- **`sf-utils-fix-errors`** - Fix ESLint and TypeScript errors
-  - Parallel processing for fast fixes
-  - Respects project conventions
-  - Safe refactoring
-
-- **`sf-utils-fix-grammar`** - Fix grammar and spelling
-  - Preserves code formatting
-  - Works on markdown, comments, docs
-
-### 🎯 Common AI Workflows
-
-#### Implement a new page
-
-```
-User: "Add a user settings page with form validation"
-Agent: uses the `sf-integration-rules` skill
-1. Creates page component in src/pages/private/
-2. Adds route in router/routes.tsx
-3. Creates form with React Hook Form + Zod
-4. Adds i18n translations
-5. Implements API hook for saving settings
-```
-
-#### Fix styling issues
-
-```
-User: "Make this page responsive for mobile"
-Agent:
-- Analyzes current layout
-- Adds Tailwind responsive classes (sm:, md:, lg:)
-- Tests on different breakpoints
-```
-
-#### Add translations
-
-```
-User: "Add French translation for the login page"
-Agent:
-- Updates src/locales/fr/auth.yml
-- Ensures translation keys match English version
-- Uses i18next best practices
-```
-
-### ✅ Best Practices
-
-**DO**:
-
-- Trust the skills - they respect project conventions
-- Let AI handle repetitive tasks (commits, error fixes, translations)
-- Use ShadCN components for consistency
-- Review UI/UX choices manually
-
-**DON'T**:
-
-- Skip tests - E2E tests validate user flows
-- Bypass git hooks (`--no-verify`)
-- Ignore TypeScript errors
-- Hard-code strings (use i18next)
-
-### 🔒 Quality Gates
-
-All AI-generated code passes through:
-
-- **ESLint** - Code quality standards (React hooks rules)
-- **TypeScript** - Compile-time type safety
-- **Prettier** - Consistent code formatting
-- **Playwright** - E2E user flow validation
-- **Git hooks** - Pre-commit checks
-- **CI/CD** - Automated deployment validation
-
-## Routing
-
-### Protected Routes
-
-```tsx
-// Requires authentication
-<Route element={<ProtectedLayout />}>
-  <Route path="/dashboard" element={<Dashboard />} />
-  <Route path="/profile" element={<UserProfile />} />
-</Route>
-```
-
-### Public Routes
-
-```tsx
-// No authentication required
-<Route path="/login" element={<Login />} />
-<Route path="/register" element={<Register />} />
-```
-
-### Lazy Loading
-
-```tsx
-// Automatic code splitting
-const Dashboard = lazy(() => import('./pages/private/Dashboard'))
-```
-
-## Internationalization (i18n)
-
-### Using Translations
-
-```tsx
-import { useTranslation } from 'react-i18next'
-
-function LoginPage() {
-  const { t } = useTranslation('auth')
-
-  return <h1>{t('login.title')}</h1>
-}
-```
-
-### Translation Files
-
-```yaml
-# src/locales/en/auth.yml
-login:
-  title: 'Sign In'
-  email: 'Email Address'
-  password: 'Password'
-```
-
-## Environment Variables
-
-See `.env.example` for required variables:
-
-```bash
-# API Configuration
-VITE_API_URL="http://localhost:3500/api"
-
-# Optional: Analytics
-VITE_ANALYTICS_URL="..."
-VITE_ANALYTICS_WEBSITE_ID="..."
-
-# Optional: Storage
-VITE_STORAGE_ENABLED="true"
-```
-
-## Testing
-
-### E2E Tests (Playwright)
-
-```bash
-npm run test:e2e
-# Tests full user flows in real browser
-# Located in: tests/e2e/*.spec.ts
-```
-
-### Writing Tests
-
-```typescript
-test('user can login', async ({ page }) => {
-  await page.goto('/login')
-  await page.fill('[name="email"]', 'user@example.com')
-  await page.fill('[name="password"]', 'password')
-  await page.click('button[type="submit"]')
-  await expect(page).toHaveURL('/dashboard')
-})
-```
-
-## Important Notes
-
-- This is a **generated project** from SaaSFoundryAI v1.0.0-beta
-- Check `.saasfoundry.json` for installed modules and configuration
-- Update this AGENTS.md as your project evolves
-- Add new components to ShadCN collection as needed
-
----
-
-**Need help?** Check the [SaaSFoundryAI documentation](https://github.com/DiamondForgeFr/SaasFoundryAI) or use the project skills for assistance.
+- Main branch: `{{MAIN_BRANCH}}`. Commits follow `<type>(#<ticket>): <description>` with the ticket number and 100 characters at most; commitlint enforces it.

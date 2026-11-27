@@ -4,8 +4,8 @@
   "unit": "bytes",
   "roundTo": 1024,
   "measuredAt": {
-    "commit": "9026389a4e5bb7d61d1bb46d3546de6b71d79924",
-    "date": "2026-11-26"
+    "commit": "838b821f85cc88fe5c73b1cab0f76461825fbd26",
+    "date": "2026-11-27"
   },
   "ceilings": {
     "sf-workflow": {
@@ -186,24 +186,24 @@
         "total": 4096
       },
       "template:api": {
-        "entry": 12288,
-        "total": 12288,
+        "entry": 4096,
+        "total": 4096,
         "files": {
-          "AGENTS.md": 12288
+          "AGENTS.md": 4096
         }
       },
       "template:web": {
-        "entry": 13312,
-        "total": 13312,
+        "entry": 5120,
+        "total": 5120,
         "files": {
-          "AGENTS.md": 13312
+          "AGENTS.md": 5120
         }
       },
       "template:monorepo-root": {
-        "entry": 14336,
-        "total": 14336,
+        "entry": 5120,
+        "total": 5120,
         "files": {
-          "AGENTS.md": 14336
+          "AGENTS.md": 5120
         }
       }
     }

@@ -49,6 +49,11 @@ my-saas/
 Seul le `AGENTS.md` racine contient la section `## Workflow System`. Il se termine par une région générée, délimitée par `<!-- saasfoundry:generated:start -->` et `<!-- saasfoundry:generated:end -->`,
 que `sf update` et `sf agents enable` réécrivent ; le reste du fichier appartient au projet. En multirepo, chaque dépôt d’application possède son propre `AGENTS.md` racine.
 
+Les fichiers `AGENTS.md` des applications (`apps/api`, `apps/web`) sont volontairement courts. Ils portent ce qui est propre à l’application et renvoient aux skills qui couvrent le reste ; les règles
+communes à tout le monorepo vivent une seule fois dans le fichier racine. Un agent qui travaille dans une application lit ensemble le fichier racine, sa région générée et le fichier de l’application,
+et Codex limite les fichiers d’instructions chargés à 32 Kio : les trois modèles restent donc nettement en dessous de cette limite (environ 22,5 Kio sur la plus longue chaîne d’un monorepo, contre
+39,4 Kio avant ce changement).
+
 ## Structure de l’API
 
 ### Organisation par module
