@@ -124,7 +124,7 @@ La skill principale la plus importante est aussi celle que vous invoquerez le mo
 
 - lire l'étiquette de complexité du ticket — `bug`, `low`, `medium` ou `complex` — et adapter le niveau de contrôle ;
 - lire le preset configuré : Team utilise sept statuts et Solo en utilise cinq ; Custom enregistre une configuration avancée ;
-- connaître les actions obligatoires et les critères de sortie livrés pour les statuts Team et Solo ;
+- lire un document par statut, avec ses étapes et ses critères de sortie, pour les presets Team et Solo ;
 - interdire à l'agent d'inventer un raccourci hors des parcours protégés ;
 - appeler la **skill d'outil du workflow** correspondante pour déplacer réellement le ticket sur le tableau.
 
@@ -135,9 +135,12 @@ GitHub Projects porte le workflow V1 complet. Les adaptateurs Jira et Linear son
 ```bash
 /sf-workflow status 42                # Quel est le statut du ticket 42 et quelle est la suite ?
 /sf-workflow detect-complexity 42     # Suggérer une complexité depuis sa description
-/sf-workflow validate 42              # Le ticket peut-il avancer ?
 /sf-workflow next 42                  # Quelle est exactement la prochaine action ?
 ```
+
+**Contenu de la skill** : un `SKILL.md` court (comment déplacer un ticket, les garde-fous, l'axe de nature, la hiérarchie des tickets, la règle de la pull request brouillon), un document par statut
+sous `statuses/`, et les fichiers qu'un agent n'ouvre que lorsqu'un cas l'exige : `reference/delegation.md` (confier du travail à un autre agent), `reference/ui-gate.md` (tickets étiquetés `ui`),
+`reference/pull-requests.md` (plusieurs tickets dans une pull request, PR empilées, tickets de release, écouteur de revue) et `escape-hatches.md` (les échappatoires, qui appartiennent au développeur).
 
 **La configuration réside dans `.saasfoundry.json`** : branches, cible des PR, noms des statuts et format des commits. La politique de branche et de cible est lue depuis ce contrat. En v1, renommer
 arbitrairement un statut exige aussi des documents de statut et des garde-fous adaptés ; modifier le manifeste seul ne les génère pas.

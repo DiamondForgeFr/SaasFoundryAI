@@ -88,7 +88,7 @@ The required exploration agents are read-only and may share the active checkout.
 with explicit file ownership. Coupled or overlapping implementation remains sequential in one feature worktree. The configured base branch comes from `workflow.workingBranch` in `.saasfoundry.json`.
 
 Each delegation names a task kind (`exploration` for the analysis, `review` for the adversarial review) that the agent resolves with
-[`sf agents route`](../cli/sf-agents.md#delegation-routing-sf-agents-route) to pick the tier agent. The workflow skill's "Delegation routing" section holds the rule.
+[`sf agents route`](../cli/sf-agents.md#delegation-routing-sf-agents-route) to pick the tier agent. The "Delegation routing" section of the workflow skill's `reference/delegation.md` holds the rule.
 
 ### 🔴 Complex
 

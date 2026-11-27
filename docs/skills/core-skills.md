@@ -124,7 +124,7 @@ The most important core skill — and the one you will invoke least often explic
 
 - Reads the ticket's complexity label (`bug` / `low` / `medium` / `complex`) and adjusts ceremony
 - Reads the configured preset: Team uses seven statuses and Solo uses five; Custom stores an advanced status configuration
-- Knows the mandatory actions and exit conditions shipped for the Team and Solo statuses
+- Reads one document per status, with its steps and its exit conditions, for the Team and Solo presets
 - Enforces the guarded Team or Solo route — an agent cannot invent an unapproved shortcut
 - Invokes the relevant **workflow tool skill** (`sf-tool-github-projects`, `sf-tool-jira`, etc.) to actually move the ticket on your board
 
@@ -133,9 +133,12 @@ The most important core skill — and the one you will invoke least often explic
 ```bash
 /sf-workflow status 42                # What status is ticket 42 in? What's next?
 /sf-workflow detect-complexity 42     # Suggest a complexity tag based on the description
-/sf-workflow validate 42              # Can this ticket move forward?
 /sf-workflow next 42                  # What's the exact next action?
 ```
+
+**What the skill contains**: a short `SKILL.md` (how to move a ticket, the guards, the nature axis, the ticket hierarchy, the draft pull request rule), one document per status under `statuses/`, and
+the files an agent opens only when a case needs them: `reference/delegation.md` (handing work to another agent), `reference/ui-gate.md` (tickets labelled `ui`), `reference/pull-requests.md` (several
+tickets in one pull request, stacked pull requests, release tickets, the review listener) and `escape-hatches.md` (the hatches that belong to the developer).
 
 **Configuration is in `.saasfoundry.json`** — branch names, PR target, status names, commit format. Branch and target policy is read from that contract. In v1, arbitrary renamed statuses also require
 matching status documents and guard extensions; changing the manifest alone does not generate them.
