@@ -123,11 +123,11 @@ this clone's own override.
   ticket in a worktree it opens with git.
 
 To hand a ticket or a step to another agent, resolve its tier with
-\`sf agents route --task <kind> --provider <current-agent>\` and delegate to the \`sf-<tier>\` agent
-it names: never name a model or an effort yourself, and when the route fails run the step in the
-session, never through another coding agent's CLI or a background session of another host. The
-route, the brief, the delegation record and the hand-backs are in \`reference/delegation.md\` of
-the workflow skill. The agent that receives a ticket builds it itself and never hands it on again;
+\`sf agents route --task <kind> --provider <current-agent> --ticket <n> --record\` (put the
+\`route=<id>\` it prints in the brief) and delegate to the \`sf-<tier>\` agent it names: never name
+a model or an effort yourself, and when the route fails run the step in the session, never through
+another coding agent's CLI or a background session of another host. The brief, the delegation
+record and the hand-backs are in \`reference/delegation.md\` of the workflow skill. The agent that receives a ticket builds it itself and never hands it on again;
 it stops at the end of AI Testing with the pull request still a draft, and never merges, runs
 \`ready-pr\`, records the consent or labels the nature of a ticket (the guard hook of Claude Code
 and Codex refuses those calls).
@@ -167,8 +167,9 @@ const CAPABILITIES_CORE = `## Execution capabilities
 A skill may name tools or hooks that another host lacks: read them as capabilities, and do not
 assume Claude Code hooks, tool permissions or credentials transfer. Run preconditions
 explicitly, and stop to report a missing capability when no equivalent exists. Delegate natively
-when the host can, otherwise execute the same steps sequentially: a sequential self-review is not
-an independent review, so report that limitation and retain any required human review. The
+when the host can and delegation is authorized, otherwise execute the same steps sequentially: a
+sequential self-review is not an independent review, so report that limitation and retain any
+required human review. The
 project manifest and workflow rules take precedence over generic skill examples, including branch
 names, commit formats, staging, pushing and approval requirements. When a guard refuses a
 command, report it and ask: an escape hatch is the developer's to apply, and a hook refuses an

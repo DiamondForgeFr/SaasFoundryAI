@@ -205,7 +205,7 @@ describe('shared agent instructions', () => {
     for (const gone of [
       'SF-DELEGATION',
       'sf agents outcome mark',
-      '--record',
+      '--retry-of',
       'Measured delegations',
       'A `chore` commit',
       'protected one',
@@ -231,7 +231,9 @@ describe('shared agent instructions', () => {
   // #931, FR-MAH-022: a delegation names a task kind and resolves it through the route; the alias a Kimi route prints and the rest are in the skill.
   it('routes delegations through sf agents route, names no model, and never starts another coding agent (#931, FR-MAH-022)', () => {
     const region = flat(GENERATED_INSTRUCTIONS)
-    expect(region).toContain('`sf agents route --task <kind> --provider <current-agent>`')
+    // The route record (#1035): without `--record` a delegation counts for nothing, so the command carries it where the session reads it
+    expect(region).toContain('`sf agents route --task <kind> --provider <current-agent> --ticket <n> --record`')
+    expect(region).toContain('`route=<id>`')
     expect(region).toContain('`sf-<tier>` agent it names')
     expect(region).toContain('never name a model or an effort yourself')
     expect(region).toContain("never through another coding agent's CLI or a background session of another host")
