@@ -32,6 +32,14 @@ et `codex`. Un point d'entrée personnalisé appartenant à un outil non déclar
 Le `AGENTS.md` racine se termine par une région générée, délimitée par `<!-- saasfoundry:generated:start -->` et `<!-- saasfoundry:generated:end -->`. `sf update` et `sf agents enable` ne réécrivent
 que cette région ; le reste du fichier appartient au projet. Un `AGENTS.md` sans ces marqueurs a été écrit par vous et n'est jamais réécrit.
 
+La région contient ce que tout agent lit avant d'ouvrir un skill : éditions de fichiers et appels shell, lecture du statut du projet, le ticket avant le code, le travail d'UI, l'identité de l'agent de
+code, les capacités d'exécution, qui construit un ticket (les états du consentement de la [livraison déléguée des tickets](#livraison-deleguee-des-tickets-sf-agents-delegation)) et les worktrees.
+Chaque règle n'y figure qu'une fois. Ce qu'un skill, un garde-fou ou la CLI possède déjà est un renvoi qui nomme le cas qui y envoie l'agent : la procédure de délégation (la route, le brief,
+l'enregistrement, les reprises) est `reference/delegation.md` du skill `sf-workflow`, le passage d'un projet au profil `full` est `flows/update.md` du skill `tool-saasfoundry`, et le sens de la ligne
+`local-ci:` de `sf status` est le document de statut AI Testing. Les copies de skills sous `.agents/skills/` s'ouvrent sur les capacités d'exécution et un renvoi vers les règles de délégation et de
+worktree de la région, non sur les règles elles-mêmes. Les trois ponts générés que `sf update` reconnaît à leurs octets (un `AGENTS.md` au-dessus d'un `CLAUDE.md` qui est le vôtre, sa variante
+d'adoption, un `CLAUDE.md` au-dessus d'un `AGENTS.md`) gardent leur texte inchangé.
+
 Le `CLAUDE.md` des projets installés avant ce changement est déplacé dans `AGENTS.md` par [`sf update`](/fr/cli/sf-update#claude-md-passe-dans-agents-md-harness-v4) ; `sf agents` lui-même ne déplace
 ni ne supprime jamais un fichier d'instructions.
 
@@ -489,9 +497,11 @@ et `sf update` conservent le champ.
 Commitez la réponse partagée avec la branche du ticket en cours. Un commit `chore` sur la branche de travail n'est permis que si elle n'exige ni status check ni pull request : après avoir enregistré
 une réponse partagée, la commande lit la protection de la branche de travail (`gh api` sur ses rulesets et sa protection de branche) et ne propose la branche de travail que si elle est connue pour ne
 pas être protégée. Quand un status check ou une pull request est exigé, ou quand la protection ne peut pas être lue, elle nomme la branche du ticket ou une pull request, jamais un commit direct sur
-cette branche. Un worktree créé depuis la branche de travail distante lit `not-asked` d'ici là : le brief de la session à un agent délégué énonce donc l'accord.
+cette branche. Un worktree créé depuis la branche de travail distante lit `not-asked` d'ici là : le brief de la session à un agent délégué énonce donc l'accord. Les instructions générées ne répètent
+pas la règle de commit : la commande l'affiche.
 
-Les instructions générées indiquent ensuite à chaque agent quoi faire de la réponse effective :
+Les instructions générées indiquent ensuite à chaque agent quoi faire de la réponse effective, une seule fois, dans le texte que toute session lit avant son premier ticket (`reference/delegation.md`
+du skill workflow y renvoie et n'en répète rien) :
 
 - `not-asked` : demander une seule fois au développeur, puis enregistrer la réponse. Ne jamais redemander une fois qu'elle est enregistrée.
 - `allowed` : chaque ticket non trivial, de In progress à la fin d'AI Testing (plan de test, tests, rapport et pull request en brouillon), s'exécute dans un agent en arrière-plan, dans son propre

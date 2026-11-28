@@ -21,17 +21,17 @@ nowhere else: delete body sections (`Auto-trigger keywords`, `When to activate`)
 
 Each rule has one owner; every other mention is a pointer, never a copy. The environment is a source of truth too: do not restate what `package.json`, `--help` or a config file says.
 
-| Rule family                                         | Owner                                                                   |
-| --------------------------------------------------- | ----------------------------------------------------------------------- |
-| Session rules, capabilities (generated `AGENTS.md`) | the generated region, rendered from `src/harness/agent-instructions.ts` |
-| Workflow lifecycle, guards, delegation              | `sf-workflow/SKILL.md`                                                  |
-| One status: its steps and exit conditions           | that status's file under `sf-workflow/statuses/`                        |
-| Escape hatches                                      | `sf-workflow/escape-hatches.md`                                         |
-| Board and pull-request commands                     | `sf-tool-github-projects/SKILL.md`                                      |
-| SRS drafting, spawning, evaluation                  | `sf-srs/SKILL.md`                                                       |
-| `sf` CLI orchestration, discovery, feedback         | `tool-saasfoundry/SKILL.md`                                             |
-| Integration grammar of the generated stack          | `sf-integration-rules/`                                                 |
-| Rules of this repository only                       | the hand-written part of this repository's `AGENTS.md`                  |
+| Rule family                                                                              | Owner                                                                   |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Session rules, capabilities, who builds a ticket (the consent states), worktrees         | the generated region, rendered from `src/harness/agent-instructions.ts` |
+| Workflow lifecycle, guards, the procedure of a delegation (route, brief, record)         | `sf-workflow/SKILL.md` and its `reference/` files                       |
+| One status: its steps and exit conditions                                                | that status's file under `sf-workflow/statuses/`                        |
+| Escape hatches                                                                           | `sf-workflow/escape-hatches.md`                                         |
+| Board and pull-request commands                                                          | `sf-tool-github-projects/SKILL.md`                                      |
+| SRS drafting, spawning, evaluation                                                       | `sf-srs/SKILL.md`                                                       |
+| `sf` CLI orchestration, discovery, feedback, the move of a project to the `full` profile | `tool-saasfoundry/SKILL.md` and its `flows/` files                      |
+| Integration grammar of the generated stack                                               | `sf-integration-rules/`                                                 |
+| Rules of this repository only                                                            | the hand-written part of this repository's `AGENTS.md`                  |
 
 ### Each step ends on a completion criterion
 
@@ -99,7 +99,9 @@ A single `.claude/` at the repository root holds every skill; `apps/api` and `ap
 profile in `sf agents catalog --json`: the directories the agent's own documentation says it scans, with that page as evidence. A project whose declared agents all read `.claude/skills/` (Claude Code
 alone) gets no copy.
 
-The copy translates Claude-only prose (`$ARGUMENTS`, the Task tool, `PARALLEL ONLY`, `` !`cmd` `` injection where the `!` opens the span) and copies fenced blocks and inline code byte for byte.
+The copy translates Claude-only prose (`$ARGUMENTS`, the Task tool, `PARALLEL ONLY`, `` !`cmd` `` injection where the `!` opens the span) and copies fenced blocks and inline code byte for byte. Each
+projected `SKILL.md` opens with the execution capabilities and one pointer to the delegation and worktree rules of the generated region (about 1.2 KB), never with the rules themselves: every host that
+reads the skill reads `AGENTS.md` too.
 
 Never edit a file under `.agents/skills/` by hand: edit the `.claude/skills/` source, then run `sf agents refresh --scope shared` and commit the copies with their `fileHashes`.
 
@@ -114,6 +116,9 @@ A skill reaches an agent from up to four places, and only some are byte-equal:
   `workflow-skill-dogfood.spec.ts` keeps it that way (a rule that only this repository follows goes in its hand-written `AGENTS.md`, never in this file). This repository runs the Solo preset, so its
   `statuses/` folder holds what the template keeps under `statuses-solo/` (the guard covers those). The `.agents/skills/` copies add the capabilities text (`sf agents refresh` writes them).
   `tool-saasfoundry` is a symlink to its template.
+- **Frozen.** The three generated bridges (an `AGENTS.md` over a `CLAUDE.md` the project owns, its adoption variant, a `CLAUDE.md` over an `AGENTS.md`) keep their bytes: the CLI recognises them by
+  those bytes, so their text lives in `src/harness/legacy-bridge-instructions.ts`, apart from the region and the projection, and `legacy-bridge-instructions.spec.ts` holds its hashes. A bridge changes
+  with a release whose bytes are captured first (`src/__tests__/fixtures/released-bridges/README.md`), never as a side effect of rewording the region.
 - **Measured per surface.** The skill check (below) sizes each of these separately, so a shrink is credited where it lands.
 
 ### Current Skills Inventory
