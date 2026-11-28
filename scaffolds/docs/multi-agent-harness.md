@@ -17,9 +17,10 @@ existing harness, `installAgentInstructions` adds the instruction surfaces witho
 manifest inventory and declared profiles determine active support. A custom entrypoint owned by an undeclared tool, such as an existing `GEMINI.md`, is preserved and does not block onboarding another
 tool.
 
-The root `AGENTS.md` ends with a generated region between `<!-- saasfoundry:generated:start -->` and `<!-- saasfoundry:generated:end -->`: file-edit and shell hygiene, managed project capabilities,
-coding-agent identity and onboarding, and execution capabilities. `sf update` and `sf agents enable` rewrite only that region; the rest of the file belongs to the project. An `AGENTS.md` without the
-markers is user-written and never rewritten.
+The root `AGENTS.md` ends with a generated region between `<!-- saasfoundry:generated:start -->` and `<!-- saasfoundry:generated:end -->`: file-edit and shell hygiene, how to read the project status,
+the ticket before the code, UI work, coding-agent identity and onboarding, execution capabilities, who builds a ticket and worktrees. Each rule lives once: what a skill already owns (the delegation
+procedure, the move to the `full` profile, the AI Testing checks) is a pointer to it. `sf update` and `sf agents enable` rewrite only that region; the rest of the file belongs to the project. An
+`AGENTS.md` without the markers is user-written and never rewritten.
 
 The generated region contains the onboarding contract. The host supplies its coding-tool identity; the agent never infers identity from a model/provider, executable, project
 files, or PATH. If that tool is undeclared, inspect `sf agents list --json` and let the user choose add, exact replacement with a named non-empty set, or no change. Ask for local versus shared scope

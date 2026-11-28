@@ -31,6 +31,13 @@ undeclared tool, such as an existing `GEMINI.md`, is preserved and does not bloc
 The root `AGENTS.md` ends with a generated region between `<!-- saasfoundry:generated:start -->` and `<!-- saasfoundry:generated:end -->`. `sf update` and `sf agents enable` rewrite only that region;
 the rest of the file belongs to the project. An `AGENTS.md` without these markers was written by you and is never rewritten.
 
+The region holds what every agent reads before it opens a skill: file edits and shell calls, how to read the project status, the ticket before the code, UI work, the coding-agent identity, the
+execution capabilities, who builds a ticket (the consent states of [delegated ticket delivery](#delegated-ticket-delivery-sf-agents-delegation)) and worktrees. Each rule lives once. What a skill, a
+guard or the CLI already owns is a pointer that names the case sending the agent there: the delegation procedure (the route, the brief, the record, the hand-backs) is `reference/delegation.md` of the
+`sf-workflow` skill, the move of a project to the `full` profile is `flows/update.md` of the `tool-saasfoundry` skill, and what the `local-ci:` line of `sf status` means is the AI Testing status
+document. The skill copies under `.agents/skills/` open with the execution capabilities and a pointer to the delegation and worktree rules of the region, not with the rules themselves. The three
+generated bridges that `sf update` recognises by their bytes (an `AGENTS.md` over a `CLAUDE.md` you own, its adoption variant, a `CLAUDE.md` over an `AGENTS.md`) keep their text unchanged.
+
 Projects installed before this change have their `CLAUDE.md` moved into `AGENTS.md` by [`sf update`](/cli/sf-update#claude-md-moves-to-agents-md-harness-v4); `sf agents` itself never moves or deletes
 an instruction file.
 
@@ -460,9 +467,10 @@ nothing and keeps its date; the opposite answer replaces it. `sf agents enable`,
 Commit the shared answer with the current ticket's branch. A `chore` commit on the working branch is only for a branch with no required status check or pull request: after recording a shared answer,
 the command reads the working branch's protection (`gh api` on its rulesets and branch protection) and offers the working branch only when it is known to be unprotected. When a required status check
 or pull request applies, or when the protection cannot be read, it names the ticket branch or a pull request, never a direct commit there. A worktree cut from the remote working branch reads
-`not-asked` until then, so the session's brief to a delegated agent states the consent.
+`not-asked` until then, so the session's brief to a delegated agent states the consent. The generated instructions do not repeat the commit rule: the command prints it.
 
-The generated instructions then tell every agent what to do with the effective answer:
+The generated instructions then tell every agent what to do with the effective answer, once, in the text every session reads before its first ticket (`reference/delegation.md` of the workflow skill
+points there and repeats none of it):
 
 - `not-asked`: ask the developer once, then record the answer. Never ask again once it is recorded.
 - `allowed`: each ticket that is not trivial, from In progress to the end of AI Testing (test plan, tests, report and draft pull request), runs in a background agent in its own worktree, on the tier
