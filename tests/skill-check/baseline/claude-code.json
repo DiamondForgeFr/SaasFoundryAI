@@ -2333,11 +2333,7 @@
           "pass": true,
           "reasons": [],
           "commands": [".claude/skills/tool-saasfoundry/scripts/detect-env.sh", ".claude/skills/tool-saasfoundry/scripts/read-poc.sh ."],
-          "filesRead": [
-            ".claude/skills/tool-saasfoundry/SKILL.md",
-            "/private/var/folders/vh/glhgyv1170z1tg-vw005fjrc0000gn/T/skill-check-GOsRTy/fixtures/poc-folder/README.md",
-            "/private/var/folders/vh/glhgyv1170z1tg-vw005fjrc0000gn/T/skill-check-GOsRTy/fixtures/poc-folder/package.json"
-          ],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md", "<fixture>/README.md", "<fixture>/package.json"],
           "forbiddenHits": [],
           "answer": "Guard: the `tool-saasfoundry` skill says to read the code first (read-only), and never move it or run `sf new` before you've confirmed the reading and answered the profile question. (My reads of `README.md` and `package.json` were denied, so I haven't seen the prototype's contents.)\nI'd ask first: is this a throwaway prototype you'll rewrite (`full`: it can move into `POC/`, after a plan you approve), or code you're keeping and building on (`harness`: nothing moves)?\nAfter the script runs, I'd tell you what it found, or why it can't tell, and have you correct it before challenging your intent.",
           "costUsd": 0.14524369999999998,
@@ -2359,11 +2355,7 @@
           "pass": true,
           "reasons": [],
           "commands": [".claude/skills/tool-saasfoundry/scripts/detect-env.sh", ".claude/skills/tool-saasfoundry/scripts/read-poc.sh ."],
-          "filesRead": [
-            ".claude/skills/tool-saasfoundry/SKILL.md",
-            "/private/var/folders/vh/glhgyv1170z1tg-vw005fjrc0000gn/T/skill-check-GOsRTy/fixtures/poc-folder/README.md",
-            "/private/var/folders/vh/glhgyv1170z1tg-vw005fjrc0000gn/T/skill-check-GOsRTy/fixtures/poc-folder/package.json"
-          ],
+          "filesRead": [".claude/skills/tool-saasfoundry/SKILL.md", "<fixture>/README.md", "<fixture>/package.json"],
           "forbiddenHits": [],
           "answer": "I rely on the skill's POC intake: read first (read-only), and let `read-poc.sh` decide `recognisable`. Nothing moves and no `sf new` runs until you've confirmed the reading and answered the profile question.\nAfter the read, I'd show you what it found for correction (if `recognisable` is false, I'd give its reason rather than guess).\nThen I'd ask: is this a throwaway prototype you'll rewrite (`full`, moved into `POC/` only after you approve the plan), or code you're keeping and building on (`harness`, nothing moves)?\nMy reads of `README.md` and `package.json` were denied, so I haven't seen what the prototype does; I only listed the files and loaded the skill.",
           "costUsd": 0.1221559,

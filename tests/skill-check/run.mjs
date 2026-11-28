@@ -27,6 +27,7 @@ import {
   scoreScenario,
   selectScenarios
 } from './lib/replay.mjs'
+import { findOutsideReads, makeRedactor, pathRoots, redactResults } from './lib/privacy.mjs'
 import { DEFAULT_ROOT, UsageError, dataDir, formatJson, parseArgs, readJson } from './lib/util.mjs'
 import { validateData } from './lib/validate.mjs'
 
@@ -49,16 +50,19 @@ Layer 2, a real agent, run by a session and never by CI:
            [--plan]                              print how many model runs this is, and stop
            [--dry-run]                           print the invocations and their environment, and stop
            [--confirm]                           required to start a real agent: it spends tokens
-           [--agent-home inherit]                give the agent your HOME (a login stored there); weaker isolation
+           [--agent-home inherit]                give the agent your HOME (a login stored there); the credential paths stay denied
            [--fixtures-dir <dir>] [--keep-fixtures] [--timeout-sec 600] [--max-budget-usd 1.5]
            [--fake-responses <file>]             answers for --runner fake
+                                                 exit 1 when an agent read or searched a path outside its fixture
   compare  <before.json> <after.json>          files read, commands planned, forbidden tokens; exit 1 on a regression
   merge    <base.json> <rerun.json> --out <f> --reason "<why>"
                                                a full run with some scenarios replaced by a rerun of them (after a recalibration)
+  redact   <results.json> --out <f>            rewrite the absolute paths of a results file (<fixture>, <scratch>, <tmp>, ~)
   parse    --runner <claude|codex> --file <f>  what the runner takes from a recorded stream (debugging a runner)
 
+Results files never hold an absolute path of the machine: run and merge write them redacted.
 Common: --root <dir> (default: this repository), --json.
-Exit codes: 0 ok, 1 the check failed or a scenario regressed, 2 usage error.
+Exit codes: 0 ok, 1 the check failed, a scenario regressed or an agent read outside its fixture, 2 usage error.
 `
 
 const SECRET_NAMES = /TOKEN|SECRET|PASSWORD|API_KEY|CREDENTIAL/i
@@ -92,7 +96,9 @@ export async function main(argv) {
     case 'compare':
       return cmdCompare(parseArgs(rest, common))
     case 'merge':
-      return cmdMerge(parseArgs(rest, { booleans: ['json'], strings: ['out', 'reason'] }))
+      return cmdMerge(parseArgs(rest, { booleans: ['json'], strings: ['root', 'out', 'reason'] }))
+    case 'redact':
+      return cmdRedact(parseArgs(rest, { booleans: ['json'], strings: ['root', 'out'] }))
     case 'parse':
       return cmdParse(parseArgs(rest, { booleans: ['json'], strings: ['runner', 'file', 'cwd', 'last-message'] }))
     default:
@@ -232,7 +238,15 @@ async function cmdRun(opts) {
         const invocation =
           runner === 'fake'
             ? { command: 'fake', args: [], tools: [] }
-            : buildInvocation(runner, { prompt: composePrompt(config, scenario), cwd: `<fixture ${scenario.fixture}>`, model: opts.model, config, outFile: '<scratch>/last-message.txt' })
+            : buildInvocation(runner, {
+                prompt: composePrompt(config, scenario),
+                cwd: `<fixture ${scenario.fixture}>`,
+                model: opts.model,
+                config,
+                outFile: '<scratch>/last-message.txt',
+                // The real HOME is never printed: its rules are shown with a placeholder.
+                realHome: inheritHome ? undefined : '/<real HOME>'
+              })
         const env = runner === 'fake' ? {} : agentEnv(runner, parentEnv, { home: '<scratch home>', inheritHome })
         return {
           scenario: scenario.id,
@@ -253,7 +267,11 @@ async function cmdRun(opts) {
     if (runner !== 'fake' && !opts.confirm) {
       throw new UsageError(`this starts ${matrix.runs} real agent run(s) and spends tokens. Check it with --plan, then add --confirm.`)
     }
-    if (inheritHome) process.stderr.write('warning: --agent-home inherit gives the agent your real HOME. Its tools are read-only, but a login or a credential file stored there is in its reach.\n')
+    if (inheritHome) {
+      process.stderr.write(
+        `warning: --agent-home inherit gives the agent your real HOME, for the login stored there. ${runner === 'claude' ? 'Its file tools stay confined to the fixture and the credential paths of replay.json are denied.' : 'Codex gets no deny rule: its read-only sandbox can read any file your user can (see the README).'}\n`
+      )
+    }
 
     const useFixtures = (opts.fixtures ?? (runner === 'fake' ? 'none' : 'generate')) === 'generate'
     const fixtureIds = [...new Set(selected.map((s) => s.fixture))]
@@ -274,13 +292,23 @@ async function cmdRun(opts) {
             maxBudgetUsd: opts.maxBudgetUsd
           })
 
+    // Every path a results file or a log line carries goes through this first: the repository is public (#1360).
+    const commonRoots = pathRoots({ fixtures: fixturesDir, scratch, repo: root, home: parentEnv.HOME })
+    const fixtureDirs = Object.fromEntries(Object.entries(fixtures).map(([id, fixture]) => [id, fixture.dir]))
     const jobs = selected.flatMap((scenario) => Array.from({ length: repeat }, (_, index) => ({ scenario, index })))
     const done = await pool(jobs, Number(opts.concurrency ?? config.concurrency), async ({ scenario, index }) => {
       const cwd = fixtures[scenario.fixture]?.dir ?? emptyDir
       const result = await run({ scenario, prompt: composePrompt(config, scenario), cwd, index }).catch((error) => ({ text: '', filesRead: [], error: String(error?.message ?? error) }))
       const scored = scoreRun(scenario, config, result)
+      // Checked on the paths as the agent gave them, before any redaction: a path outside the fixture flags the run.
+      const errored = new Set(result.erroredPaths ?? [])
+      const outsideReads = findOutsideReads([...(result.filesRead ?? []), ...(result.searched ?? [])], cwd).map((path) => ({ path, errored: errored.has(path) }))
       process.stderr.write(`${scored.pass ? 'pass' : 'FAIL'} ${scenario.id} #${index + 1}${scored.pass ? '' : `  ${scored.reasons.map((r) => r.code).join(',')}`}\n`)
-      return { scenario, index, run: { ...scored, costUsd: result.costUsd, durationMs: result.durationMs, model: result.model, error: result.error } }
+      if (outsideReads.length > 0) {
+        const redact = makeRedactor({ roots: [...pathRoots({ fixture: cwd }), ...commonRoots], fixtureId: scenario.fixture })
+        process.stderr.write(`OUTSIDE ${scenario.id} #${index + 1}: ${outsideReads.map((item) => `${redact(item.path)}${item.errored ? ' (errored)' : ''}`).join(', ')}\n`)
+      }
+      return { scenario, index, run: { ...scored, outsideReads, costUsd: result.costUsd, durationMs: result.durationMs, model: result.model, error: result.error } }
     })
 
     const results = selected.map((scenario) => {
@@ -311,6 +339,7 @@ async function cmdRun(opts) {
         scenarios: results.length,
         passed: results.filter((r) => r.passed).length,
         failed: results.filter((r) => !r.passed).length,
+        outsideRuns: results.reduce((sum, r) => sum + r.outsideRuns, 0),
         costUsd: Number(
           results
             .flatMap((r) => r.runs)
@@ -319,16 +348,22 @@ async function cmdRun(opts) {
         )
       }
     }
+    const redacted = redactResults(doc, { roots: commonRoots, fixtureDirs })
     if (opts.out) {
       mkdirSync(dirname(resolve(opts.out)), { recursive: true })
-      writeFileSync(resolve(opts.out), `${formatJson(doc)}\n`)
+      writeFileSync(resolve(opts.out), `${formatJson(redacted)}\n`)
     }
+    const outside = doc.totals.outsideRuns
     const human = [
-      ...results.map((r) => `${r.passed ? 'PASS' : 'FAIL'} ${r.id}  (${r.passRuns}/${repeat}${r.forbiddenRuns ? `, forbidden on ${r.forbiddenRuns}` : ''})`),
-      `${doc.totals.passed}/${doc.totals.scenarios} scenarios pass, ${jobs.length} runs, cost ${doc.totals.costUsd} USD${opts.out ? `, written to ${opts.out}` : ''}`
+      ...results.map(
+        (r) =>
+          `${r.passed ? 'PASS' : 'FAIL'} ${r.id}  (${r.passRuns}/${repeat}${r.forbiddenRuns ? `, forbidden on ${r.forbiddenRuns}` : ''}${r.outsideRuns ? `, read outside its fixture on ${r.outsideRuns}` : ''})`
+      ),
+      `${doc.totals.passed}/${doc.totals.scenarios} scenarios pass, ${jobs.length} runs, cost ${doc.totals.costUsd} USD${opts.out ? `, written to ${opts.out}` : ''}`,
+      ...(outside ? [`OUTSIDE: ${outside} run(s) read or searched a path outside their fixture (outsideReads in the results); exit 1`] : [])
     ].join('\n')
-    emit(opts, doc, human)
-    return 0
+    emit(opts, redacted, human)
+    return outside ? 1 : 0
   } finally {
     if (!opts.keepFixtures) rmSync(scratch, { recursive: true, force: true })
   }
@@ -339,7 +374,9 @@ function cmdMerge(opts) {
   const [basePath, rerunPath] = opts._
   if (!basePath || !rerunPath || !opts.out) throw new UsageError('merge needs <base.json> <rerun.json> --out <file> --reason "<why>"')
   for (const path of [basePath, rerunPath]) if (!existsSync(path)) throw new UsageError(`no such file: ${path}`)
-  const merged = mergeResults(JSON.parse(readFileSync(basePath, 'utf8')), JSON.parse(readFileSync(rerunPath, 'utf8')), { reason: opts.reason })
+  const merged = redactResults(mergeResults(JSON.parse(readFileSync(basePath, 'utf8')), JSON.parse(readFileSync(rerunPath, 'utf8')), { reason: opts.reason }), {
+    roots: machineRoots(opts)
+  })
   mkdirSync(dirname(resolve(opts.out)), { recursive: true })
   writeFileSync(resolve(opts.out), `${formatJson(merged)}\n`)
   const rerun = merged.meta.sources[1]
@@ -349,6 +386,31 @@ function cmdMerge(opts) {
     `${merged.totals.passed}/${merged.totals.scenarios} scenarios pass; ${rerun.replaces.length} replaced by the rerun of ${rerun.commit.slice(0, 8)} (${rerun.replaces.join(', ')}); ${merged.meta.modelRuns} runs recorded, ${merged.meta.modelRunsSpent} paid, ${merged.meta.costUsdSpent} USD; written to ${opts.out}`
   )
   return 0
+}
+
+/** The folders of this machine a results file written outside a run may name: this checkout, the HOME, the temporary folder. */
+const machineRoots = (opts) => pathRoots({ repo: rootOf(opts), home: process.env.HOME })
+
+/** A results file with its absolute paths rewritten, keys and order kept: how a file recorded before #1360 is cleaned. */
+function cmdRedact(opts) {
+  const [path] = opts._
+  if (!path || !opts.out) throw new UsageError('redact needs <results.json> --out <file> (the same path rewrites it in place)')
+  if (!existsSync(path)) throw new UsageError(`no such file: ${path}`)
+  const doc = JSON.parse(readFileSync(path, 'utf8'))
+  if (doc.kind !== 'results') throw new UsageError(`${path} is not a results file (kind ${JSON.stringify(doc.kind)})`)
+  // The temporary folders are left to the patterns, which know a run's scratch folder and its fixtures in them.
+  const redacted = redactResults(doc, { roots: machineRoots(opts) })
+  mkdirSync(dirname(resolve(opts.out)), { recursive: true })
+  writeFileSync(resolve(opts.out), `${formatJson(redacted)}\n`)
+  const changed = countChangedStrings(doc, redacted)
+  emit(opts, { out: opts.out, stringsRewritten: changed }, `${changed} string(s) rewritten, written to ${opts.out}`)
+  return 0
+}
+
+const countChangedStrings = (before, after) => {
+  if (typeof before === 'string') return before === after ? 0 : 1
+  if (before === null || typeof before !== 'object') return 0
+  return Object.keys(before).reduce((sum, key) => sum + countChangedStrings(before[key], after?.[key]), 0)
 }
 
 /** What the runner would take from a recorded stream: the files read, the answer, the cost. For debugging a runner without starting an agent. */

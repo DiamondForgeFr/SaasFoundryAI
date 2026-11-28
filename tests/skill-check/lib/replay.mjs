@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSyn
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, sep } from 'node:path'
 
+import { claudeDenyRules } from './privacy.mjs'
 import { UsageError, dataDir, readJson } from './util.mjs'
 
 /**
@@ -172,6 +173,7 @@ export function scoreRun(scenario, config, result) {
 export function scoreScenario(scenario, host, config, runs, repeat) {
   const passRuns = runs.filter((run) => run.pass).length
   const forbiddenRuns = runs.filter((run) => run.forbiddenHits.length > 0).length
+  const outsideRuns = runs.filter((run) => (run.outsideReads ?? []).length > 0).length
   return {
     id: scenario.id,
     skill: scenario.skill,
@@ -181,6 +183,7 @@ export function scoreScenario(scenario, host, config, runs, repeat) {
     passed: passRuns >= passThreshold(config, repeat) && forbiddenRuns === 0,
     passRuns,
     forbiddenRuns,
+    outsideRuns,
     runs
   }
 }
@@ -298,6 +301,7 @@ export function mergeResults(base, rerun, { reason }) {
       scenarios: scenarios.length,
       passed: scenarios.filter((item) => item.passed).length,
       failed: scenarios.filter((item) => !item.passed).length,
+      outsideRuns: scenarios.reduce((sum, item) => sum + (item.outsideRuns ?? 0), 0),
       costUsd: roundUsd(runs.reduce((sum, run) => sum + (run.costUsd ?? 0), 0))
     }
   }
@@ -327,7 +331,15 @@ export function agentEnv(runner, parent, { home, inheritHome = false }) {
   return env
 }
 
-export function buildInvocation(runner, { prompt, cwd, model, config, outFile, maxBudgetUsd, maxTurns }) {
+/**
+ * The command line of one agent run. `realHome` is the developer's HOME when the agent is given a scratch one: Claude Code's `~` is then
+ * the scratch folder, so the real credential paths are denied by their absolute spelling as well. With `--agent-home inherit` the
+ * agent's `~` is the real HOME and the `~/` rules cover it.
+ *
+ * Each deny rule is an argument of its own after `--disallowedTools`, the form of the Claude Code CLI reference
+ * (`--disallowedTools "Bash(git log *)" "Edit"`).
+ */
+export function buildInvocation(runner, { prompt, cwd, model, config, outFile, maxBudgetUsd, maxTurns, realHome }) {
   if (runner === 'claude') {
     const c = config.claude
     const args = [
@@ -339,13 +351,13 @@ export function buildInvocation(runner, { prompt, cwd, model, config, outFile, m
       '--tools',
       c.tools.join(','),
       '--disallowedTools',
-      c.denyTools.join(','),
+      ...claudeDenyRules(config, { realHome }),
       '--permission-mode',
       c.permissionMode,
       '--setting-sources',
       'project',
       '--settings',
-      '{"disableAllHooks":true}',
+      JSON.stringify(c.settings ?? { disableAllHooks: true }),
       '--strict-mcp-config',
       '--no-session-persistence',
       '--max-turns',
@@ -365,12 +377,20 @@ export function buildInvocation(runner, { prompt, cwd, model, config, outFile, m
   throw new UsageError(`no invocation for runner ${runner}`)
 }
 
-const KNOWN_FILE = /(?:[\w.-]+\/)*[\w.-]+\.(?:md|sh|json|yml|yaml|toml|ts)\b/g
+// A leading `/` or `~/` is kept, so a path outside the project is seen as one.
+const KNOWN_FILE = /(?:~?\/)?(?:[\w.-]+\/)*[\w.-]+\.(?:md|sh|json|yml|yaml|toml|ts)\b/g
 
-/** Pull what a stream of Claude Code events says: the files it read, its final answer, its cost. */
+/**
+ * Pull what a stream of Claude Code events says: the files it read, its final answer, its cost. Also `searched`, the folders and
+ * absolute patterns Glob and Grep were pointed at, and `erroredPaths`, the paths whose Read, Glob or Grep call came back as an error
+ * (refused by a rule or by the permission mode, or nothing there): what the check of reads outside the fixture needs.
+ */
 export function parseClaudeStream(stdout, cwd) {
   const filesRead = []
-  const out = { text: '', filesRead, model: undefined, costUsd: undefined, error: undefined, turns: undefined }
+  const searched = []
+  const erroredPaths = []
+  const pathOfCall = new Map()
+  const out = { text: '', filesRead, searched, erroredPaths, model: undefined, costUsd: undefined, error: undefined, turns: undefined }
   // The agent reports the real path of a file; a temporary folder is often reached through a symlink (`/var` is `/private/var` on macOS), so both spellings of the project folder are tried.
   const roots = [cwd]
   try {
@@ -394,11 +414,28 @@ export function parseClaudeStream(stdout, cwd) {
     if (event.type === 'assistant') {
       for (const block of event.message?.content ?? []) {
         if (block.type !== 'tool_use') continue
-        if (block.name === 'Read' && block.input?.file_path) filesRead.push(rel(block.input.file_path))
+        if (block.name === 'Read' && block.input?.file_path) {
+          const file = rel(block.input.file_path)
+          filesRead.push(file)
+          if (block.id) pathOfCall.set(block.id, [file])
+        }
+        if (block.name === 'Glob' || block.name === 'Grep') {
+          const paths = []
+          if (typeof block.input?.path === 'string' && block.input.path) paths.push(rel(block.input.path))
+          const pattern = block.input?.pattern
+          if (block.name === 'Glob' && typeof pattern === 'string' && (isAbsolute(pattern) || pattern.startsWith('~') || pattern.startsWith('..'))) paths.push(rel(pattern))
+          searched.push(...paths)
+          if (block.id && paths.length) pathOfCall.set(block.id, paths)
+        }
         if (block.name === 'Skill') {
           const name = block.input?.skill ?? block.input?.command
           if (name) filesRead.push(`.claude/skills/${String(name).replace(/^\//, '')}/SKILL.md`)
         }
+      }
+    }
+    if (event.type === 'user') {
+      for (const block of Array.isArray(event.message?.content) ? event.message.content : []) {
+        if (block.type === 'tool_result' && block.is_error === true && pathOfCall.has(block.tool_use_id)) erroredPaths.push(...pathOfCall.get(block.tool_use_id))
       }
     }
     if (event.type === 'result') {
@@ -459,7 +496,7 @@ export function fakeRunner(responsesPath) {
     const list = responses[scenario.id] ?? responses.default
     if (!list || list.length === 0) return { text: '', filesRead: [], error: `no fake response for ${scenario.id}` }
     const entry = list[index % list.length]
-    return { text: entry.text ?? '', filesRead: entry.filesRead ?? [], model: 'fake', costUsd: 0, durationMs: 0 }
+    return { text: entry.text ?? '', filesRead: entry.filesRead ?? [], searched: entry.searched ?? [], erroredPaths: entry.erroredPaths ?? [], model: 'fake', costUsd: 0, durationMs: 0 }
   }
 }
 
@@ -469,7 +506,7 @@ export function agentRunner(runner, { config, parentEnv, home, inheritHome, mode
     const scratch = mkdtempSync(join(tmpdir(), 'skill-check-run-'))
     const outFile = join(scratch, 'last-message.txt')
     try {
-      const invocation = buildInvocation(runner, { prompt, cwd, model, config, outFile, maxBudgetUsd })
+      const invocation = buildInvocation(runner, { prompt, cwd, model, config, outFile, maxBudgetUsd, realHome: inheritHome ? undefined : parentEnv.HOME })
       const env = agentEnv(runner, parentEnv, { home, inheritHome })
       const done = await execProcess({ ...invocation, cwd, env, timeoutMs })
       const parsed = runner === 'claude' ? parseClaudeStream(done.stdout, cwd) : parseCodexStream(done.stdout, existsSync(outFile) ? readFileSync(outFile, 'utf8') : '')
