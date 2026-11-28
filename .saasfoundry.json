@@ -152,7 +152,7 @@
     ".agents/skills/sf-workflow/scripts/examine.sh": "fa7b4758fb7b973c476998a14b7c34cd25f220e11bc7f468e0251638acf2ffea",
     ".agents/skills/sf-workflow/scripts/plan.sh": "cec9907f9800b41a22251352ef8cc2d589a6e55212f75ce743dcbc1f7a9cbac6",
     ".agents/skills/sf-workflow/SKILL.md": "109b9d1fe993f7b5440a2f4383b3deadb5d8e894a0cec07f252700ef246d4dfa",
-    ".agents/skills/sf-workflow/statuses/1-backlog.md": "d9e73212ba82219e1c73eade04be95835ed6f5ea4f4b4def98de3bea9b1efd77",
+    ".agents/skills/sf-workflow/statuses/1-backlog.md": "8f85751b2dc1371f416d06518c5316fc213485bf6049015b7890f0c4acb1d213",
     ".agents/skills/sf-workflow/workflow-cli.sh": "f4c8ced4d73025bea97fa5d22cd7f2deabb0623e7265d8782339604f5df891dd",
     ".claude/rules/claude-code.md": "2eafdde282421c15bfea3645b722ac0dfffbe0c5c04c3ce7fe3763b341717178",
     ".claude/agents/sf-light.md": "e8304d2408100d144ce2c7919ea559dc04073057385ec1624b531a25e894a05b",
