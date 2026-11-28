@@ -107,14 +107,43 @@ node tests/skill-check/run.mjs compare tests/skill-check/baseline/claude-code.js
 ### What an agent is given
 
 - **Tools.** Claude Code: `Read`, `Glob`, `Grep` and `Skill`, with `Bash`, `Edit`, `Write`, web access and sub-agents removed, `--permission-mode dontAsk` (a read outside the project folder needs a
-  permission, which that mode refuses), no MCP server, no hook, no saved session. Codex: `--sandbox read-only`, `--ephemeral`, `--ignore-user-config`.
+  permission, which that mode refuses), reads outside the working directory blocked by setting, the credential paths denied (below), no MCP server, no hook, no saved session. Codex:
+  `--sandbox read-only`, `--ephemeral`, `--ignore-user-config`.
 - **A project of its own.** Generated into a temporary folder by `bin/sf.js` with a scratch `HOME`, an `npm` that does nothing (no dependency is installed, no network is needed), and every `.env` file
   removed afterwards. The `harness-srs` project declares a Notion SRS directly in its manifest: no token exists, and the replay only plans. The `dogfood` project copies the _tracked_ harness files of
   this repository, never an untracked file.
 - **An allowlisted environment.** `PATH`, `LANG`, `TERM`, `TMPDIR`, a scratch `HOME`, and the one variable each agent reads to log in (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` or
   `ANTHROPIC_AUTH_TOKEN` for Claude Code; `OPENAI_API_KEY` or `CODEX_API_KEY` for Codex). No `GH_TOKEN`, no `SF_PROJECTS_TOKEN`, no Notion, Jira or Linear token. `--dry-run` prints exactly this.
-- A login kept in your real `HOME` (a keychain item, `~/.codex/auth.json`) is out of reach by default. `--agent-home inherit` hands it over, says so, and weakens the isolation: Codex's read-only
-  sandbox can read any file the process can.
+- A login kept in your real `HOME` (a keychain item, `~/.codex/auth.json`) is out of reach by default. `--agent-home inherit` hands it over and says so.
+
+### What `--agent-home inherit` exposes, and what stays blocked
+
+`--agent-home inherit` sets the agent's `HOME` to yours, so Claude Code finds the login of your subscription there and no token has to be generated. What the agent's tools can reach does not change
+with it (#1360):
+
+- **Reads outside the fixture are refused.** Claude Code runs with `--settings '{"disableAllHooks":true,"permissions":{"blockReadsOutsideWorkingDirectories":true}}'` and `--permission-mode dontAsk`:
+  its file tools refuse any path outside the fixture folder, in either mode.
+- **The credential paths are denied by name**, on top of that, in both modes. `replay.json` → `deniedReadPaths` lists them: `~/.ssh/**`, `~/.aws/**`, `~/.gnupg/**`, `~/.config/**`, `~/.netrc`,
+  `~/.npmrc`, `~/.docker/**`, `~/.kube/**`, `~/Library/Keychains/**`, `~/.git-credentials`, `~/.pgpass`, `~/.claude.json`, `~/.claude/.credentials.json`, `~/.codex/**`, and every `.env` and `.env.*`
+  file (`**/.env`, `**/.env.*` in the fixture, `//**/.env`, `//**/.env.*` anywhere). Each becomes a `Read(<path>)` rule of `--disallowedTools`, one argument per rule. Claude Code applies a `Read` deny
+  rule to Read and to the folder Glob and Grep search; a `Glob(<path>)` or `Grep(<path>)` rule is accepted but never matched, so none is written (Claude Code docs, "Configure permissions" → "Read and
+  Edit"). With a scratch `HOME`, `~` is the scratch folder, so the same paths of your real `HOME` are also denied by their absolute spelling (`Read(//Users/<you>/.ssh/**)`); `--dry-run` prints that
+  spelling as `<real HOME>`.
+- **Codex gets no deny rule.** Its read-only sandbox can read any file your user can, and the runner names no path it may not read. Codex's beta permission profiles can deny reads
+  (`permissions.<name>.filesystem` with `"deny"`), but they are selected with `default_permissions`, which does not combine with the `--sandbox read-only` the runner relies on, and no Codex run has
+  been measured to check them. Until that is decided, do not run Codex with `--agent-home inherit`.
+
+What a run does with what the agent touched:
+
+- **A read outside the fixture flags the run.** Every path an agent read, and every folder it pointed Glob or Grep at, is checked against its fixture folder. A path outside it is recorded in the run's
+  `outsideReads` (with `errored: true` when the tool call came back as an error, a refusal included), counted in `outsideRuns` per scenario and in the totals, printed as an `OUTSIDE` line, and the run
+  exits 1. Read the run's answer before trusting it: a prompt injection in a fixture or a skill shows up here first.
+- **Results never hold a path of the machine.** `run` and `merge` rewrite every absolute path before they write: the fixture becomes `<fixture>`, the run's scratch folder `<scratch>`, a temporary
+  folder `<tmp>`, this checkout `<repo>`, and your `HOME`, or any `/Users/<name>` or `/home/<name>`, `~`. `validate` (and the spec) refuse a file under `baseline/` that still holds `/Users/`, `/home/`
+  or `/private/var/folders/`; `node tests/skill-check/run.mjs redact <file> --out <file>` rewrites one recorded before #1360.
+
+None of this stops what the model is told. Whatever the agent reads inside its fixture goes to the model and into the results file, so a fixture never holds a real secret: the generation removes every
+`.env` file and the `dogfood` copy takes tracked files only.
 
 ### Writing a scenario
 

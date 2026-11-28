@@ -1,7 +1,8 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 
+import { MACHINE_PATH } from './privacy.mjs'
 import { DEFAULT_ROOT, UsageError, dataDir, readJson } from './util.mjs'
 
 /** The files of the check, by where they live: [path under tests/skill-check, definition in schema.json]. */
@@ -60,6 +61,9 @@ export async function validateData(root) {
       const kind = readJson(join(baselineDir, name)).kind
       if (!BASELINES[kind]) problems.push(`baseline/${name}: kind ${JSON.stringify(kind)} is neither results nor metrics`)
       else validate(`baseline/${name}`, BASELINES[kind])
+      // This repository is public: a recorded file never holds a path of the machine it ran on (#1360). `run.mjs redact` rewrites one.
+      const leak = readFileSync(join(baselineDir, name), 'utf8').match(MACHINE_PATH)
+      if (leak) problems.push(`baseline/${name}: holds an absolute path of a machine (${leak[0]}…): rewrite it with \`run.mjs redact\``)
     }
   }
   if (problems.length > 0) return problems

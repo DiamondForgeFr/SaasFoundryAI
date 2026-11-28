@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 import { promisify } from 'util'
@@ -76,6 +76,13 @@ const edit = (root: string, file: string, change: (text: string) => string): voi
   const after = change(before)
   if (after === before) throw new Error(`the mutation of ${file} changed nothing`)
   writeFileSync(full, after)
+}
+
+/** The deny rules of a Claude Code invocation: every argument after `--disallowedTools` up to the next flag. */
+function disallowed(args: string[]): string[] {
+  const start = args.indexOf('--disallowedTools') + 1
+  const end = args.findIndex((arg, i) => i >= start && arg.startsWith('--'))
+  return args.slice(start, end === -1 ? undefined : end)
 }
 
 const editLedger = (root: string, skill: string, change: (ledger: { rules: Record<string, unknown>[]; knownBrokenLinks?: Record<string, unknown>[] }) => void): void => {
@@ -171,6 +178,23 @@ describe('skill check, Layer 1: the rule ledger on this repository', () => {
       const ids = new Set(baseline.scenarios.map((scenario) => scenario.id))
       for (const id of ids) expect(list.map((item) => item.id)).toContain(id)
       for (const item of list.filter((entry) => entry.core && entry.hosts.includes('claude-code'))) expect(ids).toContain(item.id)
+    })
+
+    // This repository is public (#1360): no recorded file names a folder of the machine it ran on.
+    it('holds no absolute path of a machine, nor does any other committed file of the check', () => {
+      const MACHINE = /\/Users\/|\/home\/|\/var\/folders\//
+      const files: string[] = []
+      const walk = (dir: string): void => {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name)
+          if (entry.isDirectory()) walk(full)
+          else if (entry.name.endsWith('.json')) files.push(full)
+        }
+      }
+      walk(path.join(REPO_ROOT, 'tests/skill-check'))
+      expect(files).toContain(baselinePath)
+      const leaks = files.filter((file) => MACHINE.test(readFileSync(file, 'utf8'))).map((file) => path.relative(REPO_ROOT, file))
+      expect(leaks).toEqual([])
     })
 
     it('compares with itself without a regression', async () => {
@@ -358,6 +382,19 @@ describe('skill check, Layer 1: it fails when a promise breaks', () => {
     expect(invalid.stdout).toContain('scenarios/dogfood.json')
   })
 
+  it.each(['/Users/someone/.ssh/config', '/home/someone/project/AGENTS.md', '/private/var/folders/ab/cd12ef/T/skill-check-AbC123/fixtures/poc-folder/README.md'])(
+    'validate: refuses a baseline that holds the machine path %s',
+    async (leak) => {
+      const baseline = path.join(root, 'tests/skill-check/baseline/claude-code.json')
+      edit(root, 'tests/skill-check/baseline/claude-code.json', (text) => text.replace('".claude/skills/tool-saasfoundry/SKILL.md"', JSON.stringify(leak)))
+      const outcome = await run(['validate', '--root', root])
+      expect(outcome.code).toBe(1)
+      expect(outcome.stdout).toContain('baseline/claude-code.json: holds an absolute path of a machine')
+      expect((await run(['redact', baseline, '--out', baseline])).code).toBe(0)
+      expect((await run(['validate', '--root', root])).code).toBe(0)
+    }
+  )
+
   it('--only narrows the check to the skills named', async () => {
     edit(root, '.claude/skills/sf-workflow/statuses/3-ai-testing.md', (text) => text.replace(/## Test report/g, '## Results'))
     expect((await check(root, ['--only', 'sf-srs'])).failures).toEqual([])
@@ -481,7 +518,7 @@ describe('skill check, Layer 2: the replay, driven without a model', () => {
       const doc = JSON.parse(readFileSync(merged, 'utf8'))
       const byId = Object.fromEntries(doc.scenarios.map((s: { id: string; passed: boolean; ranOn: string }) => [s.id, [s.passed, s.ranOn]]))
       expect(byId).toEqual({ [WF]: [true, BASE_COMMIT], [CI]: [true, RERUN_COMMIT] })
-      expect(doc.totals).toEqual({ scenarios: 2, passed: 2, failed: 0, costUsd: 1.05 })
+      expect(doc.totals).toEqual({ scenarios: 2, passed: 2, failed: 0, outsideRuns: 0, costUsd: 1.05 })
       expect(doc.meta).toMatchObject({
         commit: RERUN_COMMIT,
         label: 'develop abc',
@@ -763,6 +800,86 @@ describe('skill check, Layer 2: the replay, driven without a model', () => {
     expect(failed.results.scenarios[0].runs[0].reasons).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'RUN_ERROR' })]))
   })
 
+  // #1360. Every path below is synthetic: a HOME made up inside the scratch folder, a file that does not exist. No real file is read.
+  describe('reads outside the fixture, and paths of the machine in the results', () => {
+    const SCENARIO = 'wf-ai-testing-to-review'
+
+    async function replayWithHome(name: string, entries: Record<string, unknown>[]) {
+      const home = path.join(scratch, 'synthetic-home')
+      const responsesPath = path.join(scratch, `${name}.json`)
+      const out = path.join(scratch, `${name}.results.json`)
+      writeFileSync(responsesPath, JSON.stringify({ [SCENARIO]: entries }))
+      const outcome = await run(['run', '--runner', 'fake', '--scenario', SCENARIO, '--repeat', '3', '--fake-responses', responsesPath, '--out', out], { HOME: home })
+      return { outcome, home, out, text: existsSync(out) ? readFileSync(out, 'utf8') : '', results: existsSync(out) ? JSON.parse(readFileSync(out, 'utf8')) : undefined }
+    }
+
+    it('records no read outside the fixture for a run that stays in it, and exits 0', async () => {
+      const { outcome, results } = await replayWithHome('inside', [{ text: GOOD, filesRead: READ }])
+      expect(outcome.code).toBe(0)
+      expect(results.scenarios[0].outsideRuns).toBe(0)
+      expect(results.scenarios[0].runs.map((r: { outsideReads: unknown[] }) => r.outsideReads)).toEqual([[], [], []])
+      expect(results.totals.outsideRuns).toBe(0)
+    })
+
+    it('flags a run that read or searched outside its fixture, says which paths and whether the call errored, and exits 1', async () => {
+      const home = path.join(scratch, 'synthetic-home')
+      const credential = path.join(home, '.ssh', 'id_synthetic')
+      const { outcome, results, text } = await replayWithHome('outside', [
+        { text: GOOD, filesRead: [...READ, credential], searched: ['../neighbour-project'], erroredPaths: [credential] },
+        { text: GOOD, filesRead: READ },
+        { text: GOOD, filesRead: ['.claude/skills/../../../escaped.md', ...READ] }
+      ])
+      expect(outcome.code).toBe(1)
+      expect(outcome.stderr).toContain('OUTSIDE wf-ai-testing-to-review #1: ~/.ssh/id_synthetic (errored), ../neighbour-project')
+      expect(outcome.stdout).toContain('OUTSIDE: 2 run(s)')
+      const [first, second, third] = results.scenarios[0].runs
+      expect(first.outsideReads).toEqual([
+        { path: '~/.ssh/id_synthetic', errored: true },
+        { path: '../neighbour-project', errored: false }
+      ])
+      expect(second.outsideReads).toEqual([])
+      expect(third.outsideReads).toEqual([{ path: '.claude/skills/../../../escaped.md', errored: false }])
+      expect(results.scenarios[0]).toMatchObject({ outsideRuns: 2, passed: true })
+      expect(results.totals.outsideRuns).toBe(2)
+      expect(text).not.toContain(home)
+      expect(outcome.stderr).not.toContain(home)
+    })
+
+    it('writes no absolute path of the machine: HOME becomes ~, a temporary folder <tmp>, a run scratch folder <scratch>, its fixture <fixture>', async () => {
+      const { results, text } = await replayWithHome('redacted', [
+        {
+          text: `${GOOD}\nI looked in /Users/someone-else/projects/app and /home/dev/app, then /private/var/folders/ab/cd12ef/T/other/file.md.`,
+          filesRead: [...READ, '/var/folders/ab/cd12ef/T/skill-check-AbC123/fixtures/harness-solo/AGENTS.md', '/var/folders/ab/cd12ef/T/skill-check-AbC123/fixtures/harness-team/AGENTS.md']
+        }
+      ])
+      expect(text).not.toMatch(/\/Users\/|\/home\/|\/var\/folders\//)
+      const run0 = results.scenarios[0].runs[0]
+      expect(run0.answer).toContain('I looked in ~/projects/app and ~/app, then <tmp>/other/file.md.')
+      // The scenario runs in harness-solo: its own fixture is <fixture>, another one is named under the scratch folder.
+      expect(run0.filesRead).toEqual(expect.arrayContaining(['<fixture>/AGENTS.md', '<scratch>/fixtures/harness-team/AGENTS.md']))
+    })
+
+    it('redact rewrites a recorded file: the fixture of each scenario becomes <fixture>, nothing else changes', async () => {
+      const { out } = await replayWithHome('to-redact', [{ text: GOOD, filesRead: READ }])
+      const doc = JSON.parse(readFileSync(out, 'utf8'))
+      doc.scenarios[0].fixture = 'poc-folder'
+      doc.scenarios[0].runs[0].filesRead.push('/private/var/folders/vh/x0y1z2/T/skill-check-GOsRTy/fixtures/poc-folder/README.md', '/Users/someone/.npmrc')
+      const recorded = path.join(scratch, 'recorded.json')
+      writeFileSync(recorded, JSON.stringify(doc))
+      const rewritten = path.join(scratch, 'rewritten.json')
+      const outcome = await run(['redact', recorded, '--out', rewritten])
+      expect(outcome.code).toBe(0)
+      expect(outcome.stdout).toContain('2 string(s) rewritten')
+      const after = JSON.parse(readFileSync(rewritten, 'utf8'))
+      expect(after.scenarios[0].runs[0].filesRead.slice(-2)).toEqual(['<fixture>/README.md', '~/.npmrc'])
+      after.scenarios[0].runs[0].filesRead.splice(-2)
+      doc.scenarios[0].runs[0].filesRead.splice(-2)
+      expect(after).toEqual(doc)
+      writeFileSync(recorded, JSON.stringify({ kind: 'metrics' }))
+      expect((await run(['redact', recorded, '--out', rewritten])).code).toBe(2)
+    })
+  })
+
   it('compares two results: a scenario that passed and fails now is a regression, a new forbidden token too', async () => {
     const before = await replay('before', answers(GOOD, GOOD, GOOD))
     const same = await replay('same', answers(GOOD, GOOD, GOOD))
@@ -872,6 +989,27 @@ describe('skill check, Layer 2: what the runners take from a recorded stream', (
     expect(parsed.filesRead).toEqual(['.claude/skills/sf-workflow/SKILL.md'])
   })
 
+  it('takes the folders Glob and Grep were pointed at, and the calls that came back as an error', async () => {
+    const stream = path.join(scratch, 'searches.ndjson')
+    const outside = path.join(scratch, 'synthetic-home/.aws/credentials')
+    writeFileSync(
+      stream,
+      lines(
+        { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'g1', name: 'Glob', input: { pattern: '**/*.md', path: path.join(scratch, '.claude/skills') } }] } },
+        { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'g2', name: 'Glob', input: { pattern: '~/.ssh/*' } }] } },
+        { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'g3', name: 'Grep', input: { pattern: 'token', path: '../other-project' } }] } },
+        { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: outside } }] } },
+        { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'r1', is_error: true, content: 'Permission to read denied' }] } },
+        { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'g2', is_error: true, content: 'denied' }] } },
+        { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'g1', content: 'SKILL.md' }] } }
+      )
+    )
+    const parsed = JSON.parse((await run(['parse', '--runner', 'claude', '--file', stream, '--cwd', scratch, '--json'])).stdout)
+    expect(parsed.searched).toEqual(['.claude/skills', '~/.ssh/*', '../other-project'])
+    expect(parsed.filesRead).toEqual(['synthetic-home/.aws/credentials'])
+    expect(parsed.erroredPaths).toEqual(['synthetic-home/.aws/credentials', '~/.ssh/*'])
+  })
+
   it('reports an error the agent itself reported', async () => {
     const stream = path.join(scratch, 'claude-error.ndjson')
     writeFileSync(stream, lines({ type: 'result', subtype: 'error_max_turns', is_error: true, result: 'Reached the turn limit' }))
@@ -887,13 +1025,15 @@ describe('skill check, Layer 2: what the runners take from a recorded stream', (
       lines(
         { type: 'item.completed', item: { type: 'command_execution', command: "sed -n '1,120p' .agents/skills/sf-workflow/statuses/3-ai-testing.md" } },
         { type: 'item.completed', item: { type: 'command_execution', command: 'rg ready-pr ./AGENTS.md' } },
+        { type: 'item.completed', item: { type: 'command_execution', command: 'cat /Users/someone/notes/plan.md ~/.config/tool/settings.json' } },
         { type: 'item.completed', item: { type: 'agent_message', text: 'done' } }
       )
     )
     writeFileSync(last, '```plan\ngit status\n```')
     const parsed = JSON.parse((await run(['parse', '--runner', 'codex', '--file', stream, '--last-message', last, '--json'])).stdout)
     expect(parsed.text).toBe('```plan\ngit status\n```')
-    expect(parsed.filesRead).toEqual(['.agents/skills/sf-workflow/statuses/3-ai-testing.md', 'AGENTS.md'])
+    // A path outside the project keeps its leading `/` or `~/`, so the check of reads outside the fixture sees it.
+    expect(parsed.filesRead).toEqual(['.agents/skills/sf-workflow/statuses/3-ai-testing.md', 'AGENTS.md', '/Users/someone/notes/plan.md', '~/.config/tool/settings.json'])
   })
 
   it('refuses a stream that is not there', async () => {
@@ -930,11 +1070,11 @@ describe('skill check, Layer 2: what an agent would be given', () => {
       expect(invocation.tools.sort()).toEqual(['Glob', 'Grep', 'Read', 'Skill'])
       const args = invocation.args
       expect(args[args.indexOf('--tools') + 1]).toBe('Read,Glob,Grep,Skill')
-      const denied = args[args.indexOf('--disallowedTools') + 1].split(',')
+      const denied = disallowed(args)
       for (const tool of ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch']) expect(denied).toContain(tool)
       expect(args[args.indexOf('--permission-mode') + 1]).toBe('dontAsk')
       expect(args).toEqual(expect.arrayContaining(['--strict-mcp-config', '--no-session-persistence']))
-      expect(args[args.indexOf('--settings') + 1]).toBe('{"disableAllHooks":true}')
+      expect(JSON.parse(args[args.indexOf('--settings') + 1])).toEqual({ disableAllHooks: true, permissions: { blockReadsOutsideWorkingDirectories: true } })
       expect(args).not.toContain('--dangerously-skip-permissions')
       expect(args).not.toContain('--allowedTools')
     }
@@ -977,6 +1117,40 @@ describe('skill check, Layer 2: what an agent would be given', () => {
     const inherit = await dryRun('claude', ['--agent-home', 'inherit'])
     expect(inherit.doc.inheritHome).toBe(true)
     expect((await run(['run', '--runner', 'claude', '--all', '--dry-run', '--agent-home', 'elsewhere'])).code).toBe(2)
+  })
+
+  // #1360: the credential paths of the ticket, which a prompt injection in a fixture or a skill could ask for.
+  const CREDENTIAL_PATHS = ['~/.ssh/**', '~/.aws/**', '~/.gnupg/**', '~/.config/**', '~/.netrc', '~/.npmrc', '~/.docker/**', '~/.kube/**', '~/Library/Keychains/**', '**/.env', '**/.env.*']
+
+  it.each([
+    ['a scratch HOME', []],
+    ['--agent-home inherit', ['--agent-home', 'inherit']]
+  ])('denies Claude Code the credential paths with %s, one Read rule per path and argument', async (_mode, extra) => {
+    const { raw, doc } = await dryRun('claude', extra)
+    for (const invocation of doc.invocations) {
+      const denied = disallowed(invocation.args)
+      for (const credential of CREDENTIAL_PATHS) expect(denied).toContain(`Read(${credential})`)
+      // A Glob(<path>) or Grep(<path>) rule is accepted by Claude Code and never matched; a Read rule covers both tools.
+      expect(denied.filter((rule) => /^(Glob|Grep)\(/.test(rule))).toEqual([])
+      for (const rule of denied) expect(rule).not.toContain(',')
+    }
+    expect(raw).not.toContain('/Users/someone')
+  })
+
+  it('also denies the real HOME by its absolute spelling when the agent has a scratch one, and never prints it', async () => {
+    const scratch = await dryRun('claude')
+    const inherit = await dryRun('claude', ['--agent-home', 'inherit'])
+    const scratchRules = disallowed(scratch.doc.invocations[0].args)
+    for (const credential of CREDENTIAL_PATHS.filter((p) => p.startsWith('~/'))) expect(scratchRules).toContain(`Read(//<real HOME>/${credential.slice(2)})`)
+    expect(disallowed(inherit.doc.invocations[0].args).some((rule) => rule.includes('<real HOME>'))).toBe(false)
+    expect(scratch.raw).not.toContain('/Users/someone')
+  })
+
+  it('declares the credential paths as data, with an anchor Claude Code reads', () => {
+    const replay = JSON.parse(readFileSync(path.join(REPO_ROOT, 'tests/skill-check/replay.json'), 'utf8')) as { deniedReadPaths: string[] }
+    expect(replay.deniedReadPaths).toEqual(expect.arrayContaining(CREDENTIAL_PATHS))
+    // A single leading slash anchors a rule at the working directory, not at the filesystem root.
+    for (const entry of replay.deniedReadPaths) expect(entry).toMatch(/^(~\/|\*\*\/|\/\/)/)
   })
 
   it('declares fixtures with no credential in their recipe and an allowlisted tracked-file copy', () => {
