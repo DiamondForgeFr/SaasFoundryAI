@@ -205,10 +205,11 @@
     },
     {
       "id": "status-backlog",
-      "summary": "Complexity is detected, then persisted with retag before the ticket leaves Backlog",
+      "summary": "Complexity is only suggested by detect-complexity; the developer confirms the level, and retag persists it before the ticket leaves Backlog",
       "owner": "statuses/1-backlog.md",
       "tier": "step",
-      "tokens": ["detect-complexity.sh <ticket>", "retag <ticket>", "get-complexity <ticket>"]
+      "tokens": ["detect-complexity.sh <ticket>", "the developer decides", "retag <ticket>", "get-complexity <ticket>"],
+      "source": "wf-leave-backlog-no-complexity: dropped by the first slimming, 3 of 3 became 1 of 3"
     },
     {
       "id": "status-in-progress-ticket-first",
@@ -281,6 +282,15 @@
       "tier": "step",
       "tokens": ["transition-drafting <ticket> ai-draft", "srs-cli.sh validate --spec <file>"],
       "source": "workflow-cli.srs-drafting.spec.ts"
+    },
+    {
+      "id": "team-backlog",
+      "summary": "Team preset: the same suggestion, the developer's confirmation, then retag, with Ready as the next status",
+      "owner": "statuses/1-backlog.md",
+      "tier": "step",
+      "tokens": ["detect-complexity.sh <ticket>", "the developer decides", "retag <ticket>", "get-complexity <ticket>"],
+      "views": ["template:team"],
+      "source": "wf-leave-backlog-no-complexity"
     },
     {
       "id": "team-ai-testing",

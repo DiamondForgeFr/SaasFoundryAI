@@ -44,7 +44,8 @@ last child is `Done`.
     checkout: off the ticket branch they find the ticket's open pull request on GitHub (`--pr <number>` picks one of several) ([Delegated ticket delivery](../reference/delegation.md)). Findings handed
     back, or work the session had to redo, mean the delegation did not do the job: `sf agents outcome mark <ticket> rework` records it for the routing.
 12. **On green, post the test report** as a ticket comment starting with the heading `## Test report` (layout below; include the Examine findings on a complex ticket), then transition:
-    - `nature:user-facing` (or no `nature:*` label): keep the PR a draft, with the test plan and results in it, then → **Human Testing**. Do not mark it ready: after Human Testing, the developer does.
+    - `nature:user-facing` (or no `nature:*` label): keep the PR a draft, with the test plan and results in it, then → **Human Testing**. Do not mark it ready: after Human Testing, the developer takes
+      it out of draft with the **Ready for review** button.
     - `nature:internal` (the developer labels it): no Human Testing, so the session takes the PR out of draft: `workflow-cli.sh ready-pr <ticket>`, then → **In Review** directly (see "Nature axis" in
       `SKILL.md`). The workflow guard enforces the transition.
     - `nature:bundled-pr`: → **Done** after validation; no individual draft or ready PR. The delivery parent owns the branch, the PR and the human validation.
