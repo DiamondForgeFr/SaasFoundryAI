@@ -31,11 +31,12 @@
       "title": "A trivial change is built in a worktree of its own",
       "fixture": "harness-solo",
       "hosts": ["claude-code", "codex"],
-      "prompt": "`delegation: allowed`. Ticket #51 is a typo in the README, one line in one file. You are the session, and the primary checkout is on the working branch `develop`. Start the work.",
+      "prompt": "`delegation: allowed`. Ticket #51 is a typo in the README, one line in one file. It sits in Backlog with `complexity: low`, which the developer has confirmed, and the developer has given the go. You are the session, and the primary checkout is on the working branch `develop`. Start the work.",
       "expect": {
         "commands": [{ "all": ["git fetch origin"] }, { "all": ["git worktree add"], "any": ["/\\b(feature|fix)\\/51-/"] }],
         "forbidden": ["sf agents route", "git switch", "git stash", "/git checkout\\s+(-b\\s+)?(feature|fix)\\//"]
-      }
+      },
+      "notes": "Calibrated in #1101. The fix of #1099 (39d107bc) restored the developer's confirmation of the complexity in Backlog, so a session that is not told the level is set now stops to ask for it before any worktree: right, and not what this scenario measures. The prompt states the level, its confirmation and the go. A control run on develop 62c93ce0, without the #1101 change, failed the earlier prompt 0 of 3 (STEP_MISSING on `git fetch origin` and `git worktree add`)."
     },
     {
       "id": "ag-undeclared-agent",
