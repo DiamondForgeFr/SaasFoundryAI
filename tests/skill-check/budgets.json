@@ -4,22 +4,22 @@
   "unit": "bytes",
   "roundTo": 1024,
   "measuredAt": {
-    "commit": "838b821f85cc88fe5c73b1cab0f76461825fbd26",
-    "date": "2026-11-27"
+    "commit": "39d107bc8a485628d1364ce0149ad7e1e31beca6",
+    "date": "2026-11-28"
   },
   "ceilings": {
     "sf-workflow": {
       "template:solo": {
         "entry": 13312,
-        "total": 124928,
+        "total": 122880,
         "files": {
           "SKILL.md": 13312,
           "complexity/README.md": 19456,
           "escape-hatches.md": 38912,
-          "reference/delegation.md": 12288,
+          "reference/delegation.md": 10240,
           "reference/pull-requests.md": 6144,
           "reference/ui-gate.md": 6144,
-          "statuses/2-in-progress.md": 7168,
+          "statuses/2-in-progress.md": 6144,
           "statuses/3-ai-testing.md": 7168,
           "statuses/4-in-review.md": 4096,
           "statuses/5-done.md": 3072
@@ -27,15 +27,15 @@
       },
       "template:team": {
         "entry": 13312,
-        "total": 133120,
+        "total": 130048,
         "files": {
           "SKILL.md": 13312,
           "complexity/README.md": 19456,
           "escape-hatches.md": 38912,
-          "reference/delegation.md": 12288,
+          "reference/delegation.md": 10240,
           "reference/pull-requests.md": 6144,
           "reference/ui-gate.md": 6144,
-          "statuses/3-in-progress.md": 8192,
+          "statuses/3-in-progress.md": 7168,
           "statuses/4-ai-testing.md": 8192,
           "statuses/5-human-testing.md": 4096,
           "statuses/6-in-review.md": 4096,
@@ -44,31 +44,31 @@
       },
       "repo": {
         "entry": 14336,
-        "total": 125952,
+        "total": 122880,
         "files": {
           "SKILL.md": 14336,
           "complexity/README.md": 19456,
           "escape-hatches.md": 38912,
-          "reference/delegation.md": 12288,
+          "reference/delegation.md": 10240,
           "reference/pull-requests.md": 6144,
           "reference/ui-gate.md": 6144,
-          "statuses/2-in-progress.md": 7168,
+          "statuses/2-in-progress.md": 6144,
           "statuses/3-ai-testing.md": 7168,
           "statuses/4-in-review.md": 4096,
           "statuses/5-done.md": 3072
         }
       },
       "agents": {
-        "entry": 19456,
-        "total": 130048,
+        "entry": 15360,
+        "total": 123904,
         "files": {
-          "SKILL.md": 19456,
+          "SKILL.md": 15360,
           "complexity/README.md": 19456,
           "escape-hatches.md": 38912,
-          "reference/delegation.md": 12288,
+          "reference/delegation.md": 10240,
           "reference/pull-requests.md": 6144,
           "reference/ui-gate.md": 6144,
-          "statuses/2-in-progress.md": 7168,
+          "statuses/2-in-progress.md": 6144,
           "statuses/3-ai-testing.md": 7168,
           "statuses/4-in-review.md": 4096,
           "statuses/5-done.md": 3072
@@ -101,10 +101,10 @@
         }
       },
       "agents": {
-        "entry": 20480,
-        "total": 74752,
+        "entry": 17408,
+        "total": 71680,
         "files": {
-          "SKILL.md": 20480,
+          "SKILL.md": 17408,
           "reference/spawning.md": 5120,
           "templates/examples/example-epic.md": 12288,
           "templates/pages/README.md": 5120,
@@ -142,10 +142,10 @@
         }
       },
       "agents": {
-        "entry": 12288,
-        "total": 12288,
+        "entry": 9216,
+        "total": 9216,
         "files": {
-          "SKILL.md": 12288
+          "SKILL.md": 9216
         }
       }
     },
@@ -171,10 +171,10 @@
         }
       },
       "agents": {
-        "entry": 7168,
-        "total": 72704,
+        "entry": 4096,
+        "total": 69632,
         "files": {
-          "SKILL.md": 7168,
+          "SKILL.md": 4096,
           "backend.md": 28672,
           "frontend.md": 19456,
           "topology.md": 19456
@@ -183,13 +183,13 @@
     },
     "instructions": {
       "repo": {
-        "entry": 29696,
-        "total": 29696,
+        "entry": 25600,
+        "total": 25600,
         "files": {
-          "AGENTS.md": 29696
+          "AGENTS.md": 25600
         },
         "extra": {
-          "region": 14336,
+          "region": 11264,
           "handWritten": 15360
         }
       },

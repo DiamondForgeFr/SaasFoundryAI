@@ -5,16 +5,16 @@
   "rules": [
     {
       "id": "region-execution-capabilities",
-      "summary": "Delegate through the route, never name a model, never start another agent's CLI, never bypass a guard",
+      "summary": "Another host's tools are read as capabilities; the manifest wins over a generic skill example; a guard refusal is reported and the hatch is the developer's",
       "owner": "AGENTS.md",
       "region": "generated",
       "tier": "reference",
-      "tokens": ["## Execution capabilities", "sf agents route --task <kind> --provider <current-agent>", "alias <name>", "An escape hatch is the developer's to apply"],
+      "tokens": ["## Execution capabilities", "not an independent review", "project manifest and workflow rules take precedence", "an escape hatch is the developer's to apply"],
       "source": "agent-instructions.spec.ts"
     },
     {
       "id": "region-session-delivery",
-      "summary": "The session talks and plans; delivery goes to one agent per ticket, in a worktree, once consent is recorded",
+      "summary": "The session talks and plans; delivery goes to one agent per ticket, in a worktree, once consent is recorded; the consent states live here and nowhere else",
       "owner": "AGENTS.md",
       "region": "generated",
       "tier": "reference",
@@ -25,9 +25,13 @@
         "`declined`",
         "sf agents delegation allow",
         "sf agents delegation decline",
-        "A delegated agent never merges"
+        "Only the developer's own reply records consent",
+        "never merges, runs `ready-pr`",
+        "sf agents route --task <kind> --provider <current-agent>",
+        "never name a model or an effort yourself",
+        "reference/delegation.md"
       ],
-      "source": "agent-instructions.spec.ts, delegation-routing.spec.ts"
+      "source": "agent-instructions.spec.ts, delegation-routing.spec.ts, the guard hook (delegation consent, ready-pr, merge)"
     },
     {
       "id": "region-worktrees",
@@ -49,12 +53,12 @@
     },
     {
       "id": "region-profile-transition",
-      "summary": "A managed harness or stack reaches full through a dry-run transition, never sf new inside a repository",
+      "summary": "A managed harness or stack reaches full through the dry-run transition of the tool-saasfoundry skill, never sf new inside a repository",
       "owner": "AGENTS.md",
       "region": "generated",
       "tier": "reference",
-      "tokens": ["## Managed project capabilities", "sf update --target-profile full --dry-run --json"],
-      "source": "agent-instructions.spec.ts"
+      "tokens": ["sf update --target-profile full --dry-run --json", "flows/update.md", "`sf new --profile full` never runs inside an existing repository"],
+      "source": "agent-instructions.spec.ts, preconditions-scaffold.spec.ts; the skill owns the transition (tool-saasfoundry, rule update-never-full-over-repo)"
     },
     {
       "id": "region-reading-status",
@@ -62,8 +66,68 @@
       "owner": "AGENTS.md",
       "region": "generated",
       "tier": "reference",
-      "tokens": ["## Reading the project status", "A `fail` precondition is resolved before any project action", "local-ci:"],
+      "tokens": ["## Reading the project status", "A `fail` precondition is resolved before any project action", "A `cliVersion` warning", "The language of the conversation is not the signal"],
       "source": "agent-instructions.spec.ts"
+    },
+    {
+      "id": "region-local-ci-line",
+      "summary": "What the local-ci line of the status report means, and when a Molten pipeline counts",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["local-ci:", "molten ci status"],
+      "retired": {
+        "reason": "The AI Testing document owns it (step 6, rule status-ai-testing-local-ci), which is where the agent acts on it, and molten-pipeline-rule.spec.ts pins it there; the status line itself says which pipeline counts.",
+        "by": "#1101"
+      }
+    },
+    {
+      "id": "region-test-strategy",
+      "summary": "A delegated agent runs the affected tests while it works and the full suites once, at the end of AI Testing",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["affects while it works", "The brief does not restate this rule"],
+      "retired": {
+        "reason": "The paragraph said itself that the workflow status documents hold the rule: the In progress and AI Testing documents carry it as 'Follow the test strategy' (#1157), pinned by delegation-routing.spec.ts.",
+        "by": "#1101"
+      }
+    },
+    {
+      "id": "region-delegation-commit-details",
+      "summary": "Where the recorded consent is committed: the ticket's branch, a chore commit only on an unprotected working branch",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["A `chore` commit on the working branch", "protected one"],
+      "retired": {
+        "reason": "`sf agents delegation allow|decline` prints where to commit the answer, from the branch protection it reads (#1124, src/commands/agents.ts describeRecord): the guard states it at the moment it applies.",
+        "by": "#1101"
+      }
+    },
+    {
+      "id": "region-delegation-hand-backs",
+      "summary": "The session hands a defect or the AI work left after the validation back to the ticket's agent, and records the measured delegation",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["hands a defect, or AI work left after the validation", "Every delegation is measured"],
+      "retired": {
+        "reason": "reference/delegation.md owns both ('Hand-backs', 'Measured delegations': rules measured-delegations and delegated-delivery of sf-workflow); the region keeps one pointer to it (rule region-session-delivery).",
+        "by": "#1101"
+      }
+    },
+    {
+      "id": "region-capabilities-noops",
+      "summary": "Use the native tools, read legacy /task examples as roles, take the request as skill arguments, assume pre-approved read-only commands",
+      "owner": "AGENTS.md",
+      "region": "generated",
+      "tier": "reference",
+      "tokens": ["Legacy /task examples", "Use the user's current request as skill arguments", "Hosts that support it pre-approve"],
+      "retired": {
+        "reason": "No-ops: the projection translates $ARGUMENTS and the Task tool itself, no skill ships a /task example any more (delegation-routing.spec.ts), a model uses its native tools by default, and the permission allowlist is the host's own rule (.claude/rules/claude-code.md).",
+        "by": "#1101"
+      }
     },
     {
       "id": "region-ticket-first",

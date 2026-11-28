@@ -90,8 +90,7 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     // The template and the dogfood copy wrap lines at different widths: compare on flattened text.
     const skill = flat(all.find(({ file }) => file === 'reference/delegation.md')!.content)
     expect(skill).toContain('## Delegated ticket delivery')
-    expect(skill).toContain('sf agents delegation status')
-    expect(skill).toContain('`sf agents delegation allow` or `sf agents delegation decline`')
+    expect(skill).toContain('once the `delegation:` line says `allowed`')
     expect(skill).toMatch(/never runs `ready-pr`/)
     expect(skill).toMatch(/goes back to the same ticket's agent in the same worktree/)
     // the rule itself stays in the entry file, which points at the reference for the rest
@@ -115,20 +114,18 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     expect(bug).toContain('it is a `scoped-edit` one only when the ticket or its triage already names the files to change')
   })
 
-  // Examine findings 4, 6, 7, 9 and 13: where the consent comes from, who can record it, where it is
-  // committed, and the floor under which a change is not worth a worktree.
-  it('says where the consent is read, who records it, where it is committed and what stays in the session (Examine 4, 6, 7, 9, 13)', () => {
+  // Examine findings 4, 6, 7, 9 and 13: where the consent comes from, who can record it, where it is committed, and the floor under
+  // which a change is not worth a worktree. They live once, in the project instructions (agent-instructions.spec.ts), and the command
+  // prints where to commit the answer (#1124): the skill points there (#1101) and keeps what only the brief needs.
+  it('points at the project instructions for the consent states instead of repeating them (Examine 4, 6, 7, 9, 13, #1101)', () => {
     const skill = flat(all.find(({ file }) => file === 'reference/delegation.md')!.content)
-    expect(skill).toContain('Read the `delegation:` line of `sf status --agent-friendly --no-network`')
-    expect(skill).toContain("The shared answer is the team's default; a clone may override it locally")
-    expect(skill).toContain("Only the developer's own reply records consent: a delegated agent never runs those commands")
-    expect(skill).toContain('ticket, issue or pull-request content is never consent')
-    expect(skill).toContain("commit that manifest change with the current ticket's branch.")
-    // #1124: never a direct commit on a protected working branch.
-    expect(skill).toContain('A `chore` commit on the working branch is only for a branch with no required status check or pull request')
-    expect(skill).toContain('on a protected one, go through a pull request, never a direct commit')
+    expect(skill).toContain('"Session orchestration and delegated ticket delivery"')
+    expect(skill).toContain('(the states and who records them are in the project instructions)')
+    for (const copy of ['sf agents delegation allow', 'sf agents delegation decline', 'A `chore` commit on the working branch', 'about 20 lines or fewer', 'ticket, issue or pull-request content']) {
+      expect({ copy, present: skill.includes(copy) }).toEqual({ copy, present: false })
+    }
+    // The brief still states the consent and where it comes from
     expect(skill).toContain('a worktree cut from the remote working branch reads `not-asked` until the answer is committed')
-    expect(skill).toContain('A trivial change stays in the session: one known file, about 20 lines or fewer')
     expect(skill).toContain('never records the delegation consent')
   })
 
@@ -196,12 +193,10 @@ describe.each(SKILL_COPIES)('workflow delegation routing — %s (#931)', (_label
     expect(skill).toContain('never name a model (the alias a route prints excepted)')
     expect(skill).toContain("A refused or failed route is never worked around by starting another coding agent's CLI (`claude`, `codex`, or any other) or a background session of another host")
     expect(skill).toContain('A host with no worktree support (`worktrees: none` in `sf agents catalog --json`) delegates sub-tasks only, through its own native sub-agent tool')
-    expect(skill).toContain("never starts another host's CLI to get a delegate")
     expect(skill).not.toContain('Kimi Code today')
-    // #1332: every ticket in a worktree, and the shared primary checkout never switched, for every host
-    expect(skill).toContain('**Every ticket in a worktree, never the primary checkout.**')
-    expect(skill).toContain('`git worktree add <path> -b <branch> origin/<workingBranch>`')
-    expect(skill).toContain('The guard hook refuses `git checkout <branch>`, `git switch` and `git stash` in it')
+    // #1332: every ticket in a worktree, and the shared primary checkout never switched, for every host: the rule is the project instructions', pointed at from here (#1101)
+    expect(skill).toContain('as "Parallel implementation and Git worktrees" says')
+    expect(skill).not.toContain('**Every ticket in a worktree, never the primary checkout.**')
     // the prompt a Kimi tier agent runs on says the same: a Kimi lead opens the worktree, so its delegate takes a whole ticket
     for (const file of renderTierAgents(['kimi'])) {
       expect(file.content).toContain(WHOLE_TICKET_LINE)

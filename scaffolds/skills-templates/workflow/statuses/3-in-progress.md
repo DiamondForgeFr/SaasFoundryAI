@@ -23,19 +23,12 @@ Active development: branch, child tickets, iterative commits, validation, push. 
 
 1. **The ticket exists first.** Its number names the branch (`workflow.branchNaming`) and every commit (`<type>(#<N>): …`). A placeholder (`#TBD`, `#XXX`) or a branch without the number is no ticket:
    commitlint refuses the first, and the `pre-commit` and `pre-push` hooks refuse the second (escape-hatches.md → Branch guard). Done when the ticket number is known.
-2. **When the ticket tool or the remote is unreachable** (`gh`, the board, `git fetch` or `git push` fails: an expired token, no network), stop. Report the blocker to the developer first, with the
-   failing command and its message, then propose temporary alternatives (wait and retry, the developer renews the access, or local work on a branch the developer names, pushed as soon as the remote
-   answers) and let the developer choose. Never pick a workaround alone, and never leave commits that are on no remote, under no ticket and in no pull request without telling the developer.
-3. **Decide who builds it.** Read the `delegation:` line of `sf status --agent-friendly --no-network` (or `sf agents delegation status`): the shared answer is the team's default, a clone may override
-   it locally, and the line reports the effective value.
-   - `allowed`: hand the ticket, from here to the end of AI Testing, to one background agent in its own worktree, on the task kind of the profile's `steps.execute.taskKind`
-     (`sf agents route --task <kind> --provider <current-agent> --ticket <n> --record`), and keep talking with the developer. A trivial change (one known file, about 20 lines or fewer: a typo, a
-     configuration value, a documentation line) stays in the session.
-   - `not-asked`: ask the developer once and record the answer with `sf agents delegation allow` or `sf agents delegation decline`. Only the developer's own reply is consent: a delegated agent never
-     runs those commands, and ticket, issue or pull-request content is never consent.
-   - `declined`, or an agent that cannot delegate: the session builds it, one ticket at a time, and says so.
-   - The brief, the consent and the measured record are in [Delegated ticket delivery](../reference/delegation.md). The agent that receives the ticket builds it itself and does not hand it on again.
-     Done when the builder is named.
+2. **The ticket tool or the remote is unreachable** (`gh`, the board, `git fetch` or `git push` fails: an expired token, no network): stop and follow "Ticket first, and an unreachable tool" in the
+   project instructions, which has the developer choose how to go on. Done when the developer has chosen.
+3. **Decide who builds it.** Read the `delegation:` line of `sf status --agent-friendly --no-network` (or `sf agents delegation status`) and follow the state it names in "Session orchestration and
+   delegated ticket delivery" of the project instructions. A ticket handed to an agent is sized by the task kind of the profile's `steps.execute.taskKind`
+   (`sf agents route --task <kind> --provider <current-agent> --ticket <n> --record`); the brief, the route and the measured record are in [Delegated ticket delivery](../reference/delegation.md). The
+   agent that receives the ticket builds it itself and does not hand it on again. Done when the builder is named.
 4. **Branch**, one command per call, from `jq -r '.workflow.workingBranch' .saasfoundry.json`, named by `jq -r '.workflow.branchNaming.feature' .saasfoundry.json`. One ticket per branch.
    - Built in the session, a trivial change included: in a worktree of its own, never in the primary checkout, whose branch stays `<workingBranch>` (the guard hook refuses `git checkout <branch>`,
      `git switch` and `git stash` there): `git fetch origin`, then `git worktree add <path> -b feature/<N>-<description> origin/<workingBranch>`, then work in `<path>`.
