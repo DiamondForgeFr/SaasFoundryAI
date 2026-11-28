@@ -8,8 +8,9 @@ description: "SRS host of the project: draft and write SRS pages (features, vers
 A skill may name tools or hooks that another host lacks: read them as capabilities, and do not
 assume Claude Code hooks, tool permissions or credentials transfer. Run preconditions
 explicitly, and stop to report a missing capability when no equivalent exists. Delegate natively
-when the host can, otherwise execute the same steps sequentially: a sequential self-review is not
-an independent review, so report that limitation and retain any required human review. The
+when the host can and delegation is authorized, otherwise execute the same steps sequentially: a
+sequential self-review is not an independent review, so report that limitation and retain any
+required human review. The
 project manifest and workflow rules take precedence over generic skill examples, including branch
 names, commit formats, staging, pushing and approval requirements. When a guard refuses a
 command, report it and ask: an escape hatch is the developer's to apply, and a hook refuses an

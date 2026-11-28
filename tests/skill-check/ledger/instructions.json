@@ -27,7 +27,7 @@
         "sf agents delegation decline",
         "Only the developer's own reply records consent",
         "never merges, runs `ready-pr`",
-        "sf agents route --task <kind> --provider <current-agent>",
+        "sf agents route --task <kind> --provider <current-agent> --ticket <n> --record",
         "never name a model or an effort yourself",
         "reference/delegation.md"
       ],
