@@ -34,6 +34,7 @@ jest.mock('ora', () => () => {
 import { updateCommand } from '../../../commands/update'
 import { harnessInstallerMeta, installHarness } from '../../../installers/harness.installer'
 import { installSrsSkill } from '../../../installers/srs-skill.installer'
+import { workflowConfigFromPreset } from '../../../prompts/workflow.prompts'
 
 const mockedPrompt = inquirer.prompt as unknown as jest.Mock
 
@@ -109,6 +110,36 @@ describe('updateCommand — harness deposits refresh (FLOW 1b)', () => {
     expect(manifest.version).toBe(cliVersion)
     expect(manifest.modules.harness.version).toBe(harnessInstallerMeta.currentVersion)
     expect(manifest.fileHashes[stalePath]).toBe(hashFileContent(refreshed))
+  })
+
+  // #1341: a Solo project installed before #1354 received the Team wording of the nature guard. The refresh must bring
+  // the Solo rule to both copies an agent reads, the Claude Code skill and the shared `.agents` one, with no migration.
+  it('brings the Solo nature-guard wording to the untouched sf-workflow skill of a Solo project (#1341)', async () => {
+    const { workflow } = workflowConfigFromPreset('solo', 'github-projects')
+    const agents: ('claude-code' | 'codex')[] = ['claude-code', 'codex']
+    const report = await installHarness({ targetPath: projectDir, projectName: 'acme', version: FRESH_VERSION, workflow, agents })
+    const { computeHarnessFileHashes } = jest.requireActual<typeof import('../../../installers/harness.installer')>('../../../installers/harness.installer')
+    const hashes = { ...(await computeHarnessFileHashes(projectDir)), ...report?.fileHashes }
+
+    // What a pre-#1354 CLI deposited: the Team requirement with no preset condition, on disk and as the baseline.
+    const stale = '- **Nature guard** on `→ In Review` from `AI Testing` — requires `nature:internal`.\n'
+    const copies = ['.claude/skills/sf-workflow/SKILL.md', '.agents/skills/sf-workflow/SKILL.md']
+    for (const copy of copies) {
+      await writeFile(join(projectDir, copy), stale)
+      hashes[copy] = hashFileContent(stale)
+    }
+    await writeManifest({ modules: { harness: { version: harnessInstallerMeta.currentVersion, managed: true, agents } }, workflow, fileHashes: hashes })
+
+    await updateCommand({ nonInteractive: true })
+
+    const manifest = await readManifest()
+    for (const copy of copies) {
+      const refreshed = (await readFile(join(projectDir, copy), 'utf8')).replace(/\s+/g, ' ')
+      expect({ copy, solo: refreshed.includes('a workflow without that status (Solo) asks for no label') }).toEqual({ copy, solo: true })
+      expect({ copy, unconditional: refreshed.includes('requires `nature:internal`') }).toEqual({ copy, unconditional: false })
+      expect(existsSync(join(projectDir, `${copy}.saasfoundry.new`))).toBe(false)
+      expect(manifest.fileHashes[copy]).toBe(hashFileContent(await readFile(join(projectDir, copy), 'utf8')))
+    }
   })
 
   it('gives a harness without an agents list its Claude Code tier agents, and leaves its other instruction files alone (#929)', async () => {
