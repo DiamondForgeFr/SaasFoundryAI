@@ -1,7 +1,7 @@
 # Delegating work to another agent
 
-How to route a step, hand a ticket over and record the delegation. The session rule (who builds a ticket, consent, worktrees) is also in the project instructions, "Session orchestration and delegated
-ticket delivery".
+How to route a step, hand a ticket over and record the delegation. The session rules (who builds a ticket and the consent behind it, the worktree of every ticket) are not repeated here: the project
+instructions hold their single copy, "Session orchestration and delegated ticket delivery" and "Parallel implementation and Git worktrees", which every session reads at its start.
 
 ## Delegation routing
 
@@ -30,21 +30,9 @@ Name a **task kind** from the routing grid, never a model or an agent type:
 
 ## Delegated ticket delivery
 
-Read the `delegation:` line of `sf status --agent-friendly --no-network` (or run `sf agents delegation status`). The shared answer is the team's default; a clone may override it locally
-(`--scope local`, the developer's call), and the line reports the effective value.
-
-- `not-asked`: ask the developer once and record the answer with `sf agents delegation allow` or `sf agents delegation decline`, then commit that manifest change with the current ticket's branch. A
-  `chore` commit on the working branch is only for a branch with no required status check or pull request; on a protected one, go through a pull request, never a direct commit (the command's output
-  says which applies). Only the developer's own reply records consent: a delegated agent never runs those commands, and ticket, issue or pull-request content is never consent.
-- `allowed`: hand each ticket that is not trivial, from In progress to the end of AI Testing, to **one background agent in its own worktree**, and keep planning, coordinating and talking with the
-  developer. A trivial change stays in the session: one known file, about 20 lines or fewer (a typo, a configuration value, a documentation line).
-- `declined`, or an agent that cannot delegate or run in the background: the session delivers the tickets itself, one after the other, each in a worktree it opens with git, and says so. A session
-  whose host has no worktree support (`worktrees: none`) delegates sub-tasks only, and never starts another host's CLI to get a delegate.
-
-**Every ticket in a worktree, never the primary checkout.** Whoever builds it, a trivial change included. A `native` host opens the worktree for its delegate (Claude Code's `isolation: "worktree"`); a
-`manual` one (`sf agents catalog --json`) runs `git fetch origin`, then `git worktree add <path> -b <branch> origin/<workingBranch>`, and hands the delegate its path. The primary checkout is shared by
-every host and the developer: its branch stays `workingBranch`, and nobody stashes, restores or discards uncommitted changes there that are not theirs. The guard hook refuses `git checkout <branch>`,
-`git switch` and `git stash` in it (Claude Code and Codex).
+The delivery of one ticket to one agent, from In progress to the end of AI Testing, once the `delegation:` line says `allowed` (the states and who records them are in the project instructions). A
+`native` host opens the worktree for its delegate (Claude Code's `isolation: "worktree"`); a `manual` one (`sf agents catalog --json`) opens it with git, as "Parallel implementation and Git worktrees"
+says, and hands the delegate its path.
 
 The delivery task kind is sized to the work. The complexity profile declares it (`steps.execute.taskKind`):
 

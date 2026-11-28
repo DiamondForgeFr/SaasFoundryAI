@@ -92,14 +92,13 @@
     },
     {
       "id": "delegated-delivery",
-      "summary": "Who builds a ticket, in which worktree, and that consent is only the developer's own reply",
+      "summary": "The delivery of one ticket to one agent: the brief carries the consent, the agent stops at AI Testing; the consent states and the worktree rule are the project instructions' (ledger instructions, region-session-delivery and region-worktrees)",
       "owner": "reference/delegation.md",
       "tier": "disclosed",
       "tokens": [
-        "sf agents delegation allow",
-        "sf agents delegation decline",
-        "Every ticket in a worktree, never the primary checkout",
-        "git worktree add <path> -b <branch> origin/<workingBranch>",
+        "the states and who records them are in the project instructions",
+        "Parallel implementation and Git worktrees",
+        "reads `not-asked` until the answer is committed",
         "never runs `ready-pr`"
       ],
       "pointer": { "from": "SKILL.md", "match": "reference/delegation.md", "lead": "You hand a ticket or a step to another agent" },
@@ -221,10 +220,10 @@
     },
     {
       "id": "status-in-progress-delegation",
-      "summary": "The session delegates the ticket to one agent; a trivial change stays in the session",
+      "summary": "The session decides who builds the ticket from the delegation line, as the project instructions say, and sizes a delegation by the task kind of the profile",
       "owner": "statuses/2-in-progress.md",
       "tier": "step",
-      "tokens": ["delegation:", "steps.execute.taskKind", "sf agents delegation allow"],
+      "tokens": ["delegation:", "steps.execute.taskKind", "Session orchestration and delegated ticket delivery", "Ticket first, and an unreachable tool"],
       "source": "delegation-routing.spec.ts"
     },
     {

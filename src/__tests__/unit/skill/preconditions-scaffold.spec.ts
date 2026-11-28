@@ -54,7 +54,8 @@ describe('Preconditions first directive (scaffold mirrors)', () => {
   it('the generated region previews profile promotion instead of scaffolding over existing code', () => {
     expect(GENERATED_INSTRUCTIONS).toContain('sf status --agent-friendly --no-network')
     expect(GENERATED_INSTRUCTIONS).toContain('sf update --target-profile full --dry-run --json')
-    expect(GENERATED_INSTRUCTIONS).toContain('Do not run\n`sf new --profile full` inside an existing repository')
+    // The hard stop stays in the region (#1101); the transition itself is the tool-saasfoundry skill's.
+    expect(GENERATED_INSTRUCTIONS.replace(/\s+/g, ' ')).toContain('`sf new --profile full` never runs inside an existing repository')
   })
 })
 

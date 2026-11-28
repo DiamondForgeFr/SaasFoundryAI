@@ -76,7 +76,9 @@ describe('harness migration v3 → v4: move-claude-md-to-agents-md (#938)', () =
     expect(agents).toContain(GENERATED_REGION_START)
     expect(agents.trimEnd().endsWith(GENERATED_REGION_END)).toBe(true)
     // Shipped generated sections are not duplicated beside the region
-    for (const heading of ['Coding-agent identity and onboarding', 'Managed project capabilities', 'File edits and shell calls']) expect(headingCount(agents, heading)).toBe(1)
+    for (const heading of ['Coding-agent identity and onboarding', 'File edits and shell calls']) expect(headingCount(agents, heading)).toBe(1)
+    // The region no longer has a block of its own for the profile transition (#1101): the shipped section is dropped, not duplicated
+    expect(headingCount(agents, 'Managed project capabilities')).toBe(0)
     expect(agents).not.toContain(KEPT_FOR_REVIEW_HEADING)
     // A shipped template section is refreshed to the current, tool-neutral wording
     expect(agents).not.toContain('SessionStart')

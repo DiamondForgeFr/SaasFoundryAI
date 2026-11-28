@@ -29,7 +29,11 @@ import { hashFileContent } from '../utils'
  * sidecar and both files stay. A CLAUDE.local.md is never touched, only reported.
  */
 
-/** Headings of the blocks the generated AGENTS.md region holds (#937). */
+/**
+ * Headings of the blocks the generated AGENTS.md region holds (#937), and of the ones it held when a CLAUDE.md shipped them:
+ * 'Managed project capabilities' is no longer a block of its own (#1101, it is a bullet of 'Reading the project status'),
+ * and a CLAUDE.md that still carries it has its unedited copy dropped like the others.
+ */
 export const REGION_HEADINGS = [
   'Coding-agent identity and onboarding',
   'Managed project capabilities',

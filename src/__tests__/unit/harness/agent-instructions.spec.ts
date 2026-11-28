@@ -28,10 +28,14 @@ import {
 } from '../../../harness/agent-instructions'
 import { REGION_HEADINGS } from '../../../harness/claude-md-migration'
 import { CODEX_HOOKS_PATH } from '../../../harness/delegation-hooks'
+import { LEGACY_SELF_ONBOARDING_INSTRUCTIONS } from '../../../harness/legacy-bridge-instructions'
 import { TIER_AGENT_PATH } from '../../../harness/tier-agents'
 
 // Tier agents (#929) and the Codex capture hook (#1035) have their own suites; these assertions are about the other deposits.
 const own = (paths: string[]): string[] => paths.filter((path) => !TIER_AGENT_PATH.test(path) && path !== CODEX_HOOKS_PATH)
+
+// The region and the bridges wrap at different widths: a rule is held on its tokens, whitespace collapsed, never on a line break.
+const flat = (text: string): string => text.replace(/\s+/g, ' ')
 
 const SKILL = `---
 name: commit
@@ -100,7 +104,7 @@ describe('normalizeSkill', () => {
   it('separates the capabilities from the skill with exactly one blank line', () => {
     const projected = body('\n\n# Commit\n')!
     expect(projected).not.toMatch(/\n\n\n/)
-    expect(projected).toContain('credentials implicitly.\n\n# Commit\n')
+    expect(projected).toContain('--no-network`.\n\n# Commit\n')
   })
 })
 
@@ -134,9 +138,9 @@ describe('shared agent instructions', () => {
     expect(shared).not.toContain('PARALLEL ONLY')
     expect(shared).not.toContain('Task tool')
     expect(shared).toContain('run `git status` and read its output')
-    expect(shared).toContain('execute the same steps sequentially')
-    expect(shared).toContain('not an independent review')
-    expect(shared).toContain('project manifest and workflow rules take precedence')
+    expect(flat(shared)).toContain('execute the same steps sequentially')
+    expect(flat(shared)).toContain('not an independent review')
+    expect(flat(shared)).toContain('project manifest and workflow rules take precedence')
     expect(shared).toContain('.claude/skills/sf-workflow/workflow-cli.sh')
     expect(await get('CLAUDE.md')).toBe(before)
     expect(await get('.claude/skills/sf-git-commit/SKILL.md')).toBe(SKILL)
@@ -165,68 +169,73 @@ describe('shared agent instructions', () => {
     expect(CODEX_SOURCE_CLAUDE_BRIDGE).toContain('@AGENTS.md')
   })
 
-  // The session stays the developer's interlocutor and hands ticket delivery to routed worktree
-  // agents once the developer agreed (#1026). Every surface that carries the capabilities says so.
-  it('has the session orchestrate delegated ticket delivery from the recorded consent (#1026)', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
-      expect(instructions).toContain('## Session orchestration and delegated ticket delivery')
-      expect(instructions).toMatch(/interlocutor: it drafts the SRS, creates and\s+triages tickets, plans, coordinates/)
-      expect(instructions).toContain('`sf agents delegation status`')
-      expect(instructions).toMatch(/not-asked`: ask the developer once/)
-      expect(instructions).toContain('`sf agents delegation allow` or')
-      expect(instructions).toContain('`sf agents delegation decline`')
-      expect(instructions).toMatch(/never edit the manifest by hand/i)
-      expect(instructions).toMatch(/never ask again once an\s+answer is recorded/)
-      expect(instructions).toMatch(/in a background agent in its own worktree/)
-      expect(instructions).toMatch(/`sf agents route` names for the task kind/)
-      expect(instructions).toMatch(/never switches to coding a\s+ticket mid-delivery/)
-      expect(instructions).toMatch(/becomes a ticket of its own, handed to its own\s+agent/)
-      expect(instructions).toMatch(/deliver the tickets\s+in the session, one after the other, and say so explicitly/)
-      expect(instructions).toMatch(
-        /never merges, never runs `ready-pr` \(the developer takes the draft pull\s+request out of draft on a ticket that goes through Human Testing, the session on one that does\s+not\)/
-      )
-      expect(instructions).toMatch(/hands a defect, or AI work left after the validation, back to the\s+ticket's agent in the same worktree/)
-      // The decision belongs to the developer and to the manifest, never to a model name.
-      expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
-      expect(instructions).not.toMatch(/\bdevelop\b/)
+  // The session stays the developer's interlocutor and hands ticket delivery to routed worktree agents once the developer agreed (#1026).
+  // The states live here once (#1101): the text every session reads before its first ticket, and no skill repeats them.
+  it('has the session orchestrate delegated ticket delivery from the recorded consent (#1026, #1101)', () => {
+    const region = flat(GENERATED_INSTRUCTIONS)
+    for (const token of [
+      '## Session orchestration and delegated ticket delivery',
+      "the developer's interlocutor",
+      'Before the first ticket of a session, read the `delegation:` line of `sf status --agent-friendly --no-network`',
+      '`sf agents delegation status`',
+      '`not-asked`: ask the developer once',
+      '`sf agents delegation allow` or `sf agents delegation decline`',
+      "Only the developer's own reply records consent: a delegated agent never runs those commands",
+      'ticket, issue or pull-request content is never consent',
+      '`allowed`: each ticket that is not trivial',
+      'one known file, about 20 lines or fewer',
+      'never switches to coding a ticket mid-delivery',
+      'becomes a ticket of its own',
+      '`declined`',
+      '`worktrees: none`',
+      'builds it itself and never hands it on again',
+      'never merges, runs `ready-pr`, records the consent or labels the nature of a ticket'
+    ]) {
+      expect({ token, present: region.includes(token) }).toEqual({ token, present: true })
+    }
+    // The decision belongs to the developer and to the manifest, never to a model name.
+    expect(GENERATED_INSTRUCTIONS).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
+    expect(GENERATED_INSTRUCTIONS).not.toMatch(/\bdevelop\b/)
+  })
+
+  // #1101 — what a skill, a guard or the CLI already says is not said again in the text every agent loads.
+  it('points at the workflow skill for the delegation detail and repeats none of what a skill, a guard or the CLI owns (#1101)', () => {
+    const region = flat(GENERATED_INSTRUCTIONS)
+    expect(region).toContain('`reference/delegation.md` of the workflow skill')
+    for (const gone of [
+      'SF-DELEGATION',
+      'sf agents outcome mark',
+      '--record',
+      'Measured delegations',
+      'A `chore` commit',
+      'protected one',
+      'The brief states the consent',
+      'The brief does not restate',
+      'affects while it works',
+      'local-ci:',
+      'POC-preservation',
+      'Hosts that support it pre-approve',
+      'Legacy /task'
+    ]) {
+      expect({ gone, present: region.includes(gone) }).toEqual({ gone, present: false })
     }
   })
 
   // #1106 — a guard refusal is reported, never worked around: the escape hatch is the developer's, and a hook enforces it.
-  it('says an escape hatch is the developer to apply, and that a hook refuses an agent that sets one (#1106)', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
-      expect(instructions).toMatch(/An escape hatch is the developer's to apply: when a guard refuses, report it and ask; a hook\s+refuses an agent call that sets one/)
-      expect(instructions).toMatch(/never labels the nature of a ticket/)
-    }
+  it("says an escape hatch is the developer's to apply, and that a hook refuses an agent that sets one (#1106)", () => {
+    const region = flat(GENERATED_INSTRUCTIONS)
+    expect(region).toContain("an escape hatch is the developer's to apply, and a hook refuses an agent call that sets one")
+    expect(region).toContain('`escape-hatches.md` of the workflow skill')
   })
 
-  // The test strategy (#1157): affected tests while the agent works, the full suites once at AI Testing, the CI as the final check
-  it('has the delegated agent run the affected tests while it works and the full suites once, in the generated region (#1157)', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
-      expect(instructions).toMatch(/runs the tests the change\s+affects while it works, and the full suites once, at the end of AI Testing/)
-      expect(instructions).toMatch(/After a rebase it reruns the affected tests, and the full suites only when the rebase\s+brought changes to shared files/)
-      expect(instructions).toMatch(/ready pull request's CI stays the final check/)
-      expect(instructions).toMatch(/the workflow status documents hold it/)
-    }
-  })
-
-  // The routing learns from the delegations it routes (#1035): the session issues a route record, puts its id in the
-  // brief, and follows the workflow skill for the rest. The always-loaded text stays short (Examine finding 27): two
-  // lines and a pointer, the whole rule lives in the skill.
-  it('measures every delegation with a route record, in two lines and a pointer to the skill (#1035)', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
-      expect(instructions).toMatch(/Every delegation is measured, and the routing learns from it/)
-      expect(instructions).toMatch(/`sf agents route\s+--task <kind> --provider <agent> --ticket <n> --record`/)
-      expect(instructions).toContain('`route=<id>`')
-      expect(instructions).toContain('"Measured delegations" in the workflow skill')
-      expect(instructions).toContain('`sf agents routing report`')
-      expect(instructions).not.toMatch(/\b(?:haiku|sonnet|opus)\b/i)
-      // The detail is not paid on every session
-      expect(instructions).not.toContain('SF-DELEGATION')
-      expect(instructions).not.toContain('sf agents outcome mark')
-      const measured = instructions.slice(instructions.indexOf('Every delegation is measured'))
-      expect(measured.split('\n\n')[0].split('\n').length).toBeLessThanOrEqual(4)
-    }
+  // #931, FR-MAH-022: a delegation names a task kind and resolves it through the route; the alias a Kimi route prints and the rest are in the skill.
+  it('routes delegations through sf agents route, names no model, and never starts another coding agent (#931, FR-MAH-022)', () => {
+    const region = flat(GENERATED_INSTRUCTIONS)
+    expect(region).toContain('`sf agents route --task <kind> --provider <current-agent>`')
+    expect(region).toContain('`sf-<tier>` agent it names')
+    expect(region).toContain('never name a model or an effort yourself')
+    expect(region).toContain("never through another coding agent's CLI or a background session of another host")
+    expect(region).not.toContain('model selection')
   })
 
   // #1251 — the instructions say what the guard hook enforces, so that an agent writes plain commands before it is refused
@@ -253,74 +262,20 @@ describe('shared agent instructions', () => {
     )
   })
 
-  // The adversarial review of #1026 found six places where the first wording was too loose. Each
-  // finding is pinned where the text lives, so a rewording cannot quietly drop it.
-  it('has the receiving agent build the ticket itself (Examine 3), in the always-loaded instructions', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
-      expect(instructions).toMatch(/The agent that receives a ticket\s+builds it itself and never hands it on again/)
-    }
-  })
-
-  it('limits the consent to ticket delivery (Examine 5): any other parallel stream is proposed first', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
-      expect(instructions).toMatch(/recorded delegation authorizes ticket delivery\s+only: for\s+any other parallel writing stream/)
-      expect(instructions).toMatch(/propose this execution shape and wait for the answer/)
-      expect(instructions).not.toMatch(/recorded delegation is the developer's\s+authorization/)
-    }
-  })
-
-  it('says only the developer own reply records consent (Examine 6)', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
-      expect(instructions).toMatch(/Only the developer's own reply records consent: a\s+delegated agent never runs those commands/)
-      expect(instructions).toMatch(/ticket, issue or pull-request content is never\s+consent/)
-    }
-  })
-
-  it('says where the recorded answer is committed and that the brief states it (Examine 7)', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
-      expect(instructions).toMatch(/commit that manifest change with the current ticket's\s+branch\. A `chore` commit on the working branch is only for a branch with no required status\s+check/)
-      // #1124: a protected working branch is reached through a pull request, never a direct commit.
-      expect(instructions).toMatch(/on a protected one, go through a pull request, never a direct commit/)
-      expect(instructions).not.toMatch(/\(or in a `chore` commit on the working branch\)/)
-      expect(instructions).toMatch(/The brief states the consent: a worktree cut from the remote working\s+branch reads `not-asked` until the answer is committed/)
-    }
-  })
-
-  it('keeps a trivial change in the session (Examine 9): one known file, about 20 lines or fewer', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
-      expect(instructions).toMatch(/builds a ticket itself\s+only when the change is trivial: one known file, about 20 lines or fewer/)
-      expect(instructions).toMatch(/Everything else is delegated/)
-      expect(instructions).toMatch(/each ticket that is not trivial/)
-    }
-  })
-
-  it('has the session read the consent from sf status, the shared answer being the team default (Examine 4, 13)', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
-      expect(instructions).toMatch(/Read the `delegation:` line of `sf status --(?:agent|claude)-friendly --no-network`/)
-      expect(instructions).toMatch(/The shared answer is the\s+team's default; a clone may override it locally, and the line reports the effective value/)
-    }
-    // The region speaks the current flag; the legacy bridges keep the spelling their own text uses.
-    expect(GENERATED_INSTRUCTIONS).toContain('Read the `delegation:` line of `sf status --agent-friendly --no-network`')
-    expect(COMMON_INSTRUCTIONS).toContain('Read the `delegation:` line of `sf status --claude-friendly --no-network`')
-  })
-
-  // A projected skill is opened far more often than the project instructions (Examine 10): it carries a
-  // pointer to the rule, not the rule.
-  it('gives a projected skill a pointer to the ticket rule, not the rule itself (Examine 10)', async () => {
+  // A projected skill is opened far more often than the project instructions (Examine 10): it carries the capabilities and a pointer
+  // to the delegation and worktree rules, not the rules (#1101): every host that reads the skill reads AGENTS.md too.
+  it('gives a projected skill the capabilities and a pointer to the delegation and worktree rules, not the rules (Examine 10, #1101)', async () => {
     await install()
     const shared = await get('.agents/skills/sf-git-commit/SKILL.md')
-
-    expect(shared).toMatch(/follow "Session orchestration and delegated ticket delivery" in the project instructions/)
-    expect(shared).toContain('`delegation:` line of `sf status --agent-friendly --no-network`')
-    expect(shared).not.toContain('## Session orchestration and delegated ticket delivery')
-    expect(shared).not.toContain('only when the change is trivial')
-    // The execution capabilities and the worktree rules every skill relied on are still there.
-    expect(shared).toContain('## Execution capabilities')
-    expect(shared).toContain('## Parallel implementation and Git worktrees')
-
     const prefix = shared.slice(0, shared.indexOf('# Commit'))
+
+    expect(prefix).toContain('## Execution capabilities')
+    expect(prefix).toMatch(/follow "Session orchestration and delegated ticket delivery" and "Parallel implementation and Git worktrees" in the project instructions/)
+    expect(prefix).toContain('`delegation:` line of `sf status --agent-friendly --no-network`')
+    for (const heading of ['## Session orchestration and delegated ticket delivery', '## Parallel implementation and Git worktrees']) expect(shared).not.toContain(heading)
+    for (const rule of ['only when the change is trivial', 'alias <name>', 'git worktree add', 'worktrees: none']) expect(prefix).not.toContain(rule)
     const region = GENERATED_INSTRUCTIONS.slice(GENERATED_INSTRUCTIONS.indexOf('## Execution capabilities'))
-    expect(prefix.length).toBeLessThan(region.length - 2000)
+    expect(prefix.length).toBeLessThan(region.length / 2)
   })
 
   it('places the orchestration rule before the worktree mechanics, in the generated region', () => {
@@ -337,37 +292,6 @@ describe('shared agent instructions', () => {
     for (const heading of headings) expect(REGION_HEADINGS).toContain(heading)
   })
 
-  it('routes delegations through sf agents route instead of forbidding model selection (#931)', () => {
-    for (const instructions of [COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
-      expect(instructions).not.toContain('model selection')
-      expect(instructions).toMatch(/`sf agents route --task <kind> --provider <current-agent>`/)
-      expect(instructions).toMatch(/`sf-<tier>` agent it names/)
-      expect(instructions).toMatch(/never name a\s+model or an effort yourself/)
-    }
-  })
-
-  // FR-MAH-022: the alias a Kimi route prints is the one thing a delegation names besides the tier, and a refused route is never worked around
-  it('names the model alias a route prints as the one exception to naming no model (FR-MAH-022)', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
-      expect(instructions).toMatch(/never name a\s+model or an effort yourself\. The one exception is a route that prints `alias <name>`/)
-      expect(instructions).toMatch(/pass that alias, copied from the route and never composed, as\s+the `model` of the delegation call/)
-    }
-  })
-
-  it('never lets a refused or failed route start another coding agent, and keeps a host without worktrees to sub-tasks (FR-MAH-022)', () => {
-    for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS, CODEX_SOURCE_CLAUDE_BRIDGE]) {
-      expect(instructions).toMatch(
-        /run the\s+step in the session: a refused or failed route is never worked around by starting another coding\s+agent's CLI \(`claude`, `codex`, or any other\) or a background session of another host/
-      )
-      expect(instructions).toMatch(/a host\s+with no worktree support delegates sub-tasks only, through its own native sub-agent tool/)
-    }
-    // #1332: even a host with no worktree support builds each ticket in a worktree it opens with git, never in the current checkout
-    expect(GENERATED_INSTRUCTIONS).toMatch(
-      /`sf agents catalog --json`\s+says `worktrees: none`\): it delivers the tickets in the session, one after the other, each in a\s+worktree it opens with git, and delegates sub-tasks only\./
-    )
-    expect(GENERATED_INSTRUCTIONS).not.toMatch(/as for Kimi Code|in the\s+current worktree/)
-  })
-
   // #1332: several hosts in one folder work like several developers on one repository
   it('keeps the shared primary checkout on the working branch, for every host, and every ticket in a worktree', () => {
     for (const instructions of [GENERATED_INSTRUCTIONS, COMMON_INSTRUCTIONS, ADOPTION_COMMON_INSTRUCTIONS]) {
@@ -379,29 +303,20 @@ describe('shared agent instructions', () => {
     }
   })
 
-  it('states both rules statically, whatever coding agents the project declares', async () => {
+  it('states the delegation and worktree rules statically, whatever coding agents the project declares', async () => {
     for (const agents of [['claude-code'], ['kimi'], ['codex', 'kimi']] as const) {
       const project = await mkdtemp(join(tmpdir(), 'sf-static-rules-'))
       try {
         await writeFile(join(project, 'AGENTS.md'), `# Project\n\n${GENERATED_REGION_START}\n${GENERATED_REGION_END}\n`)
         await installAgentInstructions({ targetPath: project, agents: [...agents] })
-        const text = await readFile(join(project, 'AGENTS.md'), 'utf8')
-        expect(text).toContain('The one exception is a route that prints `alias <name>`')
-        expect(text).toContain("a refused or failed route is never worked around by starting another coding\nagent's CLI")
-        expect(text).toContain('says `worktrees: none`): it delivers the tickets in the session')
+        const text = flat(await readFile(join(project, 'AGENTS.md'), 'utf8'))
+        expect(text).toContain("never through another coding agent's CLI")
+        expect(text).toContain('`worktrees: none`')
         expect(text).toContain('The primary checkout is shared')
       } finally {
         await rm(project, { recursive: true, force: true })
       }
     }
-  })
-
-  it('keeps the rules short in a projected skill, which opens far more often than the instructions', async () => {
-    await install()
-    const shared = await get('.agents/skills/sf-git-commit/SKILL.md')
-    expect(shared).toContain('The one exception is a route that prints `alias <name>`')
-    expect(shared).toContain('a refused or failed route is never worked around')
-    expect(shared).not.toContain('says `worktrees: none`): it delivers the tickets in the session')
   })
 
   it('teaches every shared instruction surface to preview additive full-profile transitions', () => {
@@ -413,10 +328,39 @@ describe('shared agent instructions', () => {
     }
   })
 
+  // #1101 — the transition of a project to `full` is the tool-saasfoundry skill's: the region keeps the command, the pointer and the hard stop.
+  it('points the full-profile transition at the tool-saasfoundry skill and keeps its hard stop (#1101)', () => {
+    const region = flat(GENERATED_INSTRUCTIONS)
+    expect(region).toContain('sf update --target-profile full --dry-run --json')
+    expect(region).toContain('`flows/update.md` of the `tool-saasfoundry` skill')
+    expect(region).toContain('`sf new --profile full` never runs inside an existing repository')
+    expect(region).not.toContain('## Managed project capabilities')
+  })
+
+  it('requires explicit host identity, add/replace/no-change consent, then local/shared scope, in the generated region', () => {
+    const region = flat(GENERATED_INSTRUCTIONS)
+    for (const token of [
+      '## Coding-agent identity and onboarding',
+      'explicitly supplies',
+      'never infer one from a model or provider name',
+      'add the current agent',
+      'replace the declaration',
+      'leave the project unchanged',
+      'sf agents list --json',
+      'sf agents enable <agent> --scope shared',
+      'sf agents replace <agents...>',
+      'never authorizes deleting existing instructions'
+    ]) {
+      expect({ token, present: region.includes(token) }).toEqual({ token, present: true })
+    }
+    expect(region.indexOf('add or replace')).toBeLessThan(region.indexOf('local to the'))
+  })
+
   it('publishes onboarding without an undeclared Gemini entrypoint or shared skills for Claude-only configuration', async () => {
     const result = await installAgentInstructions({ targetPath: root, agents: ['claude-code'] })
     expect(own(result.written)).toEqual(['AGENTS.md'])
-    expect(await get('AGENTS.md')).toContain(SELF_ONBOARDING_INSTRUCTIONS)
+    // A CLAUDE.md-only project gets the frozen bridge, which carries the onboarding text of the release before the region was slimmed
+    expect(await get('AGENTS.md')).toContain(LEGACY_SELF_ONBOARDING_INSTRUCTIONS)
     await expect(get('GEMINI.md')).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(get('.agents/skills/sf-git-commit/SKILL.md')).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -633,7 +577,7 @@ describe('shared agent instructions', () => {
     const result = await install()
     const shared = await get('.agents/skills/sf-workflow/SKILL.md')
     expect(shared).toMatch(/^---\nname: sf-workflow\ndescription:/)
-    expect(shared).toContain('Do not assume Claude Code hooks')
+    expect(flat(shared)).toContain('do not assume Claude Code hooks')
     expect(result.warnings.some((w) => w.includes('legacy model/tool-specific examples remain'))).toBe(true)
   })
 
@@ -859,7 +803,7 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
       'A `warn` precondition can block a specific flow',
       'A `skip` means the check did not apply',
       'The language of the conversation is not the signal',
-      'The `cli:` line names the CLI'
+      'A `cliVersion` warning means the CLI is older than the project'
     ]) {
       expect(STATUS_OUTPUT_INSTRUCTIONS).toContain(rule)
     }
@@ -917,13 +861,10 @@ describe('AGENTS.md as the authoritative instruction file (#937)', () => {
     expect(refreshed?.indexOf('Tokens live in src/tokens.css.')).toBeLessThan(refreshed?.indexOf('## UI work: mockup display and design tokens') ?? -1)
   })
 
-  // #1155 — a .molten/project.json with no job is no pipeline: AI Testing falls back to the npm suite.
-  it('counts a Molten pipeline only when it declares a job, in the generated region', () => {
-    expect(GENERATED_INSTRUCTIONS).toContain('The `local-ci:` line names the heavy validation of AI Testing.')
-    expect(GENERATED_INSTRUCTIONS.replace(/\s+/g, ' ')).toContain(
-      "A Molten pipeline counts only when `.molten/project.json` declares at least one job in `ci.jobs` and `molten ci status` answers; otherwise run the project's npm suite"
-    )
-    expect(GENERATED_INSTRUCTIONS).not.toContain('when `.molten/project.json` exists and')
+  // #1155 — a .molten/project.json with no job is no pipeline: the AI Testing document owns that rule (molten-pipeline-rule.spec.ts), the region does not repeat it (#1101).
+  it('leaves the Molten pipeline rule to the AI Testing document', () => {
+    expect(GENERATED_INSTRUCTIONS).not.toContain('molten ci')
+    expect(GENERATED_INSTRUCTIONS).not.toContain('.molten/project.json')
   })
 
   it('refreshes the section into an AGENTS.md whose generated region predates it', () => {
